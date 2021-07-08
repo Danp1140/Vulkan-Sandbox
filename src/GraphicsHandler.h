@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include <png/png.h>
 
@@ -23,42 +24,16 @@
 //actually the two places i use this value i *think* can be different values
 #define VULKAN_NUM_SAMPLES VK_SAMPLE_COUNT_1_BIT
 
-typedef enum PipelineID{
-	PRIMARY_GRAPHICS_PIPELINE
-}PipelineID;
-
-typedef struct VulkanInfo{
-	GLFWwindow*window;
-	int horizontalres, verticalres, width, height;
-	VkInstance instance;
-	VkSurfaceKHR surface;
-	VkPhysicalDevice physicaldevice;
-	VkDevice logicaldevice;
-	//better way to organize these?
-	VkQueue graphicsqueue, presentationqueue;
-	//perhaps should break up the bottom into however many uint32_ts, instead of one pointer/array
-	uint32_t*queuefamilyindices;
-	VkSwapchainKHR swapchain;
-	uint32_t numswapchainimages;
-	VkImage*swapchainimages;
-	VkImageView*swapchainimageviews;
-	VkExtent2D swapchainextent;
-	VkRenderPass primaryrenderpass;
-	std::map<PipelineID, VkPipeline> pipelines;
-	VkFramebuffer*framebuffers;
-	VkCommandPool commandpool;
-	VkCommandBuffer*commandbuffers;
-	VkSemaphore imageavailablesemaphore, renderfinishedsemaphore;
-} VulkanInfo;
+typedef struct PrimaryGraphicsPushConstants{
+	glm::mat4 cameravpmatrices, modelmatrix;
+}PrimaryGraphicsPushConstants;
 
 class GraphicsHandler{
 private:
 	static VulkanInfo vulkaninfo;
 //  extent is redundant with hori/vertres variables
 	static VkExtent2D swapextent;
-	static VkPipelineShaderStageCreateInfo shaderstagecreateinfos[2];
-	static VkPipelineLayout pipelinelayout;
-	static VkPipeline primarygraphicspipeline;
+	PrimaryGraphicsPushConstants primarygraphicspushconstants;
 
 	Camera*primarycamera;
 	std::vector<Light*>lights;
@@ -68,7 +43,7 @@ private:
 	Mesh**laststaticscmptr;
 	Grass*testgrass;
 	Text*troubleshootingtext;
-	double lasttime;
+	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime;
 
 //	static void GLInit(bool printstuff);
 	static void VKInit();
@@ -78,10 +53,12 @@ private:
 	static void VKSubInitQueues();
 	static void VKSubInitSwapchain();
 	static void VKSubInitRenderpass();
-	static void VKSubInitGraphicsPipeline();
+	static void VKSubInitGraphicsPipeline(const char*vertexshaderfilepath, const char*fragmentshaderfilepath);
 	static void VKSubInitFramebuffers();
 	static void VKSubInitCommandPool();
 	static void VKSubInitSemaphores();
+//	static void setUpStagingBuffer(VkDeviceSize buffersize);
+	void recordCommandBuffers();
 public:
 	GraphicsHandler();
 	~GraphicsHandler();
@@ -90,7 +67,7 @@ public:
 	void sendLightUniforms();
 	bool shouldClose();
 	static GLuint linkShaders(char shadertypes, ...);
-	static void createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath);
+	static void createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath, VkPipelineLayout*pipelinelayout, VkPipelineShaderStageCreateInfo*vertexshaderstagecreateinfo, VkPipelineShaderStageCreateInfo*fragmentshaderstagecreateinfo);
 };
 
 

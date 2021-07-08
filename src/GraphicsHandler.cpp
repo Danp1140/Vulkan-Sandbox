@@ -6,13 +6,17 @@
 
 VulkanInfo GraphicsHandler::vulkaninfo{};
 VkExtent2D GraphicsHandler::swapextent={};
-VkPipelineShaderStageCreateInfo GraphicsHandler::shaderstagecreateinfos[2]={};
-VkPipelineLayout GraphicsHandler::pipelinelayout=VK_NULL_HANDLE;
-VkPipeline GraphicsHandler::primarygraphicspipeline=VK_NULL_HANDLE;
 
 GraphicsHandler::GraphicsHandler(){
 //	if(vulkaninfo.window==nullptr) GLInit(true);
 	if(vulkaninfo.window==nullptr) VKInit();
+	staticshadowcastingmeshes=std::vector<const Mesh*>();
+ 	staticshadowcastingmeshes.push_back(new Mesh("../resources/objs/smoothhipolysuzanne.obj", glm::vec3(0.0f, 0.0f, 0.0f), &vulkaninfo));
+//	staticshadowcastingmeshes.push_back(new Mesh(&vulkaninfo));
+	primarycamera=new Camera(vulkaninfo.window, vulkaninfo.horizontalres, vulkaninfo.verticalres);
+	primarygraphicspushconstants={glm::mat4(1), glm::mat4(1)};
+	lasttime=std::chrono::high_resolution_clock::now();
+	recordCommandBuffers();
 }
 
 GraphicsHandler::~GraphicsHandler(){
@@ -20,13 +24,15 @@ GraphicsHandler::~GraphicsHandler(){
 	vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.renderfinishedsemaphore, nullptr);
 	vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.imageavailablesemaphore, nullptr);
 //	delete primarycamera;
+	vkFreeCommandBuffers(vulkaninfo.logicaldevice, vulkaninfo.commandpool, 1, &(vulkaninfo.interimcommandbuffer));
 	vkFreeCommandBuffers(vulkaninfo.logicaldevice, vulkaninfo.commandpool, vulkaninfo.numswapchainimages, &vulkaninfo.commandbuffers[0]);
 	vkDestroyCommandPool(vulkaninfo.logicaldevice, vulkaninfo.commandpool, nullptr);
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.framebuffers[x], nullptr);
 
-	vkDestroyPipeline(vulkaninfo.logicaldevice, primarygraphicspipeline, nullptr);
+	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipeline, nullptr);
 	vkDestroyRenderPass(vulkaninfo.logicaldevice, vulkaninfo.primaryrenderpass, nullptr);
-	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, pipelinelayout, nullptr);
+	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipelinelayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.descriptorsetlayout, nullptr);
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
 		vkDestroyImageView(vulkaninfo.logicaldevice, vulkaninfo.swapchainimageviews[x], nullptr);
 	}
@@ -321,8 +327,8 @@ void GraphicsHandler::VKInit(){
 	VKSubInitQueues();
 	VKSubInitSwapchain();
 	VKSubInitRenderpass();
-	createGraphicsPipelineSPIRV("../resources/shaders/vert.spv", "../resources/shaders/frag.spv");
-	VKSubInitGraphicsPipeline();
+//	createGraphicsPipelineSPIRV("../resources/shaders/vert.spv", "../resources/shaders/frag.spv");
+	VKSubInitGraphicsPipeline("../resources/shaders/vert.spv", "../resources/shaders/frag.spv");
 	VKSubInitFramebuffers();
 	VKSubInitCommandPool();
 	VKSubInitSemaphores();
@@ -408,6 +414,7 @@ void GraphicsHandler::VKSubInitDevices(){
 	char*deviceextnames[deviceextcount];
 	for(uint32_t x=0;x<deviceextcount;x++) deviceextnames[x]=deviceextprops[x].extensionName;
 	VkPhysicalDeviceFeatures physicaldevicefeatures{};
+	physicaldevicefeatures.samplerAnisotropy=VK_TRUE;
 	//could include all available, but for now will include none
 	VkDeviceCreateInfo devicecreateinfo{
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -525,7 +532,9 @@ void GraphicsHandler::VKSubInitRenderpass(){
 	vkCreateRenderPass(vulkaninfo.logicaldevice, &renderpasscreateinfo, nullptr, &vulkaninfo.primaryrenderpass);
 }
 
-void GraphicsHandler::VKSubInitGraphicsPipeline(){
+void GraphicsHandler::VKSubInitGraphicsPipeline(const char*vertexshaderfilepath, const char*fragmentshaderfilepath){
+	VkPipelineShaderStageCreateInfo*shaderstagecreateinfos=new VkPipelineShaderStageCreateInfo[2];
+	createGraphicsPipelineSPIRV("../resources/shaders/vert.spv", "../resources/shaders/frag.spv", &(vulkaninfo.primarygraphicspipeline.pipelinelayout), &shaderstagecreateinfos[0], &shaderstagecreateinfos[1]);
 	VkVertexInputBindingDescription vertexinputbindingdescription{
 		0,
 		sizeof(Vertex),
@@ -538,12 +547,12 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 		offsetof(Vertex, position)
 	}, {
 		1,
-		1,
+		0,
 		VK_FORMAT_R32G32B32_SFLOAT,
 		offsetof(Vertex, normal)
 	}, {
 		2,
-		2,
+		0,
 		VK_FORMAT_R32G32_SFLOAT,
 		offsetof(Vertex, uv)
 	}};
@@ -592,7 +601,7 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 		VK_FALSE,
 		VK_POLYGON_MODE_FILL,
 		VK_CULL_MODE_BACK_BIT,
-		VK_FRONT_FACE_CLOCKWISE,
+		VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		VK_FALSE,
 		0.0f,
 		0.0f,
@@ -646,13 +655,14 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 		nullptr,
 		&colorblendstatecreateinfo,
 		nullptr,
-		pipelinelayout,
+		vulkaninfo.primarygraphicspipeline.pipelinelayout,
 		vulkaninfo.primaryrenderpass,
 		0,
 		VK_NULL_HANDLE,
 		-1
 	};
-	vkCreateGraphicsPipelines(vulkaninfo.logicaldevice, VK_NULL_HANDLE, 1, &graphicspipelinecreateinfo, nullptr, &primarygraphicspipeline);
+	vkCreateGraphicsPipelines(vulkaninfo.logicaldevice, VK_NULL_HANDLE, 1, &graphicspipelinecreateinfo, nullptr, &(vulkaninfo.primarygraphicspipeline.pipeline));
+	delete[] shaderstagecreateinfos;
 }
 
 void GraphicsHandler::VKSubInitFramebuffers(){
@@ -690,27 +700,29 @@ void GraphicsHandler::VKSubInitCommandPool(){
 	};
 	vulkaninfo.commandbuffers=new VkCommandBuffer[vulkaninfo.numswapchainimages];
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &vulkaninfo.commandbuffers[0]);
+	cmdbufferallocateinfo.commandBufferCount=1;
+	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
+	//do we need below record???
 	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
 		VkCommandBufferBeginInfo cmdbufferbegininfo{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			0,
-			nullptr
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				nullptr,
+				0,
+				nullptr
 		};
+
 		vkBeginCommandBuffer(vulkaninfo.commandbuffers[x], &cmdbufferbegininfo);
 		VkRenderPassBeginInfo renderpassbegininfo{
-			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-			nullptr,
-			vulkaninfo.primaryrenderpass,
-			vulkaninfo.framebuffers[x],
-			{{0, 0}, swapextent},
-			1,
-			&clearcolor
+				VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+				nullptr,
+				vulkaninfo.primaryrenderpass,
+				vulkaninfo.framebuffers[x],
+				{{0, 0}, swapextent},
+				1,
+				&clearcolor
 		};
 		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(vulkaninfo.commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, primarygraphicspipeline);
-		vkCmdDraw(vulkaninfo.commandbuffers[x], 3, 1, 0, 0);
 		vkCmdEndRenderPass(vulkaninfo.commandbuffers[x]);
 		vkEndCommandBuffer(vulkaninfo.commandbuffers[x]);
 	}
@@ -726,8 +738,51 @@ void GraphicsHandler::VKSubInitSemaphores(){
 	vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr, &vulkaninfo.renderfinishedsemaphore);
 }
 
+//void GraphicsHandler::VKSubInitBufferStuff(VkDeviceSize buffersize){
+//	Mesh::createAndAllocateBuffer(&(vulkaninfo.stagingbuffer), buffersize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &(vulkaninfo.stagingbuffermemory), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+//}
+
+void GraphicsHandler::recordCommandBuffers(){
+	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
+	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+		VkCommandBufferBeginInfo cmdbufferbegininfo{
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				nullptr,
+				0,
+				nullptr
+		};
+
+		vkBeginCommandBuffer(vulkaninfo.commandbuffers[x], &cmdbufferbegininfo);
+		VkRenderPassBeginInfo renderpassbegininfo{
+				VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+				nullptr,
+				vulkaninfo.primaryrenderpass,
+				vulkaninfo.framebuffers[x],
+				{{0, 0}, swapextent},
+				1,
+				&clearcolor
+		};
+		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBindPipeline(vulkaninfo.commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipeline);
+		vkCmdPushConstants(vulkaninfo.commandbuffers[x], vulkaninfo.primarygraphicspipeline.pipelinelayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PrimaryGraphicsPushConstants), (void*)(&primarygraphicspushconstants));
+		//can stick a few optimized checks here for updating dynamic meshes
+		for(auto&m:staticshadowcastingmeshes) vkCmdExecuteCommands(vulkaninfo.commandbuffers[x], 1, m->getCommandBuffer());
+		vkCmdEndRenderPass(vulkaninfo.commandbuffers[x]);
+		vkEndCommandBuffer(vulkaninfo.commandbuffers[x]);
+	}
+}
+
 void GraphicsHandler::draw(){
 	glfwPollEvents();
+
+	primarycamera->takeInputs(vulkaninfo.window);
+	primarygraphicspushconstants={
+		primarycamera->getProjectionMatrix()*primarycamera->getViewMatrix(),
+		glm::mat4(1)
+	};
+
+	recordCommandBuffers();
+
 	uint32_t imageindex=-1u;
 	vkAcquireNextImageKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, UINT64_MAX, vulkaninfo.imageavailablesemaphore, VK_NULL_HANDLE, &imageindex);
 	VkPipelineStageFlags pipelinestageflags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -756,6 +811,8 @@ void GraphicsHandler::draw(){
 		nullptr
 	};
 	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
+	std::cout<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps"<<std::endl;
+	lasttime=std::chrono::high_resolution_clock::now();
 }
 
 void GraphicsHandler::drawShittyTextureMonitor(){
@@ -771,7 +828,7 @@ bool GraphicsHandler::shouldClose(){
 GLuint GraphicsHandler::linkShaders(char shadertypes, ...){
 }
 
-void GraphicsHandler::createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath){
+void GraphicsHandler::createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath, VkPipelineLayout*pipelinelayout, VkPipelineShaderStageCreateInfo*vertexshaderstagecreateinfo, VkPipelineShaderStageCreateInfo*fragmentshaderstagecreateinfo){
 	std::ifstream shaderstream=std::ifstream(vertshaderfilepath, std::ios::ate|std::ios::binary);
 	size_t vertshadersize=shaderstream.tellg(), fragshadersize;
 	shaderstream.seekg(0);
@@ -784,14 +841,12 @@ void GraphicsHandler::createGraphicsPipelineSPIRV(const char*vertshaderfilepath,
 	char fragshadersrc[fragshadersize];
 	shaderstream.read(&fragshadersrc[0], fragshadersize);
 	shaderstream.close();
-
-	//unsure of the reinterpret cast here
 	VkShaderModuleCreateInfo vertexshadermodulecreateinfo{
 		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		nullptr,
 		0,
-        vertshadersize,
-        reinterpret_cast<const uint32_t*>(vertshadersrc)
+		vertshadersize,
+		reinterpret_cast<const uint32_t*>(vertshadersrc)
 	},
 	fragmentshadermodulecreateinfo{
 		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -803,39 +858,54 @@ void GraphicsHandler::createGraphicsPipelineSPIRV(const char*vertshaderfilepath,
 	VkShaderModule vertexshadermodule, fragmentshadermodule;
 	vkCreateShaderModule(vulkaninfo.logicaldevice, &vertexshadermodulecreateinfo, nullptr, &vertexshadermodule);
 	vkCreateShaderModule(vulkaninfo.logicaldevice, &fragmentshadermodulecreateinfo, nullptr, &fragmentshadermodule);
-	VkPipelineShaderStageCreateInfo shaderstagecreateinfostemp[2]{{
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+	*vertexshaderstagecreateinfo={
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         nullptr,
         0,
         VK_SHADER_STAGE_VERTEX_BIT,
         vertexshadermodule,
         "main",
-        nullptr
-    }, {
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		nullptr,
-		0,
-		VK_SHADER_STAGE_FRAGMENT_BIT,
-		fragmentshadermodule,
-		"main",
 		nullptr
-	}};
-	shaderstagecreateinfos[0]=shaderstagecreateinfostemp[0];
-	shaderstagecreateinfos[1]=shaderstagecreateinfostemp[1];
-
-	//are we really allowed to throw away these modules???
-	//tutorial says we can, but doing so creates an error
-//	vkDestroyShaderModule(vulkaninfo.logicaldevice, vertexshadermodule, nullptr);
-//	vkDestroyShaderModule(vulkaninfo.logicaldevice, fragmentshadermodule, nullptr);
-
-	VkPipelineLayoutCreateInfo playoutci{
+    };
+	*fragmentshaderstagecreateinfo={
+        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        nullptr,
+        0,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+        fragmentshadermodule,
+        "main",
+        nullptr
+	};
+//	VkDescriptorSetLayoutBinding descriptorsetlayoutbinding{
+//		0,
+//		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//		1,
+//		VK_SHADER_STAGE_VERTEX_BIT,
+//		nullptr
+//	};
+//	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfo{
+//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+//		nullptr,
+//		0,
+//		1,
+//		&descriptorsetlayoutbinding
+//	};
+//	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &descriptorsetlayoutcreateinfo, nullptr, &(vulkaninfo.primarygraphicspipeline.descriptorsetlayout));
+//	VkDeviceSize uniformbuffersize=sizeof(PrimaryGraphicsUniform);
+//	Mesh::createAndAllocateBuffer(&(vulkaninfo.primarygraphicspipeline.uniformbuffer), uniformbuffersize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &(vulkaninfo.primarygraphicspipeline.uniformbuffermemory), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	VkPushConstantRange pushconstantrange{
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(PrimaryGraphicsPushConstants)
+	};
+	VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo{
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		nullptr,
 		0,
 		0,
 		nullptr,
-		0,
-		nullptr
+		1,
+		&pushconstantrange
 	};
-	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &playoutci, nullptr, &pipelinelayout);
+	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, pipelinelayout);
 }

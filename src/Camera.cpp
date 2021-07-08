@@ -23,8 +23,8 @@ Camera::Camera(){
 }
 
 Camera::Camera(GLFWwindow*w, int hres, int vres){
-	position=glm::vec3(0, 5, 5);
-	forward=glm::vec3(0, 0, -1);
+	position=glm::vec3(5, 5, 5);
+	forward=glm::vec3(-1, -1, -1);
 	up=glm::vec3(0, 1, 0);
 	fovy=0.785f;
 	nearclip=0.001f;
@@ -62,6 +62,7 @@ void Camera::takeInputs(GLFWwindow*w){
 void Camera::recalculateProjectionMatrix(){
 	if(projection==PERSPECTIVE) projectionmatrix=glm::perspective(fovy, aspectratio, nearclip, farclip);
 	else projectionmatrix=glm::mat4(1);
+	projectionmatrix[1][1]*=-1;
 }
 
 void Camera::recalculateViewMatrix(){
