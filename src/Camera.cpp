@@ -23,8 +23,8 @@ Camera::Camera(){
 }
 
 Camera::Camera(GLFWwindow*w, int hres, int vres){
-	position=glm::vec3(5, 5, 5);
-	forward=glm::vec3(-1, -1, -1);
+	position=glm::vec3(0, 5, 0);
+	forward=glm::vec3(-1, -1 , -1);
 	up=glm::vec3(0, 1, 0);
 	fovy=0.785f;
 	nearclip=0.001f;
@@ -56,6 +56,7 @@ void Camera::takeInputs(GLFWwindow*w){
 	if(glfwGetKey(w, GLFW_KEY_D)==GLFW_PRESS) position+=glm::cross(forward, up)*movementsens;
 	if(glfwGetKey(w, GLFW_KEY_SPACE)==GLFW_PRESS) position+=up*movementsens;
 	if(glfwGetKey(w, GLFW_KEY_Z)==GLFW_PRESS) position+=up*-movementsens;
+
 	recalculateViewMatrix();
 }
 

@@ -9,10 +9,12 @@ layout(push_constant) uniform PushConstants{
 
 layout(location=0) out vec3 positionthru;
 layout(location=1) out vec3 normalthru;
+layout(location=2) out vec2 uvthru;
 
 void main() {
 //    gl_Position=vec4(0.1f*vertexposition.x,-0.1f*vertexposition.y, 0.0f, 1.0f);
     gl_Position=constants.cameravpmatrices*constants.modelmatrix*vec4(vertexposition, 1.0f);
     positionthru=vertexposition;
     normalthru=vertexnormal;
+    uvthru=vertexuv;
 }

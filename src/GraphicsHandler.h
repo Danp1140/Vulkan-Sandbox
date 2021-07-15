@@ -11,7 +11,7 @@
 
 #include <png/png.h>
 
-#include "Camera.h"
+#include "PhysicsHandler.h"
 #include "Light.h"
 #include "Grass.h"
 #include "Text.h"
@@ -28,14 +28,17 @@ typedef struct PrimaryGraphicsPushConstants{
 	glm::mat4 cameravpmatrices, modelmatrix;
 }PrimaryGraphicsPushConstants;
 
+typedef struct LightUniformBuffer{
+	glm::vec4 colortemp;
+}LightUniformBuffer;
+
 class GraphicsHandler{
 private:
 	static VulkanInfo vulkaninfo;
-//  extent is redundant with hori/vertres variables
-	static VkExtent2D swapextent;
 	PrimaryGraphicsPushConstants primarygraphicspushconstants;
 
 	Camera*primarycamera;
+	PhysicsHandler physicshandler;
 	std::vector<Light*>lights;
 	Light**lastlightsptr;
 	std::vector<Mesh*>dynamicshadowcastingmeshes, landscapemeshes;
@@ -45,7 +48,6 @@ private:
 	Text*troubleshootingtext;
 	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime;
 
-//	static void GLInit(bool printstuff);
 	static void VKInit();
 	static void VKSubInitWindow();
 	static void VKSubInitInstance();
@@ -53,20 +55,30 @@ private:
 	static void VKSubInitQueues();
 	static void VKSubInitSwapchain();
 	static void VKSubInitRenderpass();
-	static void VKSubInitGraphicsPipeline(const char*vertexshaderfilepath, const char*fragmentshaderfilepath);
+	static void VKSubInitDescriptorPool();
+	static void VKSubInitGraphicsPipeline();
 	static void VKSubInitFramebuffers();
 	static void VKSubInitCommandPool();
-	static void VKSubInitSemaphores();
-//	static void setUpStagingBuffer(VkDeviceSize buffersize);
+	static void VKSubInitSemaphoresAndFences();
 	void recordCommandBuffers();
+	static void VKSubInitPipeline(VkPipelineLayout*pipelinelayout,
+								  VkDescriptorSetLayout*descriptorsetlayout,
+								  VkPushConstantRange*pushconstantrange,
+								  VkRenderPass*renderpass,
+								  VkPipeline*pipeline,
+						          VkPipelineShaderStageCreateInfo*shadermodules,
+						          VkPipelineVertexInputStateCreateInfo*vertexinputstatecreateinfo);
+	static void VKSubInitLoadShaders(const char*vertexshaderfilepath,
+								     const char*fragmentshaderfilepath,
+								     VkShaderModule*vertexshadermodule,
+								     VkShaderModule*fragmentshadermodule,
+								     VkPipelineShaderStageCreateInfo*vertexshaderstatecreateinfo,
+								     VkPipelineShaderStageCreateInfo*fragmentshaderstatecreateinfo);
 public:
 	GraphicsHandler();
 	~GraphicsHandler();
 	void draw();
-	void drawShittyTextureMonitor();
-	void sendLightUniforms();
 	bool shouldClose();
-	static GLuint linkShaders(char shadertypes, ...);
 	static void createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath, VkPipelineLayout*pipelinelayout, VkPipelineShaderStageCreateInfo*vertexshaderstagecreateinfo, VkPipelineShaderStageCreateInfo*fragmentshaderstagecreateinfo);
 };
 

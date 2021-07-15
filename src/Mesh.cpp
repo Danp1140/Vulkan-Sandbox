@@ -10,14 +10,7 @@ Mesh::Mesh(VulkanInfo*vki){
 	vulkaninfo=vki;
 	position=glm::vec3(0, 0, 0);
 	vertices=std::vector<Vertex>();
-	vertices.push_back({glm::vec3(0, 0, 0), glm::vec3(0, 1, 0), glm::vec2(0, 0)});
-	vertices.push_back({glm::vec3(1, 0, 0), glm::vec3(0, 1, 0), glm::vec2(0, 0)});
-	vertices.push_back({glm::vec3(0, 0, 1), glm::vec3(0, 1, 0), glm::vec2(0, 0)});
-	vertices.push_back({glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)});
 	tris=std::vector<Tri>();
-	tris.push_back({{0, 1, 2}});
-	tris.push_back({{0, 1, 3}});
-	tris.push_back({{0, 2, 3}});
 	recalculateModelMatrix();
 	shadowtype=RADIUS;
 	updateBuffers();
@@ -33,16 +26,24 @@ Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
 	updateBuffers();
 	initCommandBuffer();
 	srand(glfwGetTime());
-	glm::vec4 noisetexture[512][512];
-	for(uint32_t x=0;x<512;x++){
-		for(uint32_t y=0;y<512;y++){
-			noisetexture[x][y]=rand()*glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-		}
-	}
-	addTexture(512, (void*)(&noisetexture[0][0]));
+//	glm::vec4 noisetexture[512][512];
+//	for(uint32_t x=0;x<512;x++){
+//		for(uint32_t y=0;y<512;y++){
+//			noisetexture[x][y]=(float(rand())/float(RAND_MAX))*glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+////			std::cout<<noisetexture[x][y].x<<'\n';
+////			noisetexture[x][y]=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+//		}
+//	}
+//	addTexture(512, (void*)(&noisetexture[0][0]));
 }
 
 Mesh::~Mesh(){
+	for(auto&t:textures){
+		vkDestroyImage(vulkaninfo->logicaldevice, t.image, nullptr);
+		vkFreeMemory(vulkaninfo->logicaldevice, t.memory, nullptr);
+		vkDestroyImageView(vulkaninfo->logicaldevice, t.imageview, nullptr);
+		vkDestroySampler(vulkaninfo->logicaldevice, t.sampler, nullptr);
+	}
 	vkFreeCommandBuffers(vulkaninfo->logicaldevice, vulkaninfo->commandpool, 1, &commandbuffer);
 	vkFreeMemory(vulkaninfo->logicaldevice, indexbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, indexbuffer, nullptr);
@@ -57,8 +58,10 @@ void Mesh::updateBuffers(){
 	vkMapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, 0, vertexbuffersize, 0, &datatemp);
 	memcpy(datatemp, (void*)vertices.data(), vertexbuffersize);
 	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
+
 	createAndAllocateBuffer(&vertexbuffer, vertexbuffersize, VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, &vertexbuffermemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	copyBuffer(&(vulkaninfo->stagingbuffer), &vertexbuffer, vertexbuffersize, nullptr);
+
 	vkFreeMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffer, nullptr);
 	VkDeviceSize indexbuffersize=sizeof(uint16_t)*3*tris.size();
@@ -73,28 +76,30 @@ void Mesh::updateBuffers(){
 	}
 	memcpy(indexdatatemp, (void*)indextemp, indexbuffersize);
 	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
+
 	createAndAllocateBuffer(&indexbuffer, indexbuffersize, VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, &indexbuffermemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	copyBuffer(&(vulkaninfo->stagingbuffer), &indexbuffer, indexbuffersize, nullptr);
+
 	vkFreeMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffer, nullptr);
 }
 
 void Mesh::initCommandBuffer(){
-	VkCommandBufferAllocateInfo commandbufferallocateinfo{
+	VkCommandBufferAllocateInfo cmdbuffallocinfo{
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		nullptr,
 		vulkaninfo->commandpool,
 		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
 		1
 	};
-	vkAllocateCommandBuffers(vulkaninfo->logicaldevice, &commandbufferallocateinfo, &commandbuffer);
-	VkCommandBufferBeginInfo commandbufferbegininfo{
+	vkAllocateCommandBuffers(vulkaninfo->logicaldevice, &cmdbuffallocinfo, &commandbuffer);
+	VkCommandBufferBeginInfo cmdbuffbegininfo{
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		nullptr,
 		0,
 		nullptr
 	};
-	vkBeginCommandBuffer(commandbuffer, &commandbufferbegininfo);
+	vkBeginCommandBuffer(commandbuffer, &cmdbuffbegininfo);
 	VkDeviceSize offsettemp=0u;
 	vkCmdBindVertexBuffers(commandbuffer, 0, 1, &vertexbuffer, &offsettemp);
 	vkCmdBindIndexBuffer(commandbuffer, indexbuffer, 0, VK_INDEX_TYPE_UINT16);
@@ -113,25 +118,31 @@ void Mesh::createAndAllocateBuffer(VkBuffer*buffer, VkDeviceSize buffersize, VkB
 			0,
 			nullptr
 	};
+	//things that could possibly be wrong:
+	//buffercreateinfo (and therefore:)
+	//  flags << unlikely to be the actual problem
+	//  buffersize << also unlikely to be the problem (unless we're allocating to small a memory size????? doubtful...)
+	//  bufferusage
+	//  sharingmode (and therefore:)
+	//      queuefamilyindexcount
+	//      queuefamilyindices
+	//and buffer address << seems most likely issue, as memory access is difficult lol
+	//but i explicitly double-checked and the address seems valid
+	//
+	//to better troubleshoot, we could look at how we successfully use this function elsewhere
 	vkCreateBuffer(vulkaninfo->logicaldevice, &buffercreateinfo, nullptr, buffer);
 	VkMemoryRequirements memrequirements{};
 	vkGetBufferMemoryRequirements(vulkaninfo->logicaldevice, *buffer, &memrequirements);
 	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
 	vkGetPhysicalDeviceMemoryProperties(vulkaninfo->physicaldevice, &physicaldevicememprops);
-	//would like to understand below checks better...
 	uint32_t memindex=-1u;
 	for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
 		if(memrequirements.memoryTypeBits&(1<<x)
 		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&reqprops)==reqprops)){
 			memindex=x;
-//			std::cout<<"mem index: "<<x<<std::endl;
 			break;
 		}
 	}
-	//would like to understand memory dynamics better...
-	//what is best optimization for static/const (or dynamic) meshes?
-	//when can memory be accessed/changed?
-	//when can memory be unmapped and what are the benefits?
 	VkMemoryAllocateInfo memallocateinfo{
 			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 			nullptr,
@@ -200,6 +211,7 @@ void Mesh::copyBufferToImage(VkBuffer*src, VkImage*dst, uint32_t resolution){
 		nullptr
 	};
 	vkBeginCommandBuffer(vulkaninfo->interimcommandbuffer, &cmdbuffbegininfo);
+	std::cout<<"copying buffer to image (layout must be transfer dst optimal\n";
 	vkCmdCopyBufferToImage(vulkaninfo->interimcommandbuffer, *src, *dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imgcopy);
 	vkEndCommandBuffer(vulkaninfo->interimcommandbuffer);
 	VkSubmitInfo subinfo{
@@ -248,12 +260,14 @@ void Mesh::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout o
 		imgmembarrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		dstmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
+		std::cout<<"transitioning image from undef to transfer\n";
 	}
 	else if(oldlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL&&newlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
 		imgmembarrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		imgmembarrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
 		srcmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
 		dstmask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		std::cout<<"transitioning from transfer to shader read\n";
 	}
 	vkBeginCommandBuffer(vulkaninfo->interimcommandbuffer, &cmdbuffbegininfo);
 	vkCmdPipelineBarrier(vulkaninfo->interimcommandbuffer, srcmask, dstmask, 0, 0, nullptr, 0, nullptr, 1, &imgmembarrier);
@@ -288,15 +302,21 @@ void Mesh::setPosition(glm::vec3 p){
 }
 
 void Mesh::addTexture(uint32_t resolution, void*data){
-	//would like to understand */all/* of this better...
-	VkBuffer stagingbuffer;
-	VkDeviceMemory stagingbuffermemory;
+	/*
+	 * allocate and map memory for staging buffer
+	 */
 	VkDeviceSize size=resolution*resolution*4;
-	createAndAllocateBuffer(&stagingbuffer, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &stagingbuffermemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	createAndAllocateBuffer(&(vulkaninfo->stagingbuffer), size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &(vulkaninfo->stagingbuffermemory), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	//if this doesnt work, make a temp void*, memcpy after the map, then unmap
-	vkMapMemory(vulkaninfo->logicaldevice, stagingbuffermemory, 0, size, 0, &data);
-	vkUnmapMemory(vulkaninfo->logicaldevice, stagingbuffermemory);
-	TextureInfo texinfotemp={VK_NULL_HANDLE, VK_NULL_HANDLE};
+	vkMapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, 0, size, 0, &data);
+	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
+
+	//make temp TextureInfo
+	TextureInfo texinfotemp={};
+
+	/*
+	 * create an image
+	 */
 	VkImageCreateInfo imgcreateinfo{
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		nullptr,
@@ -314,7 +334,11 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 		nullptr,
 		VK_IMAGE_LAYOUT_UNDEFINED
 	};
-	vkCreateImage(vulkaninfo->logicaldevice, &imgcreateinfo, nullptr, &(texinfotemp.image));
+	if(vkCreateImage(vulkaninfo->logicaldevice, &imgcreateinfo, nullptr, &(texinfotemp.image))==VK_SUCCESS) std::cout<<"image created\n";
+
+	/*
+	 * get the memory index for the device image storage, and allocate appropriate amount of such memory
+	 */
 	VkMemoryRequirements memrequirements{};
 	vkGetImageMemoryRequirements(vulkaninfo->logicaldevice, texinfotemp.image, &memrequirements);
 	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
@@ -336,11 +360,19 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 	vkAllocateMemory(vulkaninfo->logicaldevice, &memallocateinfo, nullptr, &(texinfotemp.memory));
 	vkBindImageMemory(vulkaninfo->logicaldevice, texinfotemp.image, texinfotemp.memory, 0);
 
-
+	/*
+	 * transition image to transfer layout, copy buffer info to image, get rid of staging buffer, and transition
+	 * image to shader read/sample layout
+	 */
 	transitionImageLayout(texinfotemp.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	copyBufferToImage(&(vulkaninfo->stagingbuffer), &texinfotemp.image, resolution);
+	vkFreeMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, nullptr);
+	vkDestroyBuffer(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffer, nullptr);
 	transitionImageLayout(texinfotemp.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+	/*
+	 * create image view
+	 */
 	VkImageViewCreateInfo imgviewcreateinfo{
 		VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		nullptr,
@@ -348,11 +380,14 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 		texinfotemp.image,
 		VK_IMAGE_VIEW_TYPE_2D,
 		VK_FORMAT_R8G8B8A8_SRGB,
-		{},
+		{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
 		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 	};
-	vkCreateImageView(vulkaninfo->logicaldevice, &imgviewcreateinfo, nullptr, &(texinfotemp.imageview));
+	if(vkCreateImageView(vulkaninfo->logicaldevice, &imgviewcreateinfo, nullptr, &(texinfotemp.imageview))==VK_SUCCESS) std::cout<<"image view created\n";
 
+	/*
+	 * create sampler
+	 */
 	VkSamplerCreateInfo samplercreateinfo{
 		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		nullptr,
@@ -364,29 +399,23 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 		VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		0.0f,
-		VK_TRUE,
-		4.0f,
+		VK_FALSE,
+		1.0f,
 		VK_FALSE,
 		VK_COMPARE_OP_ALWAYS,
 		0.0f,
-		0.0f,
+		1.0f,
 		VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 		VK_FALSE
 	};
-	vkCreateSampler(vulkaninfo->logicaldevice, &samplercreateinfo, nullptr, &(texinfotemp.sampler));
+	if(vkCreateSampler(vulkaninfo->logicaldevice, &samplercreateinfo, nullptr, &(texinfotemp.sampler))==VK_SUCCESS) std::cout<<"sampler created\n";
 
-	//hopefully passing by value is okay here
 	textures.push_back(texinfotemp);
 }
 
 void Mesh::loadOBJ(const char*filepath){
-	/* writing this function has introduced some problematic parts of how we go about sending/rendering info w/ the gpu.
-	 * worth considering options here. would like to be able to do seperate indexing for vertex position, uv, and normal,
-	 * but not sure if that's possible with opengl....
-	*/
 	tris=std::vector<Tri>(); vertices=std::vector<Vertex>();
 	std::vector<unsigned int> vertexindices, uvindices, normalindices;
-	std::vector<glm::ivec3> combinations;
 	std::vector<glm::vec3> vertextemps, normaltemps;
 	std::vector<glm::vec2> uvtemps;
 	FILE*obj=fopen(filepath, "r");
@@ -414,7 +443,6 @@ void Mesh::loadOBJ(const char*filepath){
 			normaltemps.push_back(normal);
 		}
 		else if(strcmp(lineheader, "f")==0){
-//			std::cout<<vertextemps.size()<<" vertices, "<<uvtemps.size()<<" uvs, "<<normaltemps.size()<<" normals"<<std::endl;
 			unsigned int vertidx[3], uvidx[3], normidx[3];
 			int matches=fscanf(obj, "%d/%d/%d %d/%d/%d %d/%d/%d", &vertidx[0], &uvidx[0], &normidx[0],
 					  &vertidx[1], &uvidx[1], &normidx[1],
@@ -428,76 +456,60 @@ void Mesh::loadOBJ(const char*filepath){
 			for(auto&u:uvidx) uvindices.push_back(u-1);
 		}
 	}
-	for(int x=0;x<vertexindices.size();x+=3){
-		uint16_t duplicate[3]={(uint16_t)-1u, (uint16_t)-1u, (uint16_t)-1u};
-		for(int y=0;y<3;y++){
-			for(int z=0;z<combinations.size();z++){
-				if(combinations[z]==glm::ivec3(vertexindices[x+y], uvindices[x+y], normalindices[x+y])){
-					duplicate[y]=z;
+
+	for(uint16_t x=0;x<vertexindices.size()/3;x++){
+		tris.push_back({{UINT16_MAX, UINT16_MAX, UINT16_MAX}, std::vector<Tri*>(), glm::vec3(0, 0, 0)});
+		for(uint16_t y=0;y<3;y++){
+			std::cout<<"\rassembling all vertices and triangles ("<<(x*3+y+1)<<'/'<<vertexindices.size()<<')';
+			vertices.push_back({vertextemps[vertexindices[3*x+y]], normaltemps[normalindices[3*x+y]], uvtemps[uvindices[3*x+y]]});
+			tris[tris.size()-1].vertices[y]=3*x+y;
+		}
+	}
+	std::cout<<std::endl;
+
+	//any efficiency possible with breaks and stuff??
+	uint16_t dupecounter=0;
+	for(int x=0;x<vertices.size();x++){
+		for(int y=0;y<x;y++){
+			if(y!=x&&vertices[x]==vertices[y]){
+				for(int z=0;z<tris.size();z++){
+					for(int w=0;w<3;w++){
+						if(tris[z].vertices[w]==x) tris[z].vertices[w]=y;
+						else if(tris[z].vertices[w]>x) tris[z].vertices[w]--;
+					}
+				}
+				vertices.erase(vertices.begin()+x);
+				dupecounter++;
+			}
+		}
+	}
+	std::cout<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(vertexindices.size())*100.0f)<<" percent size decrease!!!)"<<std::endl;
+
+	bool adjacencyfound;
+	for(int x=0;x<tris.size();x++){
+		for(int y=0;y<tris.size();y++){
+			if(x!=y){
+				adjacencyfound=false;
+				for(int z=0;z<3;z++){
+					for(int w=0;w<3;w++){
+						if(vertices[tris[x].vertices[z]].position==vertices[tris[y].vertices[w]].position){
+							tris[x].adjacencies.push_back(&tris[y]);
+//							std::cout<<"adjacency found between tri "<<x<<" and tri "<<y<<std::endl;
+							adjacencyfound=true;
+							break;
+						}
+					}
+					if(adjacencyfound) break;
 				}
 			}
 		}
-		uint16_t triindices[3]={(uint16_t)-1u, (uint16_t)-1u, (uint16_t)-1u};
-		for(int y=0;y<3;y++){
-//			std::cout<<"loading... ("<<combinations.size()<<" combinations to check thru...)"<<std::endl;
-			if(duplicate[y]==(uint16_t)-1u){
-				vertices.push_back({vertextemps[vertexindices[x+y]], normaltemps[normalindices[x+y]], uvtemps[uvindices[x+y]]});
-				triindices[y]=vertices.size()-1;
-				combinations.push_back(glm::ivec3(vertexindices[x+y], normalindices[x+y], uvindices[x+y]));
-			}
-			else triindices[y]=duplicate[y];
-		}
-		tris.push_back({triindices[0], triindices[1], triindices[2]});
+		std::cout<<"\rfinding adjacencies (tri "<<(x+1)<<" of "<<tris.size()<<')';
 	}
-//	for(auto&t:tris){
-//		std::cout<<vertices[t.vertices[0]].getString()<<"<=>"<<vertices[t.vertices[1]].getString()<<"<=>"<<vertices[t.vertices[2]].getString()<<std::endl;
-//	}
-}
+	std::cout<<std::endl;
 
-void Mesh::loadOBJLoadtimeOptimized(const char*filepath){
-	tris=std::vector<Tri>(); vertices=std::vector<Vertex>();
-	std::vector<unsigned int> vertexindices, uvindices, normalindices;
-	std::vector<glm::ivec3> combinations;
-	std::vector<glm::vec3> vertextemps, normaltemps;
-	std::vector<glm::vec2> uvtemps;
-	FILE*obj=fopen(filepath, "r");
-	if(obj==nullptr){
-		std::cout<<"Loading OBJ Failure ("<<filepath<<")\n";
-		return;
-	}
-	while(true){
-		char lineheader[128];//128?
-		int res=fscanf(obj, "%s", lineheader);
-		if(res==EOF){break;}
-		if(strcmp(lineheader, "v")==0){
-			glm::vec3 vertex;
-			fscanf(obj, "%f %f %f\n", &vertex.x, &vertex.y, &vertex.z);
-			vertextemps.push_back(vertex);
-		}
-		else if(strcmp(lineheader, "vt")==0){
-			glm::vec2 uv;
-			fscanf(obj, "%f %f\n", &uv.x, &uv.y);
-			uvtemps.push_back(uv);
-		}
-		else if(strcmp(lineheader, "vn")==0){
-			glm::vec3 normal;
-			fscanf(obj, "%f %f %f\n", &normal.x, &normal.y, &normal.z);
-			normaltemps.push_back(normal);
-		}
-		else if(strcmp(lineheader, "f")==0){
-//			std::cout<<vertextemps.size()<<" vertices, "<<uvtemps.size()<<" uvs, "<<normaltemps.size()<<" normals"<<std::endl;
-			unsigned int vertidx[3], uvidx[3], normidx[3];
-			int matches=fscanf(obj, "%d/%d/%d %d/%d/%d %d/%d/%d", &vertidx[0], &uvidx[0], &normidx[0],
-			                   &vertidx[1], &uvidx[1], &normidx[1],
-			                   &vertidx[2], &uvidx[2], &normidx[2]);
-			if(matches!=9){
-				std::cout<<"OBJ Format Failure ("<<filepath<<")\n";
-				return;
-			}
-			for(int x=0;x<3;x++){
-				vertices.push_back({glm::vec3(vertextemps[vertidx[x]]), glm::vec3(normaltemps[normidx[x]]), glm::vec2(uvtemps[uvidx[x]])});
-			}
-			tris.push_back({{(uint16_t)(vertices.size()-3), (uint16_t)(vertices.size()-2), (uint16_t)(vertices.size()-1)}});
-		}
+	for(auto&t:tris){
+		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertices[1]].position-vertices[t.vertices[0]].position,
+							   vertices[t.vertices[2]].position-vertices[t.vertices[0]].position));
+//		std::cout<<"algebraic normal: <"<<t.algebraicnormal.x<<", "<<t.algebraicnormal.y<<", "<<t.algebraicnormal.z<<">\n";
 	}
 }

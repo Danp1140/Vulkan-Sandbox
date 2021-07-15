@@ -15,7 +15,7 @@ link_directories(libs/vulkan)
 #add_custom_command(OUTPUT compilelog.txt
 #        COMMAND compile.sh)
 
-add_executable(VulkanSandbox src/main.cpp src/GraphicsHandler.cpp src/GraphicsHandler.h src/Mesh.cpp src/Mesh.h src/Camera.cpp src/Camera.h src/Light.cpp src/Light.h src/Grass.cpp src/Grass.h src/Text.cpp src/Text.h)
+add_executable(VulkanSandbox src/main.cpp src/GraphicsHandler.cpp src/GraphicsHandler.h src/Mesh.cpp src/Mesh.h src/Camera.cpp src/Camera.h src/Light.cpp src/Light.h src/Grass.cpp src/Grass.h src/Text.cpp src/Text.h src/PhysicsHandler.cpp src/PhysicsHandler.h)
 
 target_link_libraries(${PROJECT_NAME} vulkan.1.2.176 glfw.3 -m64)
 #target_link_libraries(${PROJECT_NAME} vulkan.1.2.176 glfw3 freetype bz2 z -m64)
