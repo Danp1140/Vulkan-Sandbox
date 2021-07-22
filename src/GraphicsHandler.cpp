@@ -9,39 +9,60 @@ VulkanInfo GraphicsHandler::vulkaninfo{};
 GraphicsHandler::GraphicsHandler(){
 	if(vulkaninfo.window==nullptr) VKInit();
 	lights=std::vector<Light*>();
-	lights.push_back(new Light(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(-1.0f, -1.0f, -1.0f), 32, SUN));
+	lights.push_back(new Light(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), 32, LIGHT_TYPE_SUN));
 	staticshadowcastingmeshes=std::vector<const Mesh*>();
+//	staticshadowcastingmeshes.push_back(new Mesh("../resources/objs/smoothhipolysuzanne.obj", glm::vec3(0, 0, 0), &vulkaninfo));
 	landscapemeshes=std::vector<Mesh*>();
 	landscapemeshes.push_back(new Mesh("../resources/objs/lowpolybeach.obj", glm::vec3(0, 0, 0), &vulkaninfo));
 	primarycamera=new Camera(vulkaninfo.window, vulkaninfo.horizontalres, vulkaninfo.verticalres);
 	primarygraphicspushconstants={glm::mat4(1), glm::mat4(1)};
-	lasttime=std::chrono::high_resolution_clock::now();
 	physicshandler=PhysicsHandler(landscapemeshes[0], primarycamera);
-	recordCommandBuffers();
+	troubleshootingtext=new Text("troubleshooting text", glm::vec2(0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 144.0f, vulkaninfo.horizontalres, vulkaninfo.verticalres);
+	lasttime=std::chrono::high_resolution_clock::now();
+//	recordCommandBuffers();
 }
 
-//roll through everything when you're bored sometime and update destructor (just cause its good practice)
 GraphicsHandler::~GraphicsHandler(){
+	vkWaitForFences(vulkaninfo.logicaldevice, MAX_FRAMES_IN_FLIGHT, &vulkaninfo.frameinflightfences[0], VK_TRUE, UINT64_MAX);
+	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
+	vkQueueWaitIdle(vulkaninfo.presentationqueue);
+	vkDeviceWaitIdle(vulkaninfo.logicaldevice);
+
+	delete troubleshootingtext;
 	for(auto&m:landscapemeshes) delete m;
 	for(auto&m:staticshadowcastingmeshes) delete m;
 	delete primarycamera;
-	vkDeviceWaitIdle(vulkaninfo.logicaldevice);
+
 	for(int x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.renderfinishedsemaphores[x], nullptr);
 		vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.imageavailablesemaphores[x], nullptr);
 		vkDestroyFence(vulkaninfo.logicaldevice, vulkaninfo.frameinflightfences[x], nullptr);
 	}
+	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.textdescriptorsetlayout, nullptr);
+	vkDestroyDescriptorPool(vulkaninfo.logicaldevice, vulkaninfo.descriptorpool, nullptr);
 	vkFreeCommandBuffers(vulkaninfo.logicaldevice, vulkaninfo.commandpool, 1, &(vulkaninfo.interimcommandbuffer));
 	vkFreeCommandBuffers(vulkaninfo.logicaldevice, vulkaninfo.commandpool, vulkaninfo.numswapchainimages, &vulkaninfo.commandbuffers[0]);
 	vkDestroyCommandPool(vulkaninfo.logicaldevice, vulkaninfo.commandpool, nullptr);
-	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.framebuffers[x], nullptr);
+	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+		vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffers[x], nullptr);
+		vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[x], nullptr);
+		vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.framebuffers[x], nullptr);
+	}
+	vkDestroyShaderModule(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.vertexshadermodule, nullptr);
+	vkDestroyShaderModule(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.fragmentshadermodule, nullptr);
+	vkDestroyShaderModule(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.vertexshadermodule, nullptr);
+	vkDestroyShaderModule(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.fragmentshadermodule, nullptr);
+	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.pipeline, nullptr);
 	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipeline, nullptr);
 	vkDestroyRenderPass(vulkaninfo.logicaldevice, vulkaninfo.primaryrenderpass, nullptr);
+	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.pipelinelayout, nullptr);
 	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipelinelayout, nullptr);
-	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.descriptorsetlayout, nullptr);
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) vkDestroyImageView(vulkaninfo.logicaldevice, vulkaninfo.swapchainimageviews[x], nullptr);
 	vkDestroySwapchainKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, nullptr);
 	vkDestroyDevice(vulkaninfo.logicaldevice, nullptr);
+	DestroyDebugUtilsMessengerEXT(vulkaninfo.instance, vulkaninfo.debugmessenger, nullptr);
 	vkDestroySurfaceKHR(vulkaninfo.instance, vulkaninfo.surface, nullptr);
 	vkDestroyInstance(vulkaninfo.instance, nullptr);
 	glfwDestroyWindow(vulkaninfo.window);
@@ -52,18 +73,19 @@ GraphicsHandler::~GraphicsHandler(){
 	delete[] vulkaninfo.framebuffers;
 	delete[] vulkaninfo.swapchainimageviews;
 	delete[] vulkaninfo.swapchainimages;
-	delete[] vulkaninfo.queuefamilyindices;
 }
 
 void GraphicsHandler::VKInit(){
 	VKSubInitWindow();
 	VKSubInitInstance();
+	VKSubInitDebug();
 	VKSubInitDevices();
 	VKSubInitQueues();
 	VKSubInitSwapchain();
 	VKSubInitRenderpass();
-	VKSubInitDescriptorPool();
+	VKSubInitDescriptorPool(2u);
 	VKSubInitGraphicsPipeline();
+	VKSubInitTextGraphicsPipeline();
 	VKSubInitFramebuffers();
 	VKSubInitCommandPool();
 	VKSubInitSemaphoresAndFences();
@@ -78,6 +100,7 @@ void GraphicsHandler::VKSubInitWindow(){
 	vulkaninfo.window=glfwCreateWindow(vulkaninfo.width, vulkaninfo.height, "Vulkan Sandbox", glfwGetPrimaryMonitor(), nullptr);
 	glfwGetFramebufferSize(vulkaninfo.window, &vulkaninfo.horizontalres, &vulkaninfo.verticalres);
 	glfwMakeContextCurrent(vulkaninfo.window);
+	glfwSetInputMode(vulkaninfo.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 void GraphicsHandler::VKSubInitInstance(){
@@ -86,10 +109,12 @@ void GraphicsHandler::VKSubInitInstance(){
 			nullptr,
 			"Vulkan Sandbox",
 			VK_MAKE_VERSION(1, 0, 0),
-			"Combustion",
+			"Jet",
 			VK_MAKE_VERSION(1, 0, 0),
 			VK_MAKE_API_VERSION(1, 1, 0, 0)
 	};
+
+	const char*layernames[1]={"VK_LAYER_KHRONOS_validation"};
 
 	uint32_t instanceextcount=-1u;
 	vkEnumerateInstanceExtensionProperties(nullptr, &instanceextcount, nullptr);
@@ -103,16 +128,37 @@ void GraphicsHandler::VKSubInitInstance(){
 			nullptr,
 			0,
 			&appinfo,
-			0,
-			nullptr,
+			1,
+			&layernames[0],
 			instanceextcount,
 			&instanceextnames[0]
 	};
+	VkValidationFeaturesEXT validationfeatures{
+			VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+			instancecreateinfo.pNext,
+			0,
+			nullptr,
+			0,
+			nullptr
+	};
+	instancecreateinfo.pNext=&validationfeatures;
 	vkCreateInstance(&instancecreateinfo, nullptr, &vulkaninfo.instance);
 	glfwCreateWindowSurface(vulkaninfo.instance, vulkaninfo.window, nullptr, &vulkaninfo.surface);
 }
 
-//maybe clean this up later? redo how queues and queue indices and queue families are managed???
+void GraphicsHandler::VKSubInitDebug(){
+	VkDebugUtilsMessengerCreateInfoEXT messengercreateinfo{
+		VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+		nullptr,
+		0,
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT|VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+		debugCallback,
+		nullptr
+	};
+	CreateDebugUtilsMessengerEXT(vulkaninfo.instance, &messengercreateinfo, nullptr, &vulkaninfo.debugmessenger);
+}
+
 void GraphicsHandler::VKSubInitDevices(){
 	uint32_t physicaldevicecount=1, queuefamilycount=-1u, deviceextcount=-1u;
 	vkEnumeratePhysicalDevices(vulkaninfo.instance, &physicaldevicecount, &vulkaninfo.physicaldevice);
@@ -120,35 +166,69 @@ void GraphicsHandler::VKSubInitDevices(){
 	VkQueueFamilyProperties queuefamilyprops[queuefamilycount];
 	vkGetPhysicalDeviceQueueFamilyProperties(vulkaninfo.physicaldevice, &queuefamilycount, &queuefamilyprops[0]);
 
-	vulkaninfo.queuefamilyindices=new uint32_t[2];
-	vulkaninfo.queuefamilyindices[0]=-1u; vulkaninfo.queuefamilyindices[1]=-1u;
+//	vulkaninfo.queuefamilyindices=new uint32_t[2];
+	vulkaninfo.graphicsqueuefamilyindex=-1u; vulkaninfo.presentqueuefamilyindex=-1u; vulkaninfo.transferqueuefamilyindex=-1u;
 	VkBool32 supportssurfacepresentation;
 	for(uint32_t x=0;x<queuefamilycount;x++){
-		if((queuefamilyprops[x].queueFlags&VK_QUEUE_GRAPHICS_BIT)&&vulkaninfo.queuefamilyindices[0]==-1u) vulkaninfo.queuefamilyindices[0]=x;
+		if((queuefamilyprops[x].queueFlags&VK_QUEUE_GRAPHICS_BIT)&&vulkaninfo.graphicsqueuefamilyindex==-1u) vulkaninfo.graphicsqueuefamilyindex=x;
 		vkGetPhysicalDeviceSurfaceSupportKHR(vulkaninfo.physicaldevice, x, vulkaninfo.surface, &supportssurfacepresentation);
-		if(supportssurfacepresentation&&vulkaninfo.queuefamilyindices[1]==-1u) vulkaninfo.queuefamilyindices[1]=x;
+		if(supportssurfacepresentation&&vulkaninfo.presentqueuefamilyindex==-1u) vulkaninfo.presentqueuefamilyindex=x;
+		if((queuefamilyprops[x].queueFlags&VK_QUEUE_TRANSFER_BIT)&&vulkaninfo.transferqueuefamilyindex==-1u) vulkaninfo.transferqueuefamilyindex=x;
 	}
+	std::vector<VkDeviceQueueCreateInfo> queuecreateinfos;
 	float queuepriority=1.0f;
+	queuecreateinfos.push_back({
+		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		nullptr,
+		0,
+		vulkaninfo.graphicsqueuefamilyindex,
+		1,
+		&queuepriority
+	});
+	if(vulkaninfo.graphicsqueuefamilyindex!=vulkaninfo.presentqueuefamilyindex){
+		queuecreateinfos.push_back({
+	        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+	        nullptr,
+	        0,
+	        vulkaninfo.presentqueuefamilyindex,
+	        1,
+	        &queuepriority
+		});
+	}
+	if(vulkaninfo.graphicsqueuefamilyindex!=vulkaninfo.transferqueuefamilyindex&&vulkaninfo.presentqueuefamilyindex!=vulkaninfo.transferqueuefamilyindex){
+		queuecreateinfos.push_back({
+            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            nullptr,
+            0,
+            vulkaninfo.transferqueuefamilyindex,
+            1,
+            &queuepriority
+		});
+	}
 	VkDeviceQueueCreateInfo devicequeuecreateinfos[2]{{
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		nullptr,
 		0,
-		vulkaninfo.queuefamilyindices[0],
+		vulkaninfo.graphicsqueuefamilyindex,
 		1,
 		&queuepriority
 	}, {
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		nullptr,
 		0,
-		vulkaninfo.queuefamilyindices[1],
+		vulkaninfo.presentqueuefamilyindex,
 		1,
 		&queuepriority
 	}};
 	vkEnumerateDeviceExtensionProperties(vulkaninfo.physicaldevice, nullptr, &deviceextcount, nullptr);
 	VkExtensionProperties deviceextprops[deviceextcount];
 	vkEnumerateDeviceExtensionProperties(vulkaninfo.physicaldevice, nullptr, &deviceextcount, &deviceextprops[0]);
-	char*deviceextnames[deviceextcount];
-	for(uint32_t x=0;x<deviceextcount;x++) deviceextnames[x]=deviceextprops[x].extensionName;
+	std::vector<const char*> deviceextnames;
+	for(uint32_t x=0;x<deviceextcount;x++){
+//		std::cout<<deviceextprops[x].extensionName<<std::endl;
+		if(strcmp(deviceextprops[x].extensionName, "VK_KHR_portability_subset")) deviceextnames.push_back("VK_KHR_portability_subset");
+		if(strcmp(deviceextprops[x].extensionName, "VK_KHR_swapchain")) deviceextnames.push_back("VK_KHR_swapchain");
+	}
 	VkPhysicalDeviceFeatures physicaldevicefeatures{};
 //	physicaldevicefeatures.samplerAnisotropy=VK_TRUE;
 	//could include all available, but for now will include none
@@ -156,20 +236,20 @@ void GraphicsHandler::VKSubInitDevices(){
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			nullptr,
 			0,
-			2,
-			&devicequeuecreateinfos[0],
+			(uint32_t)queuecreateinfos.size(),
+			queuecreateinfos.data(),
 			0,
 			nullptr,
-			deviceextcount,
-			&deviceextnames[0],
+			(uint32_t)deviceextnames.size(),
+			deviceextnames.data(),
 			&physicaldevicefeatures
 	};
 	vkCreateDevice(vulkaninfo.physicaldevice, &devicecreateinfo, nullptr, &vulkaninfo.logicaldevice);
-}
+}       //maybe clean this up later? redo how queues and queue indices and queue families are managed???
 
 void GraphicsHandler::VKSubInitQueues(){
-	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.queuefamilyindices[0], 0, &vulkaninfo.graphicsqueue);
-	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.queuefamilyindices[1], 0, &vulkaninfo.presentationqueue);
+	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.graphicsqueuefamilyindex, 0, &vulkaninfo.graphicsqueue);
+	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.presentqueuefamilyindex, 0, &vulkaninfo.presentationqueue);
 }
 
 void GraphicsHandler::VKSubInitSwapchain(){
@@ -177,7 +257,7 @@ void GraphicsHandler::VKSubInitSwapchain(){
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vulkaninfo.physicaldevice, vulkaninfo.surface, &surfacecaps);
 	vulkaninfo.swapchainextent=surfacecaps.currentExtent;
 	vulkaninfo.numswapchainimages=surfacecaps.minImageCount;
-	bool queuefamilyindicesaresame=vulkaninfo.queuefamilyindices[0]==vulkaninfo.queuefamilyindices[1];
+	bool queuefamilyindicesaresame=vulkaninfo.graphicsqueuefamilyindex==vulkaninfo.presentqueuefamilyindex;
 	VkSwapchainCreateInfoKHR swapchaincreateinfo{
 		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		nullptr,
@@ -191,7 +271,7 @@ void GraphicsHandler::VKSubInitSwapchain(){
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		queuefamilyindicesaresame?VK_SHARING_MODE_EXCLUSIVE:VK_SHARING_MODE_CONCURRENT,
 		queuefamilyindicesaresame?0u:2u,
-		queuefamilyindicesaresame?nullptr:&vulkaninfo.queuefamilyindices[0],
+		queuefamilyindicesaresame?nullptr:&vulkaninfo.graphicsqueuefamilyindex,
 		surfacecaps.currentTransform,
 		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		VK_PRESENT_MODE_FIFO_KHR,
@@ -199,6 +279,9 @@ void GraphicsHandler::VKSubInitSwapchain(){
 		VK_NULL_HANDLE
 	};
 	vkCreateSwapchainKHR(vulkaninfo.logicaldevice, &swapchaincreateinfo, nullptr, &vulkaninfo.swapchain);
+	uint32_t imgcounttemp=-1u;
+	//lol i have to call this to get the number once before i can call for values lmao
+	vkGetSwapchainImagesKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, &imgcounttemp, nullptr);
 	vulkaninfo.swapchainimages=new VkImage[vulkaninfo.numswapchainimages];
 	vkGetSwapchainImagesKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, &vulkaninfo.numswapchainimages, &vulkaninfo.swapchainimages[0]);
 	vulkaninfo.swapchainimageviews=new VkImageView[vulkaninfo.numswapchainimages];
@@ -268,80 +351,51 @@ void GraphicsHandler::VKSubInitRenderpass(){
 	vkCreateRenderPass(vulkaninfo.logicaldevice, &renderpasscreateinfo, nullptr, &vulkaninfo.primaryrenderpass);
 }
 
-void GraphicsHandler::VKSubInitDescriptorPool(){
-	VkDescriptorPoolSize descriptorpoolsize{
+void GraphicsHandler::VKSubInitDescriptorPool(uint32_t nummeshes){
+	VkDescriptorPoolSize descriptorpoolsizes[2]{{
 		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 		vulkaninfo.numswapchainimages
-	};
+	}, {
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		vulkaninfo.numswapchainimages*nummeshes+1
+	}};
 	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		nullptr,
 		0,      //perhaps look into flags
-		vulkaninfo.numswapchainimages,
-		1,
-		&descriptorpoolsize
+		vulkaninfo.numswapchainimages*(1+nummeshes+1),
+		2,
+		&descriptorpoolsizes[0]
 	};
 	vkCreateDescriptorPool(vulkaninfo.logicaldevice, &descriptorpoolcreateinfo, nullptr, &vulkaninfo.descriptorpool);
 }
 
-void GraphicsHandler::VKSubInitGraphicsPipeline(){
-	VkDescriptorSetLayoutBinding descriptorsetlayoutbinding{
-		0,
-		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		1,
-		VK_SHADER_STAGE_FRAGMENT_BIT,
-		nullptr
-	};
-	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		nullptr,
-		0,       //look into flags later
-		1,
-		&descriptorsetlayoutbinding
-	};
-	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &descriptorsetlayoutcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.descriptorsetlayout);
-	VkDescriptorSetLayout descriptorsetlayoutstemp[vulkaninfo.numswapchainimages];
-	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) descriptorsetlayoutstemp[x]=vulkaninfo.primarygraphicspipeline.descriptorsetlayout;
-	vulkaninfo.primarygraphicspipeline.descriptorset=new VkDescriptorSet[vulkaninfo.numswapchainimages];
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		vulkaninfo.descriptorpool,
-		vulkaninfo.numswapchainimages,
-		&descriptorsetlayoutstemp[0]
-	};
-	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descriptorsetallocinfo, &vulkaninfo.primarygraphicspipeline.descriptorset[0]);
-	vulkaninfo.lightuniformbuffers=new VkBuffer[vulkaninfo.numswapchainimages];
-	vulkaninfo.lightuniformbuffermemories=new VkDeviceMemory[vulkaninfo.numswapchainimages];
-	VkDeviceSize buffersize=sizeof(LightUniformBuffer);
+void GraphicsHandler::VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
+											 uint32_t binding,
+											 VkDeviceSize buffersize,
+											 VkBuffer*buffers,
+											 VkDeviceMemory*memories){
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
-		vulkaninfo.lightuniformbuffers[x]=VK_NULL_HANDLE;
-		vulkaninfo.lightuniformbuffermemories[x]=VK_NULL_HANDLE;
-//		Mesh::createAndAllocateBuffer(&vulkaninfo.lightuniformbuffers[x],
-//									  buffersize,
-//									  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-//									  &vulkaninfo.lightuniformbuffermemories[x],
-//									  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		VkBufferCreateInfo buffcreateinfo{
-			VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			nullptr,
-			0,
-			buffersize,
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_SHARING_MODE_EXCLUSIVE,
-			0,
-			nullptr
+				VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				nullptr,
+				0,
+				buffersize,
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_SHARING_MODE_EXCLUSIVE,
+				0,
+				nullptr
 		};
-		vkCreateBuffer(vulkaninfo.logicaldevice, &buffcreateinfo, nullptr, &vulkaninfo.lightuniformbuffers[x]);
+		vkCreateBuffer(vulkaninfo.logicaldevice, &buffcreateinfo, nullptr, &buffers[x]);
 		VkMemoryRequirements memrequirements{};
-		vkGetBufferMemoryRequirements(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffers[x], &memrequirements);
+		vkGetBufferMemoryRequirements(vulkaninfo.logicaldevice, buffers[x], &memrequirements);
 		VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
 		vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
 		uint32_t memindex=-1u;
 		for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
 			if(memrequirements.memoryTypeBits&(1<<x)
-				&&physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-				&&physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT){
+			   &&physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+			   &&physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT){
 				memindex=x;
 				break;
 			}
@@ -352,34 +406,103 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 				memrequirements.size,
 				memindex
 		};
-		vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &vulkaninfo.lightuniformbuffermemories[x]);
-		vkBindBufferMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffers[x], vulkaninfo.lightuniformbuffermemories[x], 0);
-
-		void*datatemp;
-		LightUniformBuffer lubtemp={glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)};
-		vkMapMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[x], 0, sizeof(LightUniformBuffer), 0, &datatemp);
-		memcpy(datatemp, (void*)&lubtemp, sizeof(LightUniformBuffer));
-		vkUnmapMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[x]);
+		vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &memories[x]);
+		vkBindBufferMemory(vulkaninfo.logicaldevice, buffers[x], memories[x], 0);
 
 		VkDescriptorBufferInfo descriptorbuffinfo{
-			vulkaninfo.lightuniformbuffers[x],
-			0,
-			sizeof(LightUniformBuffer)
+				buffers[x],
+				0,
+				buffersize
 		};
 		VkWriteDescriptorSet writedescriptorset{
-			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			nullptr,
-			vulkaninfo.primarygraphicspipeline.descriptorset[x],
-			0,
-			0,
-			1,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			nullptr,
-			&descriptorbuffinfo,
-			nullptr
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				nullptr,
+				pipelineinfo->descriptorset[x],
+				binding,
+				0,
+				1,
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				nullptr,
+				&descriptorbuffinfo,
+				nullptr
 		};
 		vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
 	}
+}
+
+void GraphicsHandler::VKSubInitGraphicsPipeline(){
+//	VkDescriptorSetLayoutBinding descriptorsetlayoutbindings[2]{{
+//		0,
+//		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//		1,
+//		VK_SHADER_STAGE_FRAGMENT_BIT,
+//		nullptr
+//	}, {
+//		0,
+//		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//		1,
+//		VK_SHADER_STAGE_FRAGMENT_BIT,
+//		nullptr
+//	}};
+//	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2]{{
+//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+//		nullptr,
+//		0,       //look into flags later
+//		1,
+//		&descriptorsetlayoutbindings[0]
+//	}, {
+//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+//		nullptr,
+//		0,
+//		1,
+//		&descriptorsetlayoutbindings[1]
+//	}};
+	VkDescriptorSetLayoutBinding scenedslbinding{
+		0,
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	};
+	VkDescriptorSetLayoutCreateInfo scenedslcreateinfo{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&scenedslbinding
+	};
+	std::cout<<"scene descriptor set layout create result: "<<string_VkResult(vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &scenedslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout))<<std::endl;
+	VkDescriptorSetLayoutBinding meshdslbinding{
+			0,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+	};
+	VkDescriptorSetLayoutCreateInfo meshdslcreateinfo{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&meshdslbinding
+	};
+	std::cout<<"mesh descriptor set layout create result: "<<string_VkResult(vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &meshdslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout))<<std::endl;
+
+	VkDescriptorSetLayout descriptorsetlayoutstemp[vulkaninfo.numswapchainimages];
+	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) descriptorsetlayoutstemp[x]=vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout;
+	vulkaninfo.primarygraphicspipeline.descriptorset=new VkDescriptorSet[vulkaninfo.numswapchainimages];
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		vulkaninfo.descriptorpool,
+		vulkaninfo.numswapchainimages,
+		&descriptorsetlayoutstemp[0]
+	};
+	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descriptorsetallocinfo, &vulkaninfo.primarygraphicspipeline.descriptorset[0]);
+
+	vulkaninfo.lightuniformbuffers=new VkBuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.lightuniformbuffermemories=new VkDeviceMemory[vulkaninfo.numswapchainimages];
+	VKSubInitUniformBuffer(&vulkaninfo.primarygraphicspipeline, 0, sizeof(LightUniformBuffer), vulkaninfo.lightuniformbuffers, vulkaninfo.lightuniformbuffermemories);
 
 	VkPushConstantRange pushconstantrange{
 		VK_SHADER_STAGE_VERTEX_BIT,
@@ -416,6 +539,7 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 		3,
 		&vertinattribdescription[0]
 	};
+	//could we just pass vulkaninfo.primarygraphicspipeline to both of these?
 	VkPipelineShaderStageCreateInfo vertshadersci, fragshadersci;
 	VKSubInitLoadShaders("../resources/shaders/vert.spv",
 					     "../resources/shaders/frag.spv",
@@ -424,13 +548,61 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 					     &vertshadersci,
 					     &fragshadersci);
 	VkPipelineShaderStageCreateInfo shaderstagecreateinfostemp[2]{vertshadersci, fragshadersci};
-	VKSubInitPipeline(&vulkaninfo.primarygraphicspipeline.pipelinelayout,
-			          &vulkaninfo.primarygraphicspipeline.descriptorsetlayout,
+	VkDescriptorSetLayout layoutstemp[2]{vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout, vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout};
+	VKSubInitPipeline(&vulkaninfo.primarygraphicspipeline,
+			          2u,
+			          &layoutstemp[0],
 			          &pushconstantrange,
 			          &vulkaninfo.primaryrenderpass,
-			          &vulkaninfo.primarygraphicspipeline.pipeline,
 			          &shaderstagecreateinfostemp[0],
 			          &vertinstatecreateinfo);
+}
+
+void GraphicsHandler::VKSubInitTextGraphicsPipeline(){
+	VkPipelineShaderStageCreateInfo vertsci, fragsci;
+	VKSubInitLoadShaders("../resources/shaders/textvert.spv",
+					     "../resources/shaders/textfrag.spv",
+					     &vulkaninfo.textgraphicspipeline.vertexshadermodule,
+					     &vulkaninfo.textgraphicspipeline.fragmentshadermodule,
+					     &vertsci,
+					     &fragsci);
+	VkPipelineShaderStageCreateInfo shaderscitemps[2]{vertsci, fragsci};
+	VkPipelineVertexInputStateCreateInfo vertexinputsci{
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		0,
+		nullptr,
+		0,
+		nullptr
+	};
+	VkDescriptorSetLayoutBinding layoutbinding{
+		0,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	};
+	VkDescriptorSetLayoutCreateInfo layoutcreateinfo{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&layoutbinding
+	};
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &layoutcreateinfo, nullptr, &vulkaninfo.textdescriptorsetlayout);
+	VkPushConstantRange pushconstantrange{
+		VK_SHADER_STAGE_VERTEX_BIT,
+		0,
+		sizeof(TextPushConstants)
+	};
+	VKSubInitPipeline(&vulkaninfo.textgraphicspipeline,
+			          1,
+			          &vulkaninfo.textdescriptorsetlayout,
+			          &pushconstantrange,
+			          &vulkaninfo.primaryrenderpass,
+			          &shaderscitemps[0],
+			          &vertexinputsci);
 }
 
 void GraphicsHandler::VKSubInitFramebuffers(){
@@ -456,8 +628,8 @@ void GraphicsHandler::VKSubInitCommandPool(){
 	VkCommandPoolCreateInfo cmdpoolcreateinfo{
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		nullptr,
-		0,
-		vulkaninfo.queuefamilyindices[0]
+		VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		vulkaninfo.graphicsqueuefamilyindex
 	};
 	vkCreateCommandPool(vulkaninfo.logicaldevice, &cmdpoolcreateinfo, nullptr, &vulkaninfo.commandpool);
 	VkCommandBufferAllocateInfo cmdbufferallocateinfo{
@@ -473,12 +645,23 @@ void GraphicsHandler::VKSubInitCommandPool(){
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
 	//do we need below record???
 	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
+	vulkaninfo.commandbufferinheritanceinfos=new VkCommandBufferInheritanceInfo[vulkaninfo.numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
 		VkCommandBufferBeginInfo cmdbufferbegininfo{
 				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 				nullptr,
 				0,
 				nullptr
+		};
+		vulkaninfo.commandbufferinheritanceinfos[x]={
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			vulkaninfo.primaryrenderpass,
+			0,
+			vulkaninfo.framebuffers[x],
+			VK_FALSE,
+			0,
+			0
 		};
 
 		vkBeginCommandBuffer(vulkaninfo.commandbuffers[x], &cmdbufferbegininfo);
@@ -491,7 +674,7 @@ void GraphicsHandler::VKSubInitCommandPool(){
 				1,
 				&clearcolor
 		};
-		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 		vkCmdEndRenderPass(vulkaninfo.commandbuffers[x]);
 		vkEndCommandBuffer(vulkaninfo.commandbuffers[x]);
 	}
@@ -519,57 +702,103 @@ void GraphicsHandler::VKSubInitSemaphoresAndFences(){
 	}
 }
 
-void GraphicsHandler::recordCommandBuffers(){
+void GraphicsHandler::recordCommandBuffer(uint32_t index){
+	//should technically move the clear value out to vulkaninfo
 	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
-	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
-		VkCommandBufferBeginInfo cmdbufferbegininfo{
-				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				nullptr,
-				0,
-				nullptr
-		};
+//		vkResetCommandBuffer(vulkaninfo.commandbuffers[x], 0);
+	VkCommandBufferBeginInfo cmdbufferbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			0,
+			nullptr
+	};
 
-		vkBeginCommandBuffer(vulkaninfo.commandbuffers[x], &cmdbufferbegininfo);
-		VkRenderPassBeginInfo renderpassbegininfo{
-				VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				nullptr,
-				vulkaninfo.primaryrenderpass,
-				vulkaninfo.framebuffers[x],
-				{{0, 0}, vulkaninfo.swapchainextent},
-				1,
-				&clearcolor
-		};
-		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(vulkaninfo.commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipeline);
-		vkCmdPushConstants(vulkaninfo.commandbuffers[x], vulkaninfo.primarygraphicspipeline.pipelinelayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PrimaryGraphicsPushConstants), (void*)(&primarygraphicspushconstants));
-		//look further into below args
-		//would like to maybe do this bind in the mesh's cmdbuff
-		vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipelinelayout, 0, 1, &vulkaninfo.primarygraphicspipeline.descriptorset[x], 0, nullptr);
-		for(auto&m:landscapemeshes) vkCmdExecuteCommands(vulkaninfo.commandbuffers[x], 1, m->getCommandBuffer());
-		//can stick a few optimized checks here for updating dynamic meshes
-		for(auto&m:staticshadowcastingmeshes) vkCmdExecuteCommands(vulkaninfo.commandbuffers[x], 1, m->getCommandBuffer());
-		vkCmdEndRenderPass(vulkaninfo.commandbuffers[x]);
-		vkEndCommandBuffer(vulkaninfo.commandbuffers[x]);
+	vkBeginCommandBuffer(vulkaninfo.commandbuffers[index], &cmdbufferbegininfo);
+	VkRenderPassBeginInfo renderpassbegininfo{
+			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			nullptr,
+			vulkaninfo.primaryrenderpass,
+			vulkaninfo.framebuffers[index],
+			{{0, 0}, vulkaninfo.swapchainextent},
+			1,
+			&clearcolor
+	};
+	vkCmdBeginRenderPass(vulkaninfo.commandbuffers[index], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipeline);
+	vkCmdPushConstants(vulkaninfo.commandbuffers[index],
+					   vulkaninfo.primarygraphicspipeline.pipelinelayout,
+					   VK_SHADER_STAGE_VERTEX_BIT,
+					   0,
+					   sizeof(PrimaryGraphicsPushConstants),
+					   (void*)(&primarygraphicspushconstants));
+	vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipelinelayout, 0, 1, &vulkaninfo.primarygraphicspipeline.descriptorset[index], 0, nullptr);
+	//consider not even using secondary command buffers, but rather just writing all the rendering code in here, as we have to rebind pipelines otherwise
+	//i don't really think this is what secondary command buffers were made for
+//		for(auto&m:landscapemeshes) vkCmdExecuteCommands(vulkaninfo.commandbuffers[x], 1, &m->getCommandBuffers()[x]);
+	VkDeviceSize offsettemp=0u;
+	for(auto&m:landscapemeshes){
+		vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
+						        VK_PIPELINE_BIND_POINT_GRAPHICS,
+						        vulkaninfo.primarygraphicspipeline.pipelinelayout,
+						        1,
+						        1,
+						        &m->getDescriptorSets()[index],
+						        0,
+						        nullptr);
+		vkCmdBindVertexBuffers(vulkaninfo.commandbuffers[index], 0, 1, m->getVertexBuffer(), &offsettemp);
+		vkCmdBindIndexBuffer(vulkaninfo.commandbuffers[index], *m->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+		vkCmdDrawIndexed(vulkaninfo.commandbuffers[index], m->getTris().size()*3, 1, 0 ,0, 0);
 	}
+	for(auto&m:staticshadowcastingmeshes){
+		vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
+		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+		                        vulkaninfo.primarygraphicspipeline.pipelinelayout,
+		                        1,
+		                        1,
+		                        &m->getDescriptorSets()[index],
+		                        0,
+		                        nullptr);
+		vkCmdBindVertexBuffers(vulkaninfo.commandbuffers[index], 0, 1, m->getVertexBuffer(), &offsettemp);
+		vkCmdBindIndexBuffer(vulkaninfo.commandbuffers[index], *m->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
+		vkCmdDrawIndexed(vulkaninfo.commandbuffers[index], m->getTris().size()*3, 1, 0 ,0, 0);
+	}
+	vkCmdBindPipeline(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.textgraphicspipeline.pipeline);
+	vkCmdPushConstants(vulkaninfo.commandbuffers[index],
+					   vulkaninfo.textgraphicspipeline.pipelinelayout,
+					   VK_SHADER_STAGE_VERTEX_BIT,
+					   0,
+					   sizeof(TextPushConstants),
+					   (void*)troubleshootingtext->getPushConstantsPtr());
+	vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
+						    VK_PIPELINE_BIND_POINT_GRAPHICS,
+						    vulkaninfo.textgraphicspipeline.pipelinelayout,
+						    0,
+						    1,
+						    &troubleshootingtext->getDescriptorSetsPtr()[index],
+						    0,
+						    nullptr);
+	vkCmdDraw(vulkaninfo.commandbuffers[index], 6, 1, 0, 0);
+	vkCmdEndRenderPass(vulkaninfo.commandbuffers[index]);
+	vkEndCommandBuffer(vulkaninfo.commandbuffers[index]);
 }
 
-void GraphicsHandler::VKSubInitPipeline(VkPipelineLayout*pipelinelayout,
-				                        VkDescriptorSetLayout*descriptorsetlayout,
+void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
+				                        uint32_t numdescriptorsets,
+				                        VkDescriptorSetLayout*descriptorsetlayouts,
 				                        VkPushConstantRange*pushconstantrange,
 				                        VkRenderPass*renderpass,
-				                        VkPipeline*pipeline,
 				                        VkPipelineShaderStageCreateInfo*shadermodules,
 				                        VkPipelineVertexInputStateCreateInfo*vertexinputstatecreateinfo){
 	VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo{
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		nullptr,
 		0,
-		1,
-		descriptorsetlayout,
-		1,
+		numdescriptorsets,
+		&descriptorsetlayouts[0],
+		pushconstantrange==nullptr?0u:1u,
 		pushconstantrange
 	};
-	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, pipelinelayout);
+	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, &pipelineinfo->pipelinelayout);
 
 	VkPipelineInputAssemblyStateCreateInfo inputassemblystatecreateinfo{
 		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -660,13 +889,13 @@ void GraphicsHandler::VKSubInitPipeline(VkPipelineLayout*pipelinelayout,
 		nullptr,
 		&colorblendstatecreateinfo,
 		nullptr,
-		*pipelinelayout,
+		pipelineinfo->pipelinelayout,
 		*renderpass,
 		0,
 		VK_NULL_HANDLE,
 		-1
 	};
-	vkCreateGraphicsPipelines(vulkaninfo.logicaldevice, VK_NULL_HANDLE, 1, &pipelinecreateinfo, nullptr, pipeline);
+	vkCreateGraphicsPipelines(vulkaninfo.logicaldevice, VK_NULL_HANDLE, 1, &pipelinecreateinfo, nullptr, &pipelineinfo->pipeline);
 }
 
 void GraphicsHandler::VKSubInitLoadShaders(const char*vertexshaderfilepath,
@@ -732,7 +961,7 @@ void GraphicsHandler::draw(){
 	glfwPollEvents();
 
 	//consider returning bool that signals whether camera has actually changed or not
-	//if we had a whole system of change flags for camera, lights, and meshes, we could get a lot of efficency with data sending and command recording
+	//if we had a whole system of change flags for camera, lights, and meshes, we could get a lot of efficiency with data sending and command recording
 	primarycamera->takeInputs(vulkaninfo.window);
 	physicshandler.updateCameraPos();
 	primarygraphicspushconstants={
@@ -740,12 +969,50 @@ void GraphicsHandler::draw(){
 		glm::mat4(1)
 	};
 
-	recordCommandBuffers();
-
 	//maybe move this to vulkaninfo struct? we don't have to, but it would be tidier, and might prove useful later???
 	uint32_t imageindex=-1u;
 	vkAcquireNextImageKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, UINT64_MAX, vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight], VK_NULL_HANDLE, &imageindex);
-	if(vulkaninfo.imageinflightfences[imageindex]!=VK_NULL_HANDLE) vkWaitForFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.imageinflightfences[imageindex], VK_TRUE, UINT64_MAX);
+
+//	if(glfwGetKey(vulkaninfo.window, GLFW_KEY_G)==GLFW_PRESS){
+//		for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+//			VkDescriptorBufferInfo descriptorbuffinfo{
+//					vulkaninfo.lightuniformbuffers[0],
+//					0,
+//					0
+//			};
+//			VkWriteDescriptorSet writedescriptorset{
+//					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+//					nullptr,
+//					vulkaninfo.primarygraphicspipeline.descriptorset[x],
+//					0,
+//					0,
+//					1,
+//					VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//					nullptr,
+//					&descriptorbuffinfo,
+//					nullptr
+//			};
+//			vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
+//		}
+//	}
+
+	void*datatemp;
+	LightUniformBuffer lubtemp{
+		primarycamera->getPosition()+glm::vec3(5.0f, 5.0f, 5.0f),
+		5.0f,
+		glm::vec3(-1.0f, -1.0f, -1.0f),
+		LIGHT_TYPE_POINT,
+		glm::vec4(sin(glfwGetTime()), sin(glfwGetTime()+2.09f), sin(glfwGetTime()+4.18f), 1.0f)
+	};
+	vkMapMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[imageindex], 0, sizeof(LightUniformBuffer), 0, &datatemp);
+	memcpy(datatemp, (void*)&lubtemp, sizeof(LightUniformBuffer));
+	vkUnmapMemory(vulkaninfo.logicaldevice,  vulkaninfo.lightuniformbuffermemories[imageindex]);
+
+	if(vulkaninfo.imageinflightfences[imageindex]!=VK_NULL_HANDLE){
+		vkWaitForFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.imageinflightfences[imageindex], VK_TRUE, UINT64_MAX);
+		//can add check here once we figure out change flag system
+		recordCommandBuffer(imageindex);
+	}
 	vulkaninfo.imageinflightfences[imageindex]=vulkaninfo.frameinflightfences[vulkaninfo.currentframeinflight];
 	VkPipelineStageFlags pipelinestageflags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	//slight efficiency to be had by holding on to submitinfo and just swapping out parts that change
@@ -776,9 +1043,10 @@ void GraphicsHandler::draw(){
 		&imageindex,
 		nullptr
 	};
+	//okay so rate limiter is vkQueuePresentKHR, so if we want better fps, we should investigate optimal options/settings
 	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
 
-	std::cout<<'\r'<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps | swapchain image #"<<imageindex<<" | frame in flight #"<<vulkaninfo.currentframeinflight;
+	std::cout<<'\r'<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps | swapchain image #"<<imageindex<<" | frame in flight #"<<vulkaninfo.currentframeinflight<<" | current tri @"<<physicshandler.getStandingTri();
 	vulkaninfo.currentframeinflight=(vulkaninfo.currentframeinflight+1)%MAX_FRAMES_IN_FLIGHT;
 	lasttime=std::chrono::high_resolution_clock::now();
 }
@@ -787,122 +1055,56 @@ bool GraphicsHandler::shouldClose(){
 	return glfwWindowShouldClose(vulkaninfo.window)||glfwGetKey(vulkaninfo.window, GLFW_KEY_ESCAPE)==GLFW_PRESS;
 }
 
-void GraphicsHandler::createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath, VkPipelineLayout*pipelinelayout, VkPipelineShaderStageCreateInfo*vertexshaderstagecreateinfo, VkPipelineShaderStageCreateInfo*fragmentshaderstagecreateinfo){
-	std::ifstream shaderstream=std::ifstream(vertshaderfilepath, std::ios::ate|std::ios::binary);
-	size_t vertshadersize=shaderstream.tellg(), fragshadersize;
-	shaderstream.seekg(0);
-	char vertshadersrc[vertshadersize];
-	shaderstream.read(&vertshadersrc[0], vertshadersize);
-	shaderstream.close();
-	shaderstream=std::ifstream(fragshaderfilepath, std::ios::ate|std::ios::binary);
-	fragshadersize=shaderstream.tellg();
-	shaderstream.seekg(0);
-	char fragshadersrc[fragshadersize];
-	shaderstream.read(&fragshadersrc[0], fragshadersize);
-	shaderstream.close();
-	VkShaderModuleCreateInfo vertexshadermodulecreateinfo{
-		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		nullptr,
-		0,
-		vertshadersize,
-		reinterpret_cast<const uint32_t*>(vertshadersrc)
-	},
-	fragmentshadermodulecreateinfo{
-		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		nullptr,
-		0,
-		fragshadersize,
-		reinterpret_cast<const uint32_t*>(fragshadersrc)
-	};
-	VkShaderModule vertexshadermodule, fragmentshadermodule;
-	vkCreateShaderModule(vulkaninfo.logicaldevice, &vertexshadermodulecreateinfo, nullptr, &vertexshadermodule);
-	vkCreateShaderModule(vulkaninfo.logicaldevice, &fragmentshadermodulecreateinfo, nullptr, &fragmentshadermodule);
-	*vertexshaderstagecreateinfo={
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        nullptr,
-        0,
-        VK_SHADER_STAGE_VERTEX_BIT,
-        vertexshadermodule,
-        "main",
-		nullptr
-    };
-	*fragmentshaderstagecreateinfo={
-        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        nullptr,
-        0,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-        fragmentshadermodule,
-        "main",
-        nullptr
-	};
+VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT type,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT*callbackdata,
+                                                    void*userdata){
+//	std::cout<<"Validation message: "
+//	<<"\nSeverity: "<<string_VkDebugUtilsMessageSeverityFlagBitsEXT(severity)
+//	<<"\nType    : "<<string_VkDebugUtilsMessageTypeFlagsEXT(type);
+//	if(callbackdata->pObjects!=nullptr){
+//		std::cout<<"\nObjects : ";
+//		std::cout<<(callbackdata->pObjects[0].pObjectName==nullptr?"unnamed":callbackdata->pObjects[0].pObjectName)
+//		         <<" ("<<string_VkObjectType(callbackdata->pObjects[0].objectType)<<" @"
+//		         <<std::hex<<callbackdata->pObjects[0].objectHandle<<std::dec<<')';
+//		for(uint32_t x=1;x<callbackdata->objectCount;x++){
+//			std::cout<<"\n          "<<(callbackdata->pObjects[x].pObjectName==nullptr?"unnamed":callbackdata->pObjects[x].pObjectName)
+//			<<" ("<<string_VkObjectType(callbackdata->pObjects[x].objectType)<<" @"
+//            <<std::hex<<callbackdata->pObjects[x].objectHandle<<std::dec<<')';
+//		}
+//	}
+//	if(callbackdata->pCmdBufLabels!=nullptr){
+//		std::cout<<"\nCommand Buffer Labels: ";
+//		std::cout<<(callbackdata->pCmdBufLabels[0].pLabelName==nullptr?"unnamed":callbackdata->pCmdBufLabels[0].pLabelName)
+//				 <<" (color: ";
+//		PRINT_QUAD(callbackdata->pCmdBufLabels[0].color);
+//		std::cout<<')';
+//		for(uint32_t x=1;x<callbackdata->cmdBufLabelCount;x++){
+//			std::cout<<'\n'<<(callbackdata->pCmdBufLabels[x].pLabelName==nullptr?"unnamed":callbackdata->pCmdBufLabels[x].pLabelName)
+//			         <<" (color: ";
+//			PRINT_QUAD(callbackdata->pCmdBufLabels[x].color);
+//			std::cout<<')';
+//		}
+//	}
+//	std::cout<<"\nMessage: "<<callbackdata->pMessage<<'\n';
+//
+//	std::cout<<callbackdata->pMessage<<std::endl;
+	if(severity!=VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) return VK_FALSE;
+	std::cout<<callbackdata->pMessage<<std::endl;
+	return VK_FALSE;
+}
 
+VkResult GraphicsHandler::CreateDebugUtilsMessengerEXT(VkInstance instance,
+                                             const VkDebugUtilsMessengerCreateInfoEXT*createinfo,
+                                             const VkAllocationCallbacks*allocator,
+                                             VkDebugUtilsMessengerEXT*debugutilsmessenger){
+	auto function=(PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	return function(instance, createinfo, allocator, debugutilsmessenger);
+}
 
-
-
-
-	VkDescriptorSetLayoutBinding descriptorsetlayoutbinding{
-		0,
-		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		1,
-		VK_SHADER_STAGE_FRAGMENT_BIT,
-		nullptr,
-	};
-	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		nullptr,
-		0,
-		1,
-		&descriptorsetlayoutbinding
-	};
-	if(vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &descriptorsetlayoutcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.descriptorsetlayout)==VK_SUCCESS) std::cout<<"descriptor set layout made\n";
-
-
-
-
-
-	VkPushConstantRange pushconstantrange{
-		VK_SHADER_STAGE_VERTEX_BIT,
-		0,
-		sizeof(PrimaryGraphicsPushConstants)
-	};
-	VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo{
-		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		nullptr,
-		0,
-		1,
-		&vulkaninfo.primarygraphicspipeline.descriptorsetlayout,
-		1,
-		&pushconstantrange
-	};
-	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, pipelinelayout);
-
-
-
-
-
-	VkDescriptorPoolSize descriptorpoolsize{
-		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		vulkaninfo.numswapchainimages
-	};
-	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		nullptr,
-		0,
-		vulkaninfo.numswapchainimages,
-		1,
-		&descriptorpoolsize
-	};
-	if(vkCreateDescriptorPool(vulkaninfo.logicaldevice, &descriptorpoolcreateinfo, nullptr, &(vulkaninfo.descriptorpool))==VK_SUCCESS) std::cout<<"descriptor pool created\n";
-	VkDescriptorSetLayout descriptorsetlayoutstemp[vulkaninfo.numswapchainimages];
-	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) descriptorsetlayoutstemp[x]=vulkaninfo.primarygraphicspipeline.descriptorsetlayout;
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		vulkaninfo.descriptorpool,
-		vulkaninfo.numswapchainimages,
-		&descriptorsetlayoutstemp[0]
-	};
-	//dont forget to delete in deconstructor, im too lazy to do it now....
-	vulkaninfo.primarygraphicspipeline.descriptorset=new VkDescriptorSet[vulkaninfo.numswapchainimages];
-	if(vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descriptorsetallocinfo, &vulkaninfo.primarygraphicspipeline.descriptorset[0])==VK_SUCCESS) std::cout<<"descriptor sets allocated\n";
+void GraphicsHandler::DestroyDebugUtilsMessengerEXT(VkInstance instance,
+											  VkDebugUtilsMessengerEXT debugutilsmessenger,
+											  const VkAllocationCallbacks*allocator){
+	auto function=(PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	function(instance, debugutilsmessenger, allocator);
 }

@@ -29,8 +29,7 @@ public:
 
 	void updateStandingTri();
 	void updateCameraPos();
-
-
+	Tri*getStandingTri(){return standingtri;}
 };
 
 

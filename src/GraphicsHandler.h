@@ -29,7 +29,11 @@ typedef struct PrimaryGraphicsPushConstants{
 }PrimaryGraphicsPushConstants;
 
 typedef struct LightUniformBuffer{
-	glm::vec4 colortemp;
+	glm::vec3 position;
+	float intensity;
+	glm::vec3 forward;
+	uint32_t lighttype;
+	glm::vec4 color;
 }LightUniformBuffer;
 
 class GraphicsHandler{
@@ -51,21 +55,29 @@ private:
 	static void VKInit();
 	static void VKSubInitWindow();
 	static void VKSubInitInstance();
+	static void VKSubInitDebug();
 	static void VKSubInitDevices();
 	static void VKSubInitQueues();
 	static void VKSubInitSwapchain();
 	static void VKSubInitRenderpass();
-	static void VKSubInitDescriptorPool();
+	static void VKSubInitDescriptorPool(uint32_t nummeshes);
+	//perhaps have option for buffer update rate (for minor optimization)
+	static void VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
+									   uint32_t binding,
+									   VkDeviceSize buffersize,
+									   VkBuffer*buffers,
+									   VkDeviceMemory*memories);
 	static void VKSubInitGraphicsPipeline();
+	static void VKSubInitTextGraphicsPipeline();
 	static void VKSubInitFramebuffers();
 	static void VKSubInitCommandPool();
 	static void VKSubInitSemaphoresAndFences();
-	void recordCommandBuffers();
-	static void VKSubInitPipeline(VkPipelineLayout*pipelinelayout,
-								  VkDescriptorSetLayout*descriptorsetlayout,
+	void recordCommandBuffer(uint32_t index);
+	static void VKSubInitPipeline(PipelineInfo*pipelineinfo,
+								  uint32_t numdescriptorsets,
+								  VkDescriptorSetLayout*descriptorsetlayouts,
 								  VkPushConstantRange*pushconstantrange,
 								  VkRenderPass*renderpass,
-								  VkPipeline*pipeline,
 						          VkPipelineShaderStageCreateInfo*shadermodules,
 						          VkPipelineVertexInputStateCreateInfo*vertexinputstatecreateinfo);
 	static void VKSubInitLoadShaders(const char*vertexshaderfilepath,
@@ -79,7 +91,17 @@ public:
 	~GraphicsHandler();
 	void draw();
 	bool shouldClose();
-	static void createGraphicsPipelineSPIRV(const char*vertshaderfilepath, const char*fragshaderfilepath, VkPipelineLayout*pipelinelayout, VkPipelineShaderStageCreateInfo*vertexshaderstagecreateinfo, VkPipelineShaderStageCreateInfo*fragmentshaderstagecreateinfo);
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+													    VkDebugUtilsMessageTypeFlagsEXT type,
+													    const VkDebugUtilsMessengerCallbackDataEXT*callbackdata,
+													    void*userdata);
+	static VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
+											     const VkDebugUtilsMessengerCreateInfoEXT*createinfo,
+											     const VkAllocationCallbacks*allocator,
+											     VkDebugUtilsMessengerEXT*debugutilsmessenger);
+	static void DestroyDebugUtilsMessengerEXT(VkInstance instance,
+                                                  VkDebugUtilsMessengerEXT debugutilsmessenger,
+                                                  const VkAllocationCallbacks*allocator);
 };
 
 

@@ -9,12 +9,12 @@
 
 #define MAX_LIGHTS 4
 
-enum LightType{
-	SUN,
-	POINT,
-	PLANE,
-	SPOT
-};
+typedef enum LightType{
+	LIGHT_TYPE_SUN,
+	LIGHT_TYPE_POINT,
+	LIGHT_TYPE_PLANE,
+	LIGHT_TYPE_SPOT
+}LightType;
 
 class Light{
 private:

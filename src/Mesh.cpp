@@ -14,7 +14,7 @@ Mesh::Mesh(VulkanInfo*vki){
 	recalculateModelMatrix();
 	shadowtype=RADIUS;
 	updateBuffers();
-	initCommandBuffer();
+//	initCommandBuffer();
 }
 
 Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
@@ -24,17 +24,21 @@ Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
 	recalculateModelMatrix();
 	shadowtype=RADIUS;
 	updateBuffers();
-	initCommandBuffer();
 	srand(glfwGetTime());
-//	glm::vec4 noisetexture[512][512];
-//	for(uint32_t x=0;x<512;x++){
-//		for(uint32_t y=0;y<512;y++){
+	glm::vec4 noisetexture[512][512];
+	for(uint32_t x=0;x<512;x++){
+		for(uint32_t y=0;y<512;y++){
 //			noisetexture[x][y]=(float(rand())/float(RAND_MAX))*glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-////			std::cout<<noisetexture[x][y].x<<'\n';
-////			noisetexture[x][y]=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-//		}
-//	}
-//	addTexture(512, (void*)(&noisetexture[0][0]));
+//			noisetexture[x][y]=glm::vec4((float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)));
+//			std::cout<<noisetexture[x][y].x<<'\n';
+//			noisetexture[x][y]=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+			noisetexture[x][y]=glm::vec4(sin(x/10.0f), cos(y/10.0f), sin(x/10.0f+3.14f), 1.0f);
+		}
+	}
+	textures.push_back({});
+	addTexture(&textures.back(), 512, 512, (void*)(&noisetexture[0][0]), sizeof(glm::vec4), VK_FORMAT_R32G32B32A32_SFLOAT);
+	initDescriptorSets();
+//	initCommandBuffer();
 }
 
 Mesh::~Mesh(){
@@ -44,7 +48,6 @@ Mesh::~Mesh(){
 		vkDestroyImageView(vulkaninfo->logicaldevice, t.imageview, nullptr);
 		vkDestroySampler(vulkaninfo->logicaldevice, t.sampler, nullptr);
 	}
-	vkFreeCommandBuffers(vulkaninfo->logicaldevice, vulkaninfo->commandpool, 1, &commandbuffer);
 	vkFreeMemory(vulkaninfo->logicaldevice, indexbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, indexbuffer, nullptr);
 	vkFreeMemory(vulkaninfo->logicaldevice, vertexbuffermemory, nullptr);
@@ -77,7 +80,7 @@ void Mesh::updateBuffers(){
 	memcpy(indexdatatemp, (void*)indextemp, indexbuffersize);
 	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
 
-	createAndAllocateBuffer(&indexbuffer, indexbuffersize, VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, &indexbuffermemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	createAndAllocateBuffer(&indexbuffer, indexbuffersize, VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT, &indexbuffermemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	copyBuffer(&(vulkaninfo->stagingbuffer), &indexbuffer, indexbuffersize, nullptr);
 
 	vkFreeMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, nullptr);
@@ -85,26 +88,94 @@ void Mesh::updateBuffers(){
 }
 
 void Mesh::initCommandBuffer(){
+	commandbuffers=new VkCommandBuffer[vulkaninfo->numswapchainimages];
 	VkCommandBufferAllocateInfo cmdbuffallocinfo{
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		nullptr,
 		vulkaninfo->commandpool,
 		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-		1
+		vulkaninfo->numswapchainimages
 	};
-	vkAllocateCommandBuffers(vulkaninfo->logicaldevice, &cmdbuffallocinfo, &commandbuffer);
-	VkCommandBufferBeginInfo cmdbuffbegininfo{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+	vkAllocateCommandBuffers(vulkaninfo->logicaldevice, &cmdbuffallocinfo, &commandbuffers[0]);
+	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++){
+		VkCommandBufferBeginInfo cmdbuffbegininfo{
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				nullptr,
+				VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+				&vulkaninfo->commandbufferinheritanceinfos[x]
+		};
+//		vkBeginCommandBuffer(commandbuffers[x], &cmdbuffbegininfo);
+//		vkCmdBindPipeline(commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo->primarygraphicspipeline.pipeline);
+//		vkCmdPushConstants(commandbuffers[x], vulkaninfo.primarygraphicspipeline.pipelinelayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PrimaryGraphicsPushConstants), (void*)(&primarygraphicspushconstants));
+//		vkCmdBindDescriptorSets(commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo->primarygraphicspipeline.pipelinelayout, 0, 1, &vulkaninfo->primarygraphicspipeline.descriptorset[x], 0, nullptr);
+//		vkCmdBindDescriptorSets(commandbuffers[x], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo->primarygraphicspipeline.pipelinelayout, 1, 1, &descriptorsets[0], 0, nullptr);
+//		VkDeviceSize offsettemp=0u;
+//		vkCmdBindVertexBuffers(commandbuffers[x], 0, 1, &vertexbuffer, &offsettemp);
+//		vkCmdBindIndexBuffer(commandbuffers[x], indexbuffer, 0, VK_INDEX_TYPE_UINT16);
+//		vkCmdDrawIndexed(commandbuffers[x], tris.size()*3, 1, 0, 0, 0);
+//		vkEndCommandBuffer(commandbuffers[x]);
+	}
+}
+
+void Mesh::recordCommandBuffer()const{
+	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++){
+		VkCommandBufferBeginInfo cmdbuffbegininfo{
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				nullptr,
+				0,
+				nullptr
+		};
+		vkBeginCommandBuffer(commandbuffers[x], &cmdbuffbegininfo);
+		vkCmdBindDescriptorSets(commandbuffers[x],
+		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+		                        vulkaninfo->primarygraphicspipeline.pipelinelayout,
+		                        1,
+		                        1,
+		                        &descriptorsets[0],
+		                        0,
+		                        nullptr);
+		VkDeviceSize offsettemp=0u;
+		vkCmdBindVertexBuffers(commandbuffers[x], 0, 1, &vertexbuffer, &offsettemp);
+		vkCmdBindIndexBuffer(commandbuffers[x], indexbuffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdDrawIndexed(commandbuffers[x], tris.size()*3, 1, 0, 0, 0);
+		vkEndCommandBuffer(commandbuffers[x]);
+	}
+}
+
+void Mesh::initDescriptorSets(){
+	VkDescriptorSetLayout layoutstemp[vulkaninfo->numswapchainimages];
+	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++) layoutstemp[x]=vulkaninfo->primarygraphicspipeline.meshdescriptorsetlayout;
+	//maybe we can get away with one descriptor set, cause its not updating every frame?
+	descriptorsets=new VkDescriptorSet[vulkaninfo->numswapchainimages];
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
-		0,
-		nullptr
+		vulkaninfo->descriptorpool,
+		vulkaninfo->numswapchainimages,
+		&layoutstemp[0]
 	};
-	vkBeginCommandBuffer(commandbuffer, &cmdbuffbegininfo);
-	VkDeviceSize offsettemp=0u;
-	vkCmdBindVertexBuffers(commandbuffer, 0, 1, &vertexbuffer, &offsettemp);
-	vkCmdBindIndexBuffer(commandbuffer, indexbuffer, 0, VK_INDEX_TYPE_UINT16);
-	vkCmdDrawIndexed(commandbuffer, tris.size()*3, 1, 0, 0, 0);
-	vkEndCommandBuffer(commandbuffer);
+	std::cout<<"alloc of "<<vulkaninfo->numswapchainimages<<" descriptor sets @"<<descriptorsets<<" result: "<<string_VkResult(vkAllocateDescriptorSets(vulkaninfo->logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]))<<std::endl;
+
+	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++){
+		VkDescriptorImageInfo imginfo={
+			textures[0].sampler,
+			textures[0].imageview,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		VkWriteDescriptorSet writedescriptorset{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			descriptorsets[x],
+			0,
+			0,
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			&imginfo,
+			nullptr,
+			nullptr
+		};
+		vkUpdateDescriptorSets(vulkaninfo->logicaldevice, 1, &writedescriptorset, 0, nullptr);
+	}
 }
 
 void Mesh::createAndAllocateBuffer(VkBuffer*buffer, VkDeviceSize buffersize, VkBufferUsageFlags bufferusage, VkDeviceMemory*buffermemory, VkMemoryPropertyFlags reqprops){
@@ -184,7 +255,7 @@ void Mesh::copyBuffer(VkBuffer*src, VkBuffer*dst, VkDeviceSize size, VkCommandBu
 	vkQueueWaitIdle(vulkaninfo->graphicsqueue);
 }
 
-void Mesh::copyBufferToImage(VkBuffer*src, VkImage*dst, uint32_t resolution){
+void Mesh::copyBufferToImage(VkBuffer*src, VkImage*dst, uint32_t horires, uint32_t vertres){
 	VkBufferImageCopy imgcopy{
 		0,
 		0,
@@ -199,8 +270,8 @@ void Mesh::copyBufferToImage(VkBuffer*src, VkImage*dst, uint32_t resolution){
 			0,
 			0
 		}, {
-			resolution,
-			resolution,
+			horires,
+			vertres,
 			1
 		}
 	};
@@ -211,7 +282,6 @@ void Mesh::copyBufferToImage(VkBuffer*src, VkImage*dst, uint32_t resolution){
 		nullptr
 	};
 	vkBeginCommandBuffer(vulkaninfo->interimcommandbuffer, &cmdbuffbegininfo);
-	std::cout<<"copying buffer to image (layout must be transfer dst optimal\n";
 	vkCmdCopyBufferToImage(vulkaninfo->interimcommandbuffer, *src, *dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imgcopy);
 	vkEndCommandBuffer(vulkaninfo->interimcommandbuffer);
 	VkSubmitInfo subinfo{
@@ -260,14 +330,12 @@ void Mesh::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout o
 		imgmembarrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		dstmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
-		std::cout<<"transitioning image from undef to transfer\n";
 	}
 	else if(oldlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL&&newlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
 		imgmembarrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		imgmembarrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
 		srcmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
 		dstmask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		std::cout<<"transitioning from transfer to shader read\n";
 	}
 	vkBeginCommandBuffer(vulkaninfo->interimcommandbuffer, &cmdbuffbegininfo);
 	vkCmdPipelineBarrier(vulkaninfo->interimcommandbuffer, srcmask, dstmask, 0, 0, nullptr, 0, nullptr, 1, &imgmembarrier);
@@ -283,7 +351,7 @@ void Mesh::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout o
 			0,
 			nullptr
 	};
-	vkQueueSubmit(vulkaninfo->graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
+	std::cout<<"img layout transition ("<<string_VkImageLayout(oldlayout)<<" to "<<string_VkImageLayout(newlayout)<<") result: "<<string_VkResult(vkQueueSubmit(vulkaninfo->graphicsqueue, 1, &subinfo, VK_NULL_HANDLE))<<std::endl;
 	vkQueueWaitIdle(vulkaninfo->graphicsqueue);
 }
 
@@ -292,8 +360,7 @@ void Mesh::recalculateModelMatrix(){
 }
 
 void Mesh::draw(GLuint shaders, bool sendnormals, bool senduvs)const{
-	//add LOD param later??
-	//this should be as efficient as possible, cause its getting called a shit-ton
+//	recordCommandBuffer();
 }
 
 void Mesh::setPosition(glm::vec3 p){
@@ -301,46 +368,55 @@ void Mesh::setPosition(glm::vec3 p){
 	recalculateModelMatrix();
 }
 
-void Mesh::addTexture(uint32_t resolution, void*data){
-	/*
-	 * allocate and map memory for staging buffer
-	 */
-	VkDeviceSize size=resolution*resolution*4;
-	createAndAllocateBuffer(&(vulkaninfo->stagingbuffer), size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &(vulkaninfo->stagingbuffermemory), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	//if this doesnt work, make a temp void*, memcpy after the map, then unmap
-	vkMapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, 0, size, 0, &data);
-	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
-
-	//make temp TextureInfo
-	TextureInfo texinfotemp={};
-
-	/*
-	 * create an image
-	 */
+void Mesh::addTexture(TextureInfo*texturedst,
+					  uint32_t horires,
+					  uint32_t vertres,
+					  void*data,
+					  uint32_t pixelsize,
+					  VkFormat format){
 	VkImageCreateInfo imgcreateinfo{
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		nullptr,
 		0,
 		VK_IMAGE_TYPE_2D,
-		VK_FORMAT_R8G8B8A8_SRGB,
-		{resolution, resolution, 1},
+		format,
+		{horires, vertres, 1},
 		1,
 		1,
 		VK_SAMPLE_COUNT_1_BIT,
-		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_TILING_LINEAR,     //perhaps add more tiling control later (e.g. if square po2 text
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_SHARING_MODE_EXCLUSIVE,
 		0,
 		nullptr,
 		VK_IMAGE_LAYOUT_UNDEFINED
 	};
-	if(vkCreateImage(vulkaninfo->logicaldevice, &imgcreateinfo, nullptr, &(texinfotemp.image))==VK_SUCCESS) std::cout<<"image created\n";
+	vkCreateImage(vulkaninfo->logicaldevice, &imgcreateinfo, nullptr, &(texturedst->image));
+	VkSubresourceLayout subresourcelayout;
+	VkImageSubresource imgsubresource{
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		0
+	};
+	vkGetImageSubresourceLayout(vulkaninfo->logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
+	VkDeviceSize size=subresourcelayout.size;
+	std::cout<<"row pitch: "<<subresourcelayout.rowPitch<<"; derived row size: "<<(horires*pixelsize)<<"; size: "<<subresourcelayout.size<<"; offset: "<<subresourcelayout.offset<<std::endl;
 
-	/*
-	 * get the memory index for the device image storage, and allocate appropriate amount of such memory
-	 */
+	createAndAllocateBuffer(&(vulkaninfo->stagingbuffer), size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &(vulkaninfo->stagingbuffermemory), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	//okay this was the root of the problem: i had to make a temp void* instead of just using the function
+	//arguement data i pass in; ig vkMapMemory only detects change, not initial value
+	void*datatemp;
+	vkMapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, 0, size, 0, &datatemp);
+	char*dstscanptr=(char*)datatemp, *srcscanptr=(char*)data;
+	for(uint32_t x=0;x<vertres;x++){
+		memcpy(dstscanptr, srcscanptr, horires*pixelsize);
+		dstscanptr+=subresourcelayout.rowPitch;
+		srcscanptr+=horires*pixelsize;
+	}
+	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
+
 	VkMemoryRequirements memrequirements{};
-	vkGetImageMemoryRequirements(vulkaninfo->logicaldevice, texinfotemp.image, &memrequirements);
+	vkGetImageMemoryRequirements(vulkaninfo->logicaldevice, texturedst->image, &memrequirements);
 	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
 	vkGetPhysicalDeviceMemoryProperties(vulkaninfo->physicaldevice, &physicaldevicememprops);
 	uint32_t memindex=-1u;
@@ -357,37 +433,27 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 			memrequirements.size,
 			memindex
 	};
-	vkAllocateMemory(vulkaninfo->logicaldevice, &memallocateinfo, nullptr, &(texinfotemp.memory));
-	vkBindImageMemory(vulkaninfo->logicaldevice, texinfotemp.image, texinfotemp.memory, 0);
+	vkAllocateMemory(vulkaninfo->logicaldevice, &memallocateinfo, nullptr, &(texturedst->memory));
+	vkBindImageMemory(vulkaninfo->logicaldevice, texturedst->image, texturedst->memory, 0);
 
-	/*
-	 * transition image to transfer layout, copy buffer info to image, get rid of staging buffer, and transition
-	 * image to shader read/sample layout
-	 */
-	transitionImageLayout(texinfotemp.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	copyBufferToImage(&(vulkaninfo->stagingbuffer), &texinfotemp.image, resolution);
+	transitionImageLayout(texturedst->image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(&(vulkaninfo->stagingbuffer), &texturedst->image, horires, vertres);
 	vkFreeMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffer, nullptr);
-	transitionImageLayout(texinfotemp.image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	transitionImageLayout(texturedst->image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	/*
-	 * create image view
-	 */
 	VkImageViewCreateInfo imgviewcreateinfo{
 		VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		nullptr,
 		0,
-		texinfotemp.image,
+		texturedst->image,
 		VK_IMAGE_VIEW_TYPE_2D,
-		VK_FORMAT_R8G8B8A8_SRGB,
+		format,
 		{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
 		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 	};
-	if(vkCreateImageView(vulkaninfo->logicaldevice, &imgviewcreateinfo, nullptr, &(texinfotemp.imageview))==VK_SUCCESS) std::cout<<"image view created\n";
+	vkCreateImageView(vulkaninfo->logicaldevice, &imgviewcreateinfo, nullptr, &(texturedst->imageview));
 
-	/*
-	 * create sampler
-	 */
 	VkSamplerCreateInfo samplercreateinfo{
 		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		nullptr,
@@ -395,9 +461,9 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 		VK_FILTER_NEAREST,
 		VK_FILTER_NEAREST,
 		VK_SAMPLER_MIPMAP_MODE_NEAREST,
-		VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
 		0.0f,
 		VK_FALSE,
 		1.0f,
@@ -408,9 +474,7 @@ void Mesh::addTexture(uint32_t resolution, void*data){
 		VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 		VK_FALSE
 	};
-	if(vkCreateSampler(vulkaninfo->logicaldevice, &samplercreateinfo, nullptr, &(texinfotemp.sampler))==VK_SUCCESS) std::cout<<"sampler created\n";
-
-	textures.push_back(texinfotemp);
+	vkCreateSampler(vulkaninfo->logicaldevice, &samplercreateinfo, nullptr, &(texturedst->sampler));
 }
 
 void Mesh::loadOBJ(const char*filepath){
@@ -480,10 +544,11 @@ void Mesh::loadOBJ(const char*filepath){
 				}
 				vertices.erase(vertices.begin()+x);
 				dupecounter++;
+				std::cout<<'\r'<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(vertexindices.size())*100.0f)<<" percent size decrease!!!)";
 			}
 		}
 	}
-	std::cout<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(vertexindices.size())*100.0f)<<" percent size decrease!!!)"<<std::endl;
+	std::cout<<std::endl;
 
 	bool adjacencyfound;
 	for(int x=0;x<tris.size();x++){

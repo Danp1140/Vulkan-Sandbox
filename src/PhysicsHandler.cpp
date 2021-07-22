@@ -83,6 +83,5 @@ void PhysicsHandler::updateCameraPos(){
 //	std::cout<<triintersectiony<<std::endl;
 //	if(triintersectiony<cameraPO.position.y) cameraPO.position.y-=0.1f;
 //	if(triintersectiony>cameraPO.position.y) cameraPO.position.y+=0.1f;
-//	camera->setPosition(cameraPO.position);
-//	camera->setPosition(glm::vec3(camera->getPosition().x, triintersectiony+0.5f, camera->getPosition().z));
+	camera->setPosition(glm::vec3(camera->getPosition().x, triintersectiony+0.5f, camera->getPosition().z));
 }
