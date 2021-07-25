@@ -13,6 +13,7 @@ Text::Text(){
 	pushconstants.position=glm::vec2(0, 0);
 	pushconstants.scale=glm::vec2(1.0f, 1.0f);
 	pushconstants.rotation=0.0f;
+	texture={};
 	ftlib=FT_Library();
 	FT_Init_FreeType(&ftlib);
 	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
@@ -31,6 +32,7 @@ Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
 	pushconstants.position=p;
 	pushconstants.scale=glm::vec2(2.0f/(float)hr, 2.0f/(float)vr);
 	pushconstants.rotation=0.0f;
+	texture={};
 	ftlib=FT_Library();
 	FT_Init_FreeType(&ftlib);
 	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
@@ -44,14 +46,40 @@ Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
 Text::~Text(){
 	FT_Done_Face(face);
 	FT_Done_FreeType(ftlib);
-	vkDestroySampler(Mesh::getVulkanInfoPtr()->logicaldevice, texture.sampler, nullptr);
-	vkDestroyImageView(Mesh::getVulkanInfoPtr()->logicaldevice, texture.imageview, nullptr);
-	vkDestroyImage(Mesh::getVulkanInfoPtr()->logicaldevice, texture.image, nullptr);
-	vkFreeMemory(Mesh::getVulkanInfoPtr()->logicaldevice, texture.memory, nullptr);
+	vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.sampler, nullptr);
+	vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.imageview, nullptr);
+	vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.image, nullptr);
+	vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.memory, nullptr);
 	delete[] descriptorsets;
 }
 
+void Text::setMessage(std::string m, uint32_t index){
+	message=m;
+	pushconstants.scale=glm::vec2(2.0f/(float)horizontalres, 2.0f/(float)verticalres);
+	regenFaces();
+	VkDescriptorImageInfo imginfo=texture.getDescriptorImageInfo();
+	VkWriteDescriptorSet write{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			descriptorsets[index],
+			0,
+			0,
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			&imginfo,
+			nullptr,
+			nullptr
+	};
+	vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
+}
+
 void Text::regenFaces(){
+//	if(texture.image!=VK_NULL_HANDLE){
+//		vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.sampler, nullptr);
+//		vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.imageview, nullptr);
+//		vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.image, nullptr);
+//		vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.memory, nullptr);
+//	}
 	unsigned int maxlinelength=0u, linelengthcounter=0u, numlines=1u;
 	for(char c:message){
 		if(c=='\n'){
@@ -65,18 +93,9 @@ void Text::regenFaces(){
 	}
 	if(linelengthcounter>maxlinelength) maxlinelength=linelengthcounter;
 	const uint32_t hres=maxlinelength/64u, vres=numlines*face->size->metrics.height/64u;
-	//remember stack vs heap
-	float**texturedata=new float*[hres];
-	for(uint32_t x=0;x<hres;x++) texturedata[x]=new float[vres];
-	for(uint32_t x=0;x<hres;x++){
-		for(uint32_t y=0;y<vres;y++){
-//			texturedata[x][y]=(float)y/(float)vres;
-//			texturedata[x][y]=(float)x/(float)hres;
-//			texturedata[x][y]=(float)(x*vres+y)/(float)()
-		}
-	}
+	float*texturedata=(float*)malloc(hres*vres*sizeof(float));
+	memset(&texturedata[0], 0.0f, hres*vres*sizeof(float));
 	pushconstants.scale*=glm::vec2(hres, vres);
-	std::cout<<"texture size: "<<hres<<'x'<<vres<<std::endl;
 	glm::vec2 penposition=glm::ivec2(0, vres-face->size->metrics.ascender/64);
 	for(char c:message){
 		if(c=='\n'){
@@ -87,40 +106,40 @@ void Text::regenFaces(){
 		FT_Load_Char(face, c, FT_LOAD_RENDER);
 		if(face->glyph!=nullptr) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
 		penposition+=glm::vec2(face->glyph->metrics.horiBearingX/64, face->glyph->metrics.horiBearingY/64);
-//		//try using memcpy on buffer???
 		unsigned char*bitmapbuffer=face->glyph->bitmap.buffer;
-		std::cout<<"bitmap size: "<<face->glyph->bitmap.width<<"x"<<face->glyph->bitmap.rows<<std::endl;
-		for(uint32_t x=0;x<face->glyph->bitmap.width;x++){
-			for(uint32_t y=0;y<face->glyph->bitmap.rows;y++){
-//				texturedata[(int)penposition.x+x][(int)penposition.y-y]=*bitmapbuffer++;
-//				texturedata[(int)penposition.x+x][(int)penposition.y-y]=bitmapbuffer[face->glyph->bitmap.rows*x+y];
+		uint32_t xtex=0, ytex=0;
+		for(uint32_t y=0;y<face->glyph->bitmap.rows;y++){
+			for(uint32_t x=0;x<face->glyph->bitmap.width;x++){
+				xtex=(int)penposition.x+x;
+				ytex=(int)penposition.y-y;
+				texturedata[ytex*hres+xtex]=*bitmapbuffer++;
 			}
 		}
 		penposition+=glm::vec2((face->glyph->metrics.horiAdvance-face->glyph->metrics.horiBearingX)/64, -face->glyph->metrics.horiBearingY/64);
 	}
-	Mesh::addTexture(&texture,
-	                 hres,
-	                 vres,
-	                 (void*)(&texturedata[0][0]),
-	                 sizeof(float),
-	                 VK_FORMAT_R32_SFLOAT);
-	for(uint32_t x=0;x<hres;x++) delete[] texturedata[x];
-	delete[] texturedata;
+	//could get a memory leak if TextureInfo members aren't being freed/deleted properly
+	GraphicsHandler::VKHelperInitTexture(&texture,
+	                                     hres,
+	                                     vres,
+	                                     reinterpret_cast<void*>(&texturedata[0]),
+	                                     sizeof(float),
+	                                     VK_FORMAT_R32_SFLOAT);
+	delete(texturedata);
 }
 
 void Text::initDescriptorSet(){
-	VkDescriptorSetLayout layoutstemp[Mesh::getVulkanInfoPtr()->numswapchainimages];
-	for(uint32_t x=0;x<Mesh::getVulkanInfoPtr()->numswapchainimages;x++) layoutstemp[x]=Mesh::getVulkanInfoPtr()->textdescriptorsetlayout;
-	descriptorsets=new VkDescriptorSet[Mesh::getVulkanInfoPtr()->numswapchainimages];
+	VkDescriptorSetLayout layoutstemp[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
+	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textdescriptorsetlayout;
+	descriptorsets=new VkDescriptorSet[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
 	VkDescriptorSetAllocateInfo allocinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
-		Mesh::getVulkanInfoPtr()->descriptorpool,
-		Mesh::getVulkanInfoPtr()->numswapchainimages,
+		GraphicsHandler::getVulkanInfoPtr()->descriptorpool,
+		GraphicsHandler::getVulkanInfoPtr()->numswapchainimages,
 		&layoutstemp[0]
 	};
-	vkAllocateDescriptorSets(Mesh::getVulkanInfoPtr()->logicaldevice, &allocinfo, &descriptorsets[0]);
-	for(uint32_t x=0;x<Mesh::getVulkanInfoPtr()->numswapchainimages;x++){
+	vkAllocateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, &allocinfo, &descriptorsets[0]);
+	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++){
 		VkDescriptorImageInfo imginfo=texture.getDescriptorImageInfo();
 		VkWriteDescriptorSet write{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -134,9 +153,6 @@ void Text::initDescriptorSet(){
 			nullptr,
 			nullptr
 		};
-		vkUpdateDescriptorSets(Mesh::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
 	}
-}
-
-void Text::draw(GLuint shaders){
-}
+}           //perhaps make a more general version of this as a VKHelper, cause we're doing this in a couple places

@@ -1,14 +1,13 @@
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-volatile"
+#pragma clang diagnostic ignored "-Wdeprecated-volatile"
 
-#include "GraphicsHandler.h"
+#include "WanglingEngine.h"
 
 int main(){
-	GraphicsHandler primaryviewport=GraphicsHandler();
+	WanglingEngine wanglingengine;
 
 	do{
-		primaryviewport.draw();
-	}while(!primaryviewport.shouldClose());
+		wanglingengine.draw();
+	}while(!wanglingengine.shouldClose());
 
 	return 0;
 }

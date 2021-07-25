@@ -5,33 +5,15 @@
 #include "GraphicsHandler.h"
 
 VulkanInfo GraphicsHandler::vulkaninfo{};
+ChangeFlag*GraphicsHandler::changeflags=nullptr;
 
-GraphicsHandler::GraphicsHandler(){
-	if(vulkaninfo.window==nullptr) VKInit();
-	lights=std::vector<Light*>();
-	lights.push_back(new Light(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), 32, LIGHT_TYPE_SUN));
-	staticshadowcastingmeshes=std::vector<const Mesh*>();
-//	staticshadowcastingmeshes.push_back(new Mesh("../resources/objs/smoothhipolysuzanne.obj", glm::vec3(0, 0, 0), &vulkaninfo));
-	landscapemeshes=std::vector<Mesh*>();
-	landscapemeshes.push_back(new Mesh("../resources/objs/lowpolybeach.obj", glm::vec3(0, 0, 0), &vulkaninfo));
-	primarycamera=new Camera(vulkaninfo.window, vulkaninfo.horizontalres, vulkaninfo.verticalres);
-	primarygraphicspushconstants={glm::mat4(1), glm::mat4(1)};
-	physicshandler=PhysicsHandler(landscapemeshes[0], primarycamera);
-	troubleshootingtext=new Text("troubleshooting text", glm::vec2(0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 144.0f, vulkaninfo.horizontalres, vulkaninfo.verticalres);
-	lasttime=std::chrono::high_resolution_clock::now();
-//	recordCommandBuffers();
-}
+GraphicsHandler::GraphicsHandler(){}
 
 GraphicsHandler::~GraphicsHandler(){
 	vkWaitForFences(vulkaninfo.logicaldevice, MAX_FRAMES_IN_FLIGHT, &vulkaninfo.frameinflightfences[0], VK_TRUE, UINT64_MAX);
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 	vkQueueWaitIdle(vulkaninfo.presentationqueue);
 	vkDeviceWaitIdle(vulkaninfo.logicaldevice);
-
-	delete troubleshootingtext;
-	for(auto&m:landscapemeshes) delete m;
-	for(auto&m:staticshadowcastingmeshes) delete m;
-	delete primarycamera;
 
 	for(int x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.renderfinishedsemaphores[x], nullptr);
@@ -83,12 +65,16 @@ void GraphicsHandler::VKInit(){
 	VKSubInitQueues();
 	VKSubInitSwapchain();
 	VKSubInitRenderpass();
-	VKSubInitDescriptorPool(2u);
+	VKSubInitCommandPool();
+	VKSubInitDepthBuffer();
+	VKSubInitFramebuffers();
+	VKSubInitSemaphoresAndFences();
+}
+
+void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
+	VKSubInitDescriptorPool(nummeshes);
 	VKSubInitGraphicsPipeline();
 	VKSubInitTextGraphicsPipeline();
-	VKSubInitFramebuffers();
-	VKSubInitCommandPool();
-	VKSubInitSemaphoresAndFences();
 }
 
 void GraphicsHandler::VKSubInitWindow(){
@@ -245,7 +231,7 @@ void GraphicsHandler::VKSubInitDevices(){
 			&physicaldevicefeatures
 	};
 	vkCreateDevice(vulkaninfo.physicaldevice, &devicecreateinfo, nullptr, &vulkaninfo.logicaldevice);
-}       //maybe clean this up later? redo how queues and queue indices and queue families are managed???
+}
 
 void GraphicsHandler::VKSubInitQueues(){
 	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.graphicsqueuefamilyindex, 0, &vulkaninfo.graphicsqueue);
@@ -285,7 +271,9 @@ void GraphicsHandler::VKSubInitSwapchain(){
 	vulkaninfo.swapchainimages=new VkImage[vulkaninfo.numswapchainimages];
 	vkGetSwapchainImagesKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, &vulkaninfo.numswapchainimages, &vulkaninfo.swapchainimages[0]);
 	vulkaninfo.swapchainimageviews=new VkImageView[vulkaninfo.numswapchainimages];
+	changeflags=new ChangeFlag[vulkaninfo.numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+		changeflags[x]=NO_CHANGE_FLAG_BIT;
 		VkImageViewCreateInfo imageviewcreateinfo{
 			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			nullptr,
@@ -312,37 +300,52 @@ void GraphicsHandler::VKSubInitRenderpass(){
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	};
-	VkAttachmentReference attachmentref{
+	VkAttachmentDescription depthattachmentdescription{
+		0,
+		VK_FORMAT_D32_SFLOAT,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_CLEAR,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+	VkAttachmentReference attachmentrefs[2]{{
 		0,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	};
+	}, {
+		1,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	}};
 	VkSubpassDescription subpassdescription{
 		0,
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
 		0,
 		nullptr,
 		1,
-		&attachmentref,
+		&attachmentrefs[0],
 		nullptr,
-		nullptr,
+		&attachmentrefs[1],
 		0,
 		nullptr
 	};
 	VkSubpassDependency subpassdependency{
 		VK_SUBPASS_EXTERNAL,
 		0,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 		0,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		0
 	};
+	VkAttachmentDescription attachmentdescriptionstemp[2]{attachmentdescription, depthattachmentdescription};
 	VkRenderPassCreateInfo renderpasscreateinfo{
 		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		nullptr,
 		0,
-		1,
-		&attachmentdescription,
+		2,
+		&attachmentdescriptionstemp[0],
 		1,
 		&subpassdescription,
 		1,
@@ -354,16 +357,16 @@ void GraphicsHandler::VKSubInitRenderpass(){
 void GraphicsHandler::VKSubInitDescriptorPool(uint32_t nummeshes){
 	VkDescriptorPoolSize descriptorpoolsizes[2]{{
 		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		vulkaninfo.numswapchainimages
+		vulkaninfo.numswapchainimages*VULKAN_MAX_LIGHTS
 	}, {
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		vulkaninfo.numswapchainimages*nummeshes+1
+		vulkaninfo.numswapchainimages*(nummeshes+1)
 	}};
 	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		nullptr,
-		0,      //perhaps look into flags
-		vulkaninfo.numswapchainimages*(1+nummeshes+1),
+		VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,      //perhaps look into flags
+		vulkaninfo.numswapchainimages*(VULKAN_MAX_LIGHTS+nummeshes+1),
 		2,
 		&descriptorpoolsizes[0]
 	};
@@ -372,15 +375,23 @@ void GraphicsHandler::VKSubInitDescriptorPool(uint32_t nummeshes){
 
 void GraphicsHandler::VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
 											 uint32_t binding,
-											 VkDeviceSize buffersize,
+											 VkDeviceSize elementsize,
+											 uint32_t elementcount,
 											 VkBuffer*buffers,
 											 VkDeviceMemory*memories){
+	VkPhysicalDeviceProperties pdprops;
+	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
+	VkDeviceSize roundedupsize=elementsize;
+	if(elementsize%pdprops.limits.minUniformBufferOffsetAlignment!=0){
+		roundedupsize=(1+floor((float)elementsize/(float)pdprops.limits.minUniformBufferOffsetAlignment))*pdprops.limits.minUniformBufferOffsetAlignment;
+	}
+
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
 		VkBufferCreateInfo buffcreateinfo{
 				VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 				nullptr,
 				0,
-				buffersize,
+				roundedupsize*elementcount,
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_SHARING_MODE_EXCLUSIVE,
 				0,
@@ -409,10 +420,11 @@ void GraphicsHandler::VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
 		vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &memories[x]);
 		vkBindBufferMemory(vulkaninfo.logicaldevice, buffers[x], memories[x], 0);
 
-		VkDescriptorBufferInfo descriptorbuffinfo{
+		VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
+		for(uint32_t y=0;y<elementcount;y++) descriptorbuffinfos[y]={
 				buffers[x],
-				0,
-				buffersize
+				y*roundedupsize,
+				elementsize
 		};
 		VkWriteDescriptorSet writedescriptorset{
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -420,10 +432,10 @@ void GraphicsHandler::VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
 				pipelineinfo->descriptorset[x],
 				binding,
 				0,
-				1,
+				elementcount,      //i mean, we only /really/ have to update the buffers for active lights
 				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				nullptr,
-				&descriptorbuffinfo,
+				&descriptorbuffinfos[0],
 				nullptr
 		};
 		vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
@@ -431,36 +443,10 @@ void GraphicsHandler::VKSubInitUniformBuffer(PipelineInfo*pipelineinfo,
 }
 
 void GraphicsHandler::VKSubInitGraphicsPipeline(){
-//	VkDescriptorSetLayoutBinding descriptorsetlayoutbindings[2]{{
-//		0,
-//		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-//		1,
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		nullptr
-//	}, {
-//		0,
-//		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//		1,
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		nullptr
-//	}};
-//	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2]{{
-//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//		nullptr,
-//		0,       //look into flags later
-//		1,
-//		&descriptorsetlayoutbindings[0]
-//	}, {
-//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//		nullptr,
-//		0,
-//		1,
-//		&descriptorsetlayoutbindings[1]
-//	}};
 	VkDescriptorSetLayoutBinding scenedslbinding{
 		0,
 		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		1,
+		VULKAN_MAX_LIGHTS,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	};
@@ -471,7 +457,7 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 		1,
 		&scenedslbinding
 	};
-	std::cout<<"scene descriptor set layout create result: "<<string_VkResult(vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &scenedslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout))<<std::endl;
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &scenedslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout);
 	VkDescriptorSetLayoutBinding meshdslbinding{
 			0,
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -486,7 +472,7 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 			1,
 			&meshdslbinding
 	};
-	std::cout<<"mesh descriptor set layout create result: "<<string_VkResult(vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &meshdslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout))<<std::endl;
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &meshdslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout);
 
 	VkDescriptorSetLayout descriptorsetlayoutstemp[vulkaninfo.numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) descriptorsetlayoutstemp[x]=vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout;
@@ -502,10 +488,15 @@ void GraphicsHandler::VKSubInitGraphicsPipeline(){
 
 	vulkaninfo.lightuniformbuffers=new VkBuffer[vulkaninfo.numswapchainimages];
 	vulkaninfo.lightuniformbuffermemories=new VkDeviceMemory[vulkaninfo.numswapchainimages];
-	VKSubInitUniformBuffer(&vulkaninfo.primarygraphicspipeline, 0, sizeof(LightUniformBuffer), vulkaninfo.lightuniformbuffers, vulkaninfo.lightuniformbuffermemories);
+	VKSubInitUniformBuffer(&vulkaninfo.primarygraphicspipeline,
+						   0,
+						   sizeof(LightUniformBuffer),
+						   VULKAN_MAX_LIGHTS,
+						   vulkaninfo.lightuniformbuffers,
+						   vulkaninfo.lightuniformbuffermemories);
 
 	VkPushConstantRange pushconstantrange{
-		VK_SHADER_STAGE_VERTEX_BIT,
+		VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
 		0,
 		sizeof(PrimaryGraphicsPushConstants)
 	};
@@ -608,13 +599,14 @@ void GraphicsHandler::VKSubInitTextGraphicsPipeline(){
 void GraphicsHandler::VKSubInitFramebuffers(){
 	vulkaninfo.framebuffers=new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+		VkImageView attachmentstemp[2]={vulkaninfo.swapchainimageviews[x], vulkaninfo.depthbuffer.imageview};
 		VkFramebufferCreateInfo framebuffercreateinfo{
 			VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 			nullptr,
 			0,
 			vulkaninfo.primaryrenderpass,
-			1,
-			&vulkaninfo.swapchainimageviews[x],
+			2,
+			&attachmentstemp[0],
 			vulkaninfo.swapchainextent.width,
 			vulkaninfo.swapchainextent.height,
 			1
@@ -623,7 +615,6 @@ void GraphicsHandler::VKSubInitFramebuffers(){
 	}
 }
 
-//do we need to record???
 void GraphicsHandler::VKSubInitCommandPool(){
 	VkCommandPoolCreateInfo cmdpoolcreateinfo{
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -643,41 +634,8 @@ void GraphicsHandler::VKSubInitCommandPool(){
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &vulkaninfo.commandbuffers[0]);
 	cmdbufferallocateinfo.commandBufferCount=1;
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
-	//do we need below record???
-	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
-	vulkaninfo.commandbufferinheritanceinfos=new VkCommandBufferInheritanceInfo[vulkaninfo.numswapchainimages];
-	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
-		VkCommandBufferBeginInfo cmdbufferbegininfo{
-				VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				nullptr,
-				0,
-				nullptr
-		};
-		vulkaninfo.commandbufferinheritanceinfos[x]={
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			vulkaninfo.primaryrenderpass,
-			0,
-			vulkaninfo.framebuffers[x],
-			VK_FALSE,
-			0,
-			0
-		};
-
-		vkBeginCommandBuffer(vulkaninfo.commandbuffers[x], &cmdbufferbegininfo);
-		VkRenderPassBeginInfo renderpassbegininfo{
-				VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				nullptr,
-				vulkaninfo.primaryrenderpass,
-				vulkaninfo.framebuffers[x],
-				{{0, 0}, vulkaninfo.swapchainextent},
-				1,
-				&clearcolor
-		};
-		vkCmdBeginRenderPass(vulkaninfo.commandbuffers[x], &renderpassbegininfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-		vkCmdEndRenderPass(vulkaninfo.commandbuffers[x]);
-		vkEndCommandBuffer(vulkaninfo.commandbuffers[x]);
-	}
+	vulkaninfo.clears[0]={0.0f, 0.0f, 0.01f, 1.0f};
+	vulkaninfo.clears[1]={1.0f, 0.0f};
 }
 
 void GraphicsHandler::VKSubInitSemaphoresAndFences(){
@@ -700,86 +658,6 @@ void GraphicsHandler::VKSubInitSemaphoresAndFences(){
 	for(int x=0;x<vulkaninfo.numswapchainimages;x++){
 		vulkaninfo.imageinflightfences[x]=VK_NULL_HANDLE;
 	}
-}
-
-void GraphicsHandler::recordCommandBuffer(uint32_t index){
-	//should technically move the clear value out to vulkaninfo
-	VkClearValue clearcolor{0.0f, 0.0f, 0.01f, 1.0f};
-//		vkResetCommandBuffer(vulkaninfo.commandbuffers[x], 0);
-	VkCommandBufferBeginInfo cmdbufferbegininfo{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			0,
-			nullptr
-	};
-
-	vkBeginCommandBuffer(vulkaninfo.commandbuffers[index], &cmdbufferbegininfo);
-	VkRenderPassBeginInfo renderpassbegininfo{
-			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-			nullptr,
-			vulkaninfo.primaryrenderpass,
-			vulkaninfo.framebuffers[index],
-			{{0, 0}, vulkaninfo.swapchainextent},
-			1,
-			&clearcolor
-	};
-	vkCmdBeginRenderPass(vulkaninfo.commandbuffers[index], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipeline);
-	vkCmdPushConstants(vulkaninfo.commandbuffers[index],
-					   vulkaninfo.primarygraphicspipeline.pipelinelayout,
-					   VK_SHADER_STAGE_VERTEX_BIT,
-					   0,
-					   sizeof(PrimaryGraphicsPushConstants),
-					   (void*)(&primarygraphicspushconstants));
-	vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.primarygraphicspipeline.pipelinelayout, 0, 1, &vulkaninfo.primarygraphicspipeline.descriptorset[index], 0, nullptr);
-	//consider not even using secondary command buffers, but rather just writing all the rendering code in here, as we have to rebind pipelines otherwise
-	//i don't really think this is what secondary command buffers were made for
-//		for(auto&m:landscapemeshes) vkCmdExecuteCommands(vulkaninfo.commandbuffers[x], 1, &m->getCommandBuffers()[x]);
-	VkDeviceSize offsettemp=0u;
-	for(auto&m:landscapemeshes){
-		vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
-						        VK_PIPELINE_BIND_POINT_GRAPHICS,
-						        vulkaninfo.primarygraphicspipeline.pipelinelayout,
-						        1,
-						        1,
-						        &m->getDescriptorSets()[index],
-						        0,
-						        nullptr);
-		vkCmdBindVertexBuffers(vulkaninfo.commandbuffers[index], 0, 1, m->getVertexBuffer(), &offsettemp);
-		vkCmdBindIndexBuffer(vulkaninfo.commandbuffers[index], *m->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
-		vkCmdDrawIndexed(vulkaninfo.commandbuffers[index], m->getTris().size()*3, 1, 0 ,0, 0);
-	}
-	for(auto&m:staticshadowcastingmeshes){
-		vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
-		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-		                        vulkaninfo.primarygraphicspipeline.pipelinelayout,
-		                        1,
-		                        1,
-		                        &m->getDescriptorSets()[index],
-		                        0,
-		                        nullptr);
-		vkCmdBindVertexBuffers(vulkaninfo.commandbuffers[index], 0, 1, m->getVertexBuffer(), &offsettemp);
-		vkCmdBindIndexBuffer(vulkaninfo.commandbuffers[index], *m->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT16);
-		vkCmdDrawIndexed(vulkaninfo.commandbuffers[index], m->getTris().size()*3, 1, 0 ,0, 0);
-	}
-	vkCmdBindPipeline(vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, vulkaninfo.textgraphicspipeline.pipeline);
-	vkCmdPushConstants(vulkaninfo.commandbuffers[index],
-					   vulkaninfo.textgraphicspipeline.pipelinelayout,
-					   VK_SHADER_STAGE_VERTEX_BIT,
-					   0,
-					   sizeof(TextPushConstants),
-					   (void*)troubleshootingtext->getPushConstantsPtr());
-	vkCmdBindDescriptorSets(vulkaninfo.commandbuffers[index],
-						    VK_PIPELINE_BIND_POINT_GRAPHICS,
-						    vulkaninfo.textgraphicspipeline.pipelinelayout,
-						    0,
-						    1,
-						    &troubleshootingtext->getDescriptorSetsPtr()[index],
-						    0,
-						    nullptr);
-	vkCmdDraw(vulkaninfo.commandbuffers[index], 6, 1, 0, 0);
-	vkCmdEndRenderPass(vulkaninfo.commandbuffers[index]);
-	vkEndCommandBuffer(vulkaninfo.commandbuffers[index]);
 }
 
 void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
@@ -854,14 +732,29 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		VK_FALSE,
 		VK_FALSE
 	};
+	VkPipelineDepthStencilStateCreateInfo depthstencilstatecreateinfo{
+			VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			VK_TRUE,
+			VK_TRUE,
+			VK_COMPARE_OP_LESS,
+			VK_FALSE,
+			VK_FALSE,
+			{},
+			{},
+			0.0f,
+			1.0f
+	};
+	//would like to figure out how this blend state works better
 	VkPipelineColorBlendAttachmentState colorblendattachmentstate{
-		VK_FALSE,
-		VK_BLEND_FACTOR_ZERO,
-		VK_BLEND_FACTOR_ONE,
+		VK_TRUE,
+		VK_BLEND_FACTOR_SRC_ALPHA,
+		VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 		VK_BLEND_OP_ADD,
-		VK_BLEND_FACTOR_ZERO,
-		VK_BLEND_FACTOR_ONE,
-		VK_BLEND_OP_ADD,
+		VK_BLEND_FACTOR_SRC_ALPHA,
+		VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		VK_BLEND_OP_SUBTRACT,
 		VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
 	};
 	VkPipelineColorBlendStateCreateInfo colorblendstatecreateinfo{
@@ -886,7 +779,7 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		&viewportstatecreateinfo,
 		&rasterizationstatecreateinfo,
 		&multisamplestatecreateinfo,
-		nullptr,
+		&depthstencilstatecreateinfo,
 		&colorblendstatecreateinfo,
 		nullptr,
 		pipelineinfo->pipelinelayout,
@@ -954,106 +847,371 @@ void GraphicsHandler::VKSubInitLoadShaders(const char*vertexshaderfilepath,
 	//consider deleting shader modules after we get it working
 }
 
-//think about further optimization for semaphores, fences, & frames in flight
-void GraphicsHandler::draw(){
-	vkWaitForFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.frameinflightfences[vulkaninfo.currentframeinflight], VK_TRUE, UINT64_MAX);
-
-	glfwPollEvents();
-
-	//consider returning bool that signals whether camera has actually changed or not
-	//if we had a whole system of change flags for camera, lights, and meshes, we could get a lot of efficiency with data sending and command recording
-	primarycamera->takeInputs(vulkaninfo.window);
-	physicshandler.updateCameraPos();
-	primarygraphicspushconstants={
-		primarycamera->getProjectionMatrix()*primarycamera->getViewMatrix(),
-		glm::mat4(1)
+void GraphicsHandler::VKSubInitDepthBuffer(){
+	VkImageCreateInfo imgcreateinfo{
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		nullptr,
+		0,
+		VK_IMAGE_TYPE_2D,
+		VK_FORMAT_D32_SFLOAT,
+		{vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1},
+		1,
+		1,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_IMAGE_TILING_OPTIMAL,        //apparently this development device's implementation doesn't support tiling linear
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_SHARING_MODE_EXCLUSIVE,
+		0,
+		nullptr,
+		VK_IMAGE_LAYOUT_UNDEFINED
 	};
+	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &vulkaninfo.depthbuffer.image);
 
-	//maybe move this to vulkaninfo struct? we don't have to, but it would be tidier, and might prove useful later???
-	uint32_t imageindex=-1u;
-	vkAcquireNextImageKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, UINT64_MAX, vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight], VK_NULL_HANDLE, &imageindex);
-
-//	if(glfwGetKey(vulkaninfo.window, GLFW_KEY_G)==GLFW_PRESS){
-//		for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
-//			VkDescriptorBufferInfo descriptorbuffinfo{
-//					vulkaninfo.lightuniformbuffers[0],
-//					0,
-//					0
-//			};
-//			VkWriteDescriptorSet writedescriptorset{
-//					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//					nullptr,
-//					vulkaninfo.primarygraphicspipeline.descriptorset[x],
-//					0,
-//					0,
-//					1,
-//					VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-//					nullptr,
-//					&descriptorbuffinfo,
-//					nullptr
-//			};
-//			vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
-//		}
-//	}
-
-	void*datatemp;
-	LightUniformBuffer lubtemp{
-		primarycamera->getPosition()+glm::vec3(5.0f, 5.0f, 5.0f),
-		5.0f,
-		glm::vec3(-1.0f, -1.0f, -1.0f),
-		LIGHT_TYPE_POINT,
-		glm::vec4(sin(glfwGetTime()), sin(glfwGetTime()+2.09f), sin(glfwGetTime()+4.18f), 1.0f)
-	};
-	vkMapMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[imageindex], 0, sizeof(LightUniformBuffer), 0, &datatemp);
-	memcpy(datatemp, (void*)&lubtemp, sizeof(LightUniformBuffer));
-	vkUnmapMemory(vulkaninfo.logicaldevice,  vulkaninfo.lightuniformbuffermemories[imageindex]);
-
-	if(vulkaninfo.imageinflightfences[imageindex]!=VK_NULL_HANDLE){
-		vkWaitForFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.imageinflightfences[imageindex], VK_TRUE, UINT64_MAX);
-		//can add check here once we figure out change flag system
-		recordCommandBuffer(imageindex);
+	VkMemoryRequirements memrequirements{};
+	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, vulkaninfo.depthbuffer.image, &memrequirements);
+	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
+	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
+	uint32_t memindex=-1u;
+	for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
+		if(memrequirements.memoryTypeBits&(1<<x)
+		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)==VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)){
+			memindex=x;
+			break;
+		}
 	}
-	vulkaninfo.imageinflightfences[imageindex]=vulkaninfo.frameinflightfences[vulkaninfo.currentframeinflight];
-	VkPipelineStageFlags pipelinestageflags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	//slight efficiency to be had by holding on to submitinfo and just swapping out parts that change
-	//same goes for presentinfo down below
-	VkSubmitInfo submitinfo{
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		nullptr,
-		1,
-		&vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight],
-		&pipelinestageflags,
-		1,
-        &vulkaninfo.commandbuffers[imageindex],
-        1,
-        &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight]
+	VkMemoryAllocateInfo memallocateinfo{
+			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			nullptr,
+			memrequirements.size,
+			memindex
 	};
-	//so this behavior isn't technically "double"-submitting, but it seems like the frame updates on a different timer than the main loop
-	//look in swapchain config
-	//note that this double-up isn't represented in the fps calculation, that's a different issue
-	vkResetFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.frameinflightfences[vulkaninfo.currentframeinflight]);
-	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &submitinfo, vulkaninfo.frameinflightfences[vulkaninfo.currentframeinflight]);
-	VkPresentInfoKHR presentinfo{
-		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &(vulkaninfo.depthbuffer.memory));
+	vkBindImageMemory(vulkaninfo.logicaldevice, vulkaninfo.depthbuffer.image, vulkaninfo.depthbuffer.memory, 0);
+
+	VkImageViewCreateInfo imgviewcreateinfo{
+			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			nullptr,
+			0,
+			vulkaninfo.depthbuffer.image,
+			VK_IMAGE_VIEW_TYPE_2D,
+			VK_FORMAT_D32_SFLOAT,
+			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+			{
+					VK_IMAGE_ASPECT_DEPTH_BIT,
+					0,
+					1,
+					0,
+					1
+			}
+	};
+	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &vulkaninfo.depthbuffer.imageview);
+
+	GraphicsHandler::VKHelperTransitionImageLayout(vulkaninfo.depthbuffer.image,
+												   VK_FORMAT_D32_SFLOAT,
+												   VK_IMAGE_LAYOUT_UNDEFINED,
+												   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+}
+
+void GraphicsHandler::VKHelperCreateAndAllocateBuffer(VkBuffer*buffer,
+												VkDeviceSize buffersize,
+												VkBufferUsageFlags bufferusage,
+												VkDeviceMemory*buffermemory,
+												VkMemoryPropertyFlags reqprops){
+	VkBufferCreateInfo buffercreateinfo{
+		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		nullptr,
-		1,
-		&vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight],
-		1,
-		&vulkaninfo.swapchain,
-		&imageindex,
+		0,
+		buffersize,
+		bufferusage,
+		VK_SHARING_MODE_EXCLUSIVE,
+		0,
 		nullptr
 	};
-	//okay so rate limiter is vkQueuePresentKHR, so if we want better fps, we should investigate optimal options/settings
-	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
+	vkCreateBuffer(vulkaninfo.logicaldevice, &buffercreateinfo, nullptr, buffer);
 
-	std::cout<<'\r'<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps | swapchain image #"<<imageindex<<" | frame in flight #"<<vulkaninfo.currentframeinflight<<" | current tri @"<<physicshandler.getStandingTri();
-	vulkaninfo.currentframeinflight=(vulkaninfo.currentframeinflight+1)%MAX_FRAMES_IN_FLIGHT;
-	lasttime=std::chrono::high_resolution_clock::now();
+	VkMemoryRequirements memrequirements{};
+	vkGetBufferMemoryRequirements(vulkaninfo.logicaldevice, *buffer, &memrequirements);
+	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
+	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
+	uint32_t memindex=-1u;
+	for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
+		if(memrequirements.memoryTypeBits&(1<<x)
+		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&reqprops)==reqprops)){
+			memindex=x;
+			break;
+		}
+	}
+	VkMemoryAllocateInfo memallocateinfo{
+			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			nullptr,
+			memrequirements.size,
+			memindex
+	};
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, buffermemory);
+	vkBindBufferMemory(vulkaninfo.logicaldevice, *buffer, *buffermemory, 0);
 }
 
-bool GraphicsHandler::shouldClose(){
-	return glfwWindowShouldClose(vulkaninfo.window)||glfwGetKey(vulkaninfo.window, GLFW_KEY_ESCAPE)==GLFW_PRESS;
+void GraphicsHandler::VKHelperCpyBufferToBuffer(VkBuffer*src,
+												VkBuffer*dst,
+												VkDeviceSize size){
+	VkBufferCopy region{
+			0,
+			0,
+			size
+	};
+	VkCommandBufferBeginInfo cmdbuffbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			nullptr
+	};
+	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &cmdbuffbegininfo);
+	vkCmdCopyBuffer(vulkaninfo.interimcommandbuffer, *src, *dst, 1, &region);
+	vkEndCommandBuffer(vulkaninfo.interimcommandbuffer);
+	VkSubmitInfo subinfo{
+			VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			nullptr,
+			0,
+			nullptr,
+			nullptr,
+			1,
+			&(vulkaninfo.interimcommandbuffer),
+			0,
+			nullptr
+	};
+	//could be using a different queue for these transfer operations
+	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
+
+void GraphicsHandler::VKHelperCpyBufferToImage(VkBuffer*src,
+											   VkImage*dst,
+											   uint32_t rowpitch,
+											   uint32_t horires,
+											   uint32_t vertres){
+	VkBufferImageCopy imgcopy{
+			0,
+			rowpitch,
+			vertres,
+			{
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					0,
+					0,
+					1
+			}, {
+					0,
+					0,
+					0
+			}, {
+					horires,
+					vertres,
+					1
+			}
+	};
+	VkCommandBufferBeginInfo cmdbuffbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			nullptr
+	};
+	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &cmdbuffbegininfo);
+	vkCmdCopyBufferToImage(vulkaninfo.interimcommandbuffer, *src, *dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imgcopy);
+	vkEndCommandBuffer(vulkaninfo.interimcommandbuffer);
+	VkSubmitInfo subinfo{
+			VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			nullptr,
+			0,
+			nullptr,
+			nullptr,
+			1,
+			&(vulkaninfo.interimcommandbuffer),
+			0,
+			nullptr
+	};
+	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
+}
+
+void GraphicsHandler::VKHelperTransitionImageLayout(VkImage image,
+											VkFormat format,
+											VkImageLayout oldlayout,
+											VkImageLayout newlayout){
+	VkCommandBufferBeginInfo cmdbuffbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			nullptr
+	};
+	VkImageMemoryBarrier imgmembarrier{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			0,
+			0,
+			oldlayout,
+			newlayout,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			image,
+			{
+//					VK_IMAGE_ASPECT_COLOR_BIT,
+					format==VK_FORMAT_D32_SFLOAT?VK_IMAGE_ASPECT_DEPTH_BIT:VK_IMAGE_ASPECT_COLOR_BIT,
+					0,
+					1,
+					0,
+					1
+			}
+	};
+	VkPipelineStageFlags srcmask, dstmask;
+	if(oldlayout==VK_IMAGE_LAYOUT_UNDEFINED&&newlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+		imgmembarrier.srcAccessMask=0;
+		imgmembarrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		dstmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+	else if(oldlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL&&newlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
+		imgmembarrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+		imgmembarrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
+		srcmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
+		dstmask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if(oldlayout==VK_IMAGE_LAYOUT_UNDEFINED&&newlayout==VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL){
+		imgmembarrier.srcAccessMask=0;
+		imgmembarrier.dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		dstmask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	}
+	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &cmdbuffbegininfo);
+	vkCmdPipelineBarrier(vulkaninfo.interimcommandbuffer, srcmask, dstmask, 0, 0, nullptr, 0, nullptr, 1, &imgmembarrier);
+	vkEndCommandBuffer(vulkaninfo.interimcommandbuffer);
+	VkSubmitInfo subinfo{
+			VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			nullptr,
+			0,
+			nullptr,
+			nullptr,
+			1,
+			&(vulkaninfo.interimcommandbuffer),
+			0,
+			nullptr
+	};
+	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
+}
+
+void GraphicsHandler::VKHelperInitTexture(TextureInfo*texturedst,           //may want to actually break this function up into sub-functions with more diverse usage
+					                      uint32_t horires,
+					                      uint32_t vertres,
+					                      void*data,
+					                      uint32_t pixelsize,
+					                      VkFormat format){
+	VkImageCreateInfo imgcreateinfo{
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			nullptr,
+			0,
+			VK_IMAGE_TYPE_2D,
+			format,
+			{horires, vertres, 1},
+			1,
+			1,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_IMAGE_TILING_LINEAR,     //perhaps add more tiling control later (e.g. if square po2 text
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_SHARING_MODE_EXCLUSIVE,
+			0,
+			nullptr,
+			VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &(texturedst->image));
+	VkSubresourceLayout subresourcelayout;
+	VkImageSubresource imgsubresource{
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			0,
+			0
+	};
+	vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
+	VkDeviceSize size=subresourcelayout.size;
+
+	GraphicsHandler::VKHelperCreateAndAllocateBuffer(&(vulkaninfo.stagingbuffer),
+	                                                 size,
+	                                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	                                                 &(vulkaninfo.stagingbuffermemory),
+	                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	//okay this was the root of the problem: i had to make a temp void* instead of just using the function
+	//arguement data i pass in; ig vkMapMemory only detects change, not initial value
+	void*datatemp=nullptr;
+	vkMapMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, 0, size, 0, &datatemp);
+	char*dstscanptr=reinterpret_cast<char*>(datatemp), *srcscanptr=reinterpret_cast<char*>(data);
+	for(uint32_t x=0;x<vertres;x++){
+		memcpy(reinterpret_cast<void*>(dstscanptr), reinterpret_cast<void*>(srcscanptr), horires*pixelsize);
+		dstscanptr+=subresourcelayout.rowPitch;
+		srcscanptr+=horires*pixelsize;
+	}
+	vkUnmapMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory);
+
+	VkMemoryRequirements memrequirements{};
+	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, texturedst->image, &memrequirements);
+	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
+	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
+	uint32_t memindex=-1u;
+	for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
+		if(memrequirements.memoryTypeBits&(1<<x)
+		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)==VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)){
+			memindex=x;
+			break;
+		}
+	}
+	VkMemoryAllocateInfo memallocateinfo{
+			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			nullptr,
+			memrequirements.size,
+			memindex
+	};
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &(texturedst->memory));
+	vkBindImageMemory(vulkaninfo.logicaldevice, texturedst->image, texturedst->memory, 0);
+
+	VKHelperTransitionImageLayout(texturedst->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	VKHelperCpyBufferToImage(&(vulkaninfo.stagingbuffer), &texturedst->image, subresourcelayout.rowPitch/pixelsize, horires, vertres);
+	vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
+	vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
+	VKHelperTransitionImageLayout(texturedst->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	VkImageViewCreateInfo imgviewcreateinfo{
+			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			nullptr,
+			0,
+			texturedst->image,
+			VK_IMAGE_VIEW_TYPE_2D,
+			format,
+			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+	};
+	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &(texturedst->imageview));
+
+	if(texturedst->sampler==VK_NULL_HANDLE){
+		VkSamplerCreateInfo samplercreateinfo{
+				VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+				nullptr,
+				0,
+				VK_FILTER_NEAREST,
+				VK_FILTER_NEAREST,
+				VK_SAMPLER_MIPMAP_MODE_NEAREST,
+				VK_SAMPLER_ADDRESS_MODE_REPEAT,
+				VK_SAMPLER_ADDRESS_MODE_REPEAT,
+				VK_SAMPLER_ADDRESS_MODE_REPEAT,
+				0.0f,
+				VK_FALSE,
+				1.0f,
+				VK_FALSE,
+				VK_COMPARE_OP_ALWAYS,
+				0.0f,
+				1.0f,
+				VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+				VK_FALSE
+		};
+		vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &(texturedst->sampler));
+	}
+}
+
 
 VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                                     VkDebugUtilsMessageTypeFlagsEXT type,
@@ -1089,7 +1247,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback(VkDebugUtilsMessag
 //	std::cout<<"\nMessage: "<<callbackdata->pMessage<<'\n';
 //
 //	std::cout<<callbackdata->pMessage<<std::endl;
-	if(severity!=VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) return VK_FALSE;
+	if(severity<VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return VK_FALSE;
 	std::cout<<callbackdata->pMessage<<std::endl;
 	return VK_FALSE;
 }

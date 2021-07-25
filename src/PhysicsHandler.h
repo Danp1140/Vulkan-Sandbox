@@ -5,9 +5,13 @@
 #ifndef VULKANSANDBOX_PHYSICSHANDLER_H
 #define VULKANSANDBOX_PHYSICSHANDLER_H
 
+#include "Mesh.h"
+#include "Camera.h"
+#include "GraphicsHandler.h"
+
 #define STEP_HEIGHT 0.1f
 
-#include "Camera.h"
+//#include "Camera.h"
 
 typedef struct PhysicsObject{
 	glm::vec3 position, velocity, acceleration;
@@ -18,7 +22,7 @@ class PhysicsHandler{
 private:
 	Mesh*currentland;
 	Tri*standingtri;
-	Camera*camera;
+	Camera*camera;      //could consider just passing position and maybe forward
 	PhysicsObject cameraPO;
 
 	static bool edgeTest2D(glm::vec2 a, glm::vec2 b);

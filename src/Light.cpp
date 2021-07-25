@@ -8,18 +8,24 @@ Light::Light(){
 	position=glm::vec3(0, 5, 5);
 	forward=glm::vec3(0, 0, -1);
 	up=glm::vec3(0, 1, 0);
+	color=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	intensity=5.0f;
 	type=LIGHT_TYPE_SUN;
 	shadowmapresolution=1024;
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) GraphicsHandler::changeflags[x]|=LIGHT_CHANGE_FLAG_BIT;
 	recalculateProjectionMatrix();
 	recalculateViewMatrix();
 }
 
-Light::Light(glm::vec3 p, glm::vec3 f, int smr, LightType t){
+Light::Light(glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType t){
 	position=p;
 	forward=f;
 	up=glm::vec3(0, 1, 0);
+	color=c;
+	intensity=i;
 	type=t;
 	shadowmapresolution=smr;
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) GraphicsHandler::changeflags[x]|=LIGHT_CHANGE_FLAG_BIT;
 	recalculateProjectionMatrix();
 	recalculateViewMatrix();
 }
@@ -47,12 +53,14 @@ void Light::recalculateViewMatrix(){
 
 void Light::setPosition(glm::vec3 p){
 	position=p;
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) GraphicsHandler::changeflags[x]|=LIGHT_CHANGE_FLAG_BIT;
 	recalculateViewMatrix();
 	recalculateProjectionMatrix();
 }
 
 void Light::setForward(glm::vec3 f){
 	forward=f;
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) GraphicsHandler::changeflags[x]|=LIGHT_CHANGE_FLAG_BIT;
 	recalculateViewMatrix();
 	recalculateProjectionMatrix();
 }

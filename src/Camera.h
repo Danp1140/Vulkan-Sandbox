@@ -5,7 +5,7 @@
 #ifndef SANDBOX_CAMERA_H
 #define SANDBOX_CAMERA_H
 
-#include "Mesh.h"
+#include "GraphicsHandler.h"
 
 enum ProjectionType{
 	PERSPECTIVE

@@ -5,9 +5,7 @@
 #ifndef SANDBOX_LIGHT_H
 #define SANDBOX_LIGHT_H
 
-#include "Mesh.h"
-
-#define MAX_LIGHTS 4
+#include "GraphicsHandler.h"
 
 typedef enum LightType{
 	LIGHT_TYPE_SUN,
@@ -19,6 +17,8 @@ typedef enum LightType{
 class Light{
 private:
 	glm::vec3 position, forward, up;
+	glm::vec4 color;
+	float intensity;
 	glm::mat4 projectionmatrix, viewmatrix;
 	int shadowmapresolution;
 	LightType type;
@@ -27,13 +27,15 @@ private:
 	void recalculateViewMatrix();
 public:
 	Light();
-	Light(glm::vec3 p, glm::vec3 f, int smr, LightType t);
+	Light(glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType t);
 	void setPosition(glm::vec3 p);
 	void setForward(glm::vec3 f);
 	glm::mat4 getProjectionMatrix(){return projectionmatrix;}
 	glm::mat4 getViewMatrix(){return viewmatrix;}
 	int getShadowmapResolution(){return shadowmapresolution;}
 	glm::vec3 getPosition(){return position;}
+	glm::vec4 getColor(){return color;}
+	float getIntensity(){return intensity;}
 	LightType getType(){return type;}
 };
 
