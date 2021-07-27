@@ -22,6 +22,7 @@
 #include <GLFW/glfw3.h>
 
 #define GLFW_INCLUDE_VULKAN
+#define PRINT_DOUBLE(vec2) std::cout<<'('<<vec2[0]<<", "<<vec2[1]<<")\n"
 #define PRINT_TRIPLE(vec3) std::cout<<'('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<")\n"
 #define PRINT_QUAD(vec4) std::cout<<'('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<")"
 #define MAX_FRAMES_IN_FLIGHT 2
@@ -58,13 +59,18 @@ typedef struct TextureInfo{
 
 typedef struct PrimaryGraphicsPushConstants{
 	glm::mat4 cameravpmatrices, modelmatrix;
-	uint32_t numlights;
+	glm::vec2 standinguv;
+	uint32_t numlights;      //could maybe send as specialization constant??
 }PrimaryGraphicsPushConstants;
 
 typedef struct TextPushConstants{
 	glm::vec2 position, scale;
 	float rotation;
 }TextPushConstants;
+
+typedef struct SkyboxPushConstants{
+	alignas(16) glm::vec3 forward, dx, dy, cameraposition;
+}SkyboxPushConstants;
 
 typedef struct LightUniformBuffer{
 	glm::vec3 position;
@@ -90,7 +96,7 @@ typedef struct VulkanInfo{
 	VkImageView*swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
 	VkRenderPass primaryrenderpass;
-	PipelineInfo primarygraphicspipeline, textgraphicspipeline;
+	PipelineInfo primarygraphicspipeline, textgraphicspipeline, skyboxgraphicspipeline;
 	VkFramebuffer*framebuffers;
 	VkClearValue clears[2];
 	VkCommandPool commandpool;
@@ -105,8 +111,9 @@ typedef struct VulkanInfo{
 	TextureInfo depthbuffer;
 	VkBuffer*lightuniformbuffers;
 	VkDeviceMemory*lightuniformbuffermemories;
-	TextureInfo skybox;
+	//perhaps move push constants to wangling engine???
 	PrimaryGraphicsPushConstants primarygraphicspushconstants;
+	SkyboxPushConstants skyboxpushconstants;
 } VulkanInfo;
 
 typedef struct Vertex{
@@ -141,6 +148,7 @@ private:
 									   VkDeviceMemory*memories);
 	static void VKSubInitGraphicsPipeline();
 	static void VKSubInitTextGraphicsPipeline();
+	static void VKSubInitSkyboxGraphicsPipeline();
 	static void VKSubInitFramebuffers();
 	static void VKSubInitCommandPool();
 	static void VKSubInitSemaphoresAndFences();
@@ -161,6 +169,7 @@ private:
 public:
 	static VulkanInfo vulkaninfo;
 	static ChangeFlag*changeflags;
+	static std::stringstream troubleshootingsstrm;
 
 	GraphicsHandler();
 	~GraphicsHandler();

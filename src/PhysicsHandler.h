@@ -22,6 +22,7 @@ class PhysicsHandler{
 private:
 	Mesh*currentland;
 	Tri*standingtri;
+	glm::vec2 standinguv;
 	Camera*camera;      //could consider just passing position and maybe forward
 	PhysicsObject cameraPO;
 
@@ -34,6 +35,7 @@ public:
 	void updateStandingTri();
 	void updateCameraPos();
 	Tri*getStandingTri(){return standingtri;}
+	glm::vec2 getStandingUV(){return standinguv;}
 };
 
 

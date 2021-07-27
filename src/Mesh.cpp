@@ -24,18 +24,19 @@ Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
 	shadowtype=RADIUS;
 	updateBuffers();
 	srand(glfwGetTime());
-	glm::vec4*noisetexture=(glm::vec4*)malloc(512*512*sizeof(glm::vec4));
-	for(uint32_t x=0;x<512;x++){
-		for(uint32_t y=0;y<512;y++){
+	glm::vec4*noisetexture=(glm::vec4*)malloc(2048*2048*sizeof(glm::vec4));
+	for(uint32_t x=0;x<2048;x++){
+		for(uint32_t y=0;y<2048;y++){
 //			noisetexture[x][y]=(float(rand())/float(RAND_MAX))*glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-//			noisetexture[x][y]=glm::vec4((float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)));
+			noisetexture[x*2048+y]=glm::vec4((float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), 1.0f);
 //			noisetexture[x][y]=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-			noisetexture[x*512+y]=glm::vec4(sin(x/10.0f), cos(y/10.0f), sin(x/10.0f+3.14f), 1.0f);
+//			noisetexture[x*512+y]=glm::vec4(sin(x/10.0f), cos(y/10.0f), sin(x/10.0f+3.14f), 1.0f);
+//			noisetexture[x*512+y]=glm::vec4()
 		}
 	}
 	textures.push_back({});
 	//format and element size are kinda redundant
-	GraphicsHandler::VKHelperInitTexture(&textures.back(), 512, 512, (void*)(&noisetexture[0]), sizeof(glm::vec4), VK_FORMAT_R32G32B32A32_SFLOAT);
+	GraphicsHandler::VKHelperInitTexture(&textures.back(), 2048, 2048, (void*)(&noisetexture[0]), sizeof(glm::vec4), VK_FORMAT_R32G32B32A32_SFLOAT);
 	free(noisetexture);
 	initDescriptorSets();
 }

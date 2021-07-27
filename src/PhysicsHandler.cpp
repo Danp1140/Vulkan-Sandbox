@@ -7,6 +7,7 @@
 PhysicsHandler::PhysicsHandler(){
 	currentland=nullptr;
 	standingtri=nullptr;
+	standinguv=glm::vec2(0.0f, 0.0f);
 	camera=nullptr;
 	cameraPO={
 		glm::vec3(0.0f, 0.0f, 0.0f),
@@ -19,6 +20,7 @@ PhysicsHandler::PhysicsHandler(){
 PhysicsHandler::PhysicsHandler(Mesh*cl, Camera*c){
 	currentland=cl;
 	standingtri=nullptr;
+	standinguv=glm::vec2(0.0f, 0.0f);
 	camera=c;
 	cameraPO={
 		camera->getPosition(),
@@ -58,6 +60,7 @@ void PhysicsHandler::updateStandingTri(){
 	}
 	glm::vec3 temparray[3]={vertices[standingtri->vertices[0]].position, vertices[standingtri->vertices[1]].position, vertices[standingtri->vertices[2]].position};
 	//dont technically need below else after return
+	//is there a more efficient calculation method that involves detecting edge cross via difference in camera position?
 	if(triIntersectionNoY(temparray, cameraPO.position)) return;
 	else{
 //		std::cout<<"tri @ "<<standingtri<<" allegedly no longer collides, so we're looking thru adjacencies"<<std::endl;
@@ -76,12 +79,32 @@ void PhysicsHandler::updateCameraPos(){
 	cameraPO.position=camera->getPosition();
 	updateStandingTri();
 
-	float triintersectiony=
-			(-standingtri->algebraicnormal.x*(cameraPO.position.x-currentland->getVertices()[standingtri->vertices[0]].position.x)
-			 -standingtri->algebraicnormal.z*(cameraPO.position.z-currentland->getVertices()[standingtri->vertices[0]].position.z))
-			 /standingtri->algebraicnormal.y+currentland->getVertices()[standingtri->vertices[0]].position.y;
-//	std::cout<<triintersectiony<<std::endl;
-//	if(triintersectiony<cameraPO.position.y) cameraPO.position.y-=0.1f;
-//	if(triintersectiony>cameraPO.position.y) cameraPO.position.y+=0.1f;
-	camera->setPosition(glm::vec3(camera->getPosition().x, triintersectiony+0.5f, camera->getPosition().z));
+	if(standingtri!=nullptr){
+		float triintersectiony=
+				(-standingtri->algebraicnormal.x*
+				 (cameraPO.position.x-currentland->getVertices()[standingtri->vertices[0]].position.x)
+				 -standingtri->algebraicnormal.z*
+				  (cameraPO.position.z-currentland->getVertices()[standingtri->vertices[0]].position.z))
+				/standingtri->algebraicnormal.y+currentland->getVertices()[standingtri->vertices[0]].position.y;
+		//	std::cout<<triintersectiony<<std::endl;
+		//	if(triintersectiony<cameraPO.position.y) cameraPO.position.y-=0.1f;
+		//	if(triintersectiony>cameraPO.position.y) cameraPO.position.y+=0.1f;
+		camera->setPosition(glm::vec3(camera->getPosition().x, triintersectiony, camera->getPosition().z));
+		glm::vec3 barycentricvalues;
+		for(uint32_t x=0;x<3;x++){
+			//very likely a more efficient, but more manual way to do this
+			barycentricvalues[x]=glm::length(glm::cross(camera->getPosition()-currentland->getVertices()[standingtri->vertices[(x+1)%3]].position,
+								   currentland->getVertices()[standingtri->vertices[(x+2)%3]].position-currentland->getVertices()[standingtri->vertices[(x+1)%3]].position));
+		}
+		barycentricvalues/=(barycentricvalues[0]+barycentricvalues[1]+barycentricvalues[2]);
+		standinguv=glm::vec2(0, 0);
+		for(uint32_t x=0;x<3;x++){
+//			GraphicsHandler::troubleshootingsstrm<<barycentricvalues[x]<<'\n';
+			standinguv+=currentland->getVertices()[standingtri->vertices[x]].uv
+					*barycentricvalues[x];
+		}
+//		standinguv.x-=floor(standinguv.x);
+//		standinguv.y-=floor(standinguv.y);
+		camera->setPosition(camera->getPosition()+glm::vec3(0.0f, 0.5f, 0.0f));
+	}
 }

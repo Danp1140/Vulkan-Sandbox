@@ -32,6 +32,7 @@ public:
 	glm::vec3 getForward(){return forward;}
 	glm::mat4 getProjectionMatrix(){return projectionmatrix;}
 	glm::mat4 getViewMatrix(){return viewmatrix;}
+	float getFovy(){return fovy;}
 };
 
 

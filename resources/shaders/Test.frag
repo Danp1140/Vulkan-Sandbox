@@ -14,6 +14,7 @@ layout(location=2) in vec2 uv;
 
 layout(push_constant) uniform PushConstants{
     mat4 cameravpmatrices, modelmatrix;
+    vec2 standinguv;
     uint numlights;
 } constants;
 layout(set=0, binding=0) uniform LightUniformBuffer{
@@ -28,11 +29,18 @@ layout(set=1, binding=0) uniform sampler2D texturesampler;
 layout(location=0) out vec4 color;
 
 void main() {
+    vec4 texcol=vec4(1.0f, 1.0f, 1.0f, 1.0f);
+//    if(distance(constants.standinguv, uv)<0.05f) color*=vec4(0.0f, 1.0f, 0.0f, 1.0f);
+    if(uv.x>constants.standinguv.x-0.05f&&uv.x<constants.standinguv.x+0.05f
+        &&uv.y>constants.standinguv.y-0.05f&&uv.y<constants.standinguv.y+0.05f){
+        texcol=texture(texturesampler,
+            (constants.standinguv-uv)/0.1f+vec2(0.5f, 0.5f));
+    }
     for(uint x=0;x<MAX_LIGHTS;x++){
         if (x<constants.numlights){
             if (lightuniformbuffer[x].lighttype==LIGHT_TYPE_SUN){
                 vec3 lighttofrag=lightuniformbuffer[x].position-position;
-                color+=texture(texturesampler, uv*10.0f)
+                color+=texcol
                 *(lightuniformbuffer[x].color
                 *max(dot(normalize(lighttofrag), normal), 0)
                 *lightuniformbuffer[x].intensity
@@ -40,7 +48,7 @@ void main() {
             }
             else {
                 vec3 lighttofrag=lightuniformbuffer[x].position-position;
-                color+=vec4(1.0f, 1.0f, 1.0f, 1.0f)
+                color+=texcol
                 *(lightuniformbuffer[x].color
                 *max(dot(normalize(lighttofrag), normal), 0)
                 *lightuniformbuffer[x].intensity/pow(length(lighttofrag), 2)
@@ -49,4 +57,5 @@ void main() {
         }
         else break;
     }
+    color.a=1;
 }

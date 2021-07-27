@@ -6,6 +6,7 @@ layout(location=2) in vec2 vertexuv;
 
 layout(push_constant) uniform PushConstants{
     mat4 cameravpmatrices, modelmatrix;
+    vec2 standinguv;
     uint numlights;
 } constants;
 

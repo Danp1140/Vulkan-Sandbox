@@ -6,6 +6,7 @@
 
 VulkanInfo GraphicsHandler::vulkaninfo{};
 ChangeFlag*GraphicsHandler::changeflags=nullptr;
+std::stringstream GraphicsHandler::troubleshootingsstrm=std::stringstream();
 
 GraphicsHandler::GraphicsHandler(){}
 
@@ -75,6 +76,7 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 	VKSubInitDescriptorPool(nummeshes);
 	VKSubInitGraphicsPipeline();
 	VKSubInitTextGraphicsPipeline();
+	VKSubInitSkyboxGraphicsPipeline();
 }
 
 void GraphicsHandler::VKSubInitWindow(){
@@ -594,6 +596,37 @@ void GraphicsHandler::VKSubInitTextGraphicsPipeline(){
 			          &vulkaninfo.primaryrenderpass,
 			          &shaderscitemps[0],
 			          &vertexinputsci);
+}
+
+void GraphicsHandler::VKSubInitSkyboxGraphicsPipeline(){
+	VkPushConstantRange pushconstantrange{
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		0,
+		sizeof(SkyboxPushConstants)
+	};
+	VkPipelineShaderStageCreateInfo shaderstagecreateinfos[2];
+	VKSubInitLoadShaders("../resources/shaders/skyboxvert.spv",
+					     "../resources/shaders/skyboxfrag.spv",
+					     &vulkaninfo.skyboxgraphicspipeline.vertexshadermodule,
+					     &vulkaninfo.skyboxgraphicspipeline.fragmentshadermodule,
+					     &shaderstagecreateinfos[0],
+					     &shaderstagecreateinfos[1]);
+	VkPipelineVertexInputStateCreateInfo vertinstatecreateinfo{
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		0,
+		nullptr,
+		0,
+		nullptr
+	};
+	VKSubInitPipeline(&vulkaninfo.skyboxgraphicspipeline,
+			          0,
+			          nullptr,
+			          &pushconstantrange,
+			          &vulkaninfo.primaryrenderpass,
+			          &shaderstagecreateinfos[0],
+			          &vertinstatecreateinfo);
 }
 
 void GraphicsHandler::VKSubInitFramebuffers(){
@@ -1195,9 +1228,9 @@ void GraphicsHandler::VKHelperInitTexture(TextureInfo*texturedst,           //ma
 				VK_FILTER_NEAREST,
 				VK_FILTER_NEAREST,
 				VK_SAMPLER_MIPMAP_MODE_NEAREST,
-				VK_SAMPLER_ADDRESS_MODE_REPEAT,
-				VK_SAMPLER_ADDRESS_MODE_REPEAT,
-				VK_SAMPLER_ADDRESS_MODE_REPEAT,
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 				0.0f,
 				VK_FALSE,
 				1.0f,
@@ -1205,7 +1238,7 @@ void GraphicsHandler::VKHelperInitTexture(TextureInfo*texturedst,           //ma
 				VK_COMPARE_OP_ALWAYS,
 				0.0f,
 				1.0f,
-				VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+				VK_BORDER_COLOR_INT_OPAQUE_WHITE,
 				VK_FALSE
 		};
 		vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &(texturedst->sampler));

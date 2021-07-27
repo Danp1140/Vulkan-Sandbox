@@ -20,7 +20,13 @@ WanglingEngine::WanglingEngine(){
 							   glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
 							   32,
 							   LIGHT_TYPE_SUN));
-	GraphicsHandler::vulkaninfo.primarygraphicspushconstants={glm::mat4(1), glm::mat4(1), (uint32_t)lights.size()};
+//	lights.push_back(new Light(glm::vec3(1.0f, 1.0f, 1.0f),
+//					           glm::vec3(-1.0f, -1.0f, -1.0f),
+//					           1.0f,
+//					           glm::vec4(1.0f, 1.0f, 0.5f, 1.0f),
+//					           32,
+//					           LIGHT_TYPE_POINT));
+	GraphicsHandler::vulkaninfo.primarygraphicspushconstants={glm::mat4(1), glm::mat4(1), glm::vec2(0), (uint32_t)lights.size()};
 	troubleshootingtext=new Text("troubleshooting text",
 							     glm::vec2(-1.0f, -1.0f),
 							     glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
@@ -52,6 +58,16 @@ void WanglingEngine::recordCommandBuffer(uint32_t index){
 		&GraphicsHandler::vulkaninfo.clears[0]
 	};
 	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[index], &renderpassbegininfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdBindPipeline(GraphicsHandler::vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipeline);
+	vkCmdPushConstants(GraphicsHandler::vulkaninfo.commandbuffers[index],
+					   GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipelinelayout,
+					   VK_SHADER_STAGE_FRAGMENT_BIT,
+					   0,
+					   sizeof(SkyboxPushConstants),
+					   &GraphicsHandler::vulkaninfo.skyboxpushconstants);
+	vkCmdDraw(GraphicsHandler::vulkaninfo.commandbuffers[index], 6, 1, 0, 0);
+
 	vkCmdBindPipeline(GraphicsHandler::vulkaninfo.commandbuffers[index], VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipeline);
 	vkCmdPushConstants(GraphicsHandler::vulkaninfo.commandbuffers[index],
 					   GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
@@ -125,6 +141,8 @@ void WanglingEngine::draw(){
 
 	glfwPollEvents();
 
+	GraphicsHandler::troubleshootingsstrm=std::stringstream();
+
 	//consider returning bool that signals whether camera has actually changed or not
 	//if we had a whole system of change flags for camera, lights, and meshes, we could get a lot of efficiency with data sending and command recording
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
@@ -132,8 +150,27 @@ void WanglingEngine::draw(){
 	GraphicsHandler::vulkaninfo.primarygraphicspushconstants={
 		primarycamera->getProjectionMatrix()*primarycamera->getViewMatrix(),
 		glm::mat4(1),        //eventually we gotta move this to a uniform buffer so it can vary by mesh
+		physicshandler.getStandingUV(),
 		(uint32_t)lights.size()
 	};
+	float theta=atan(primarycamera->getForward().x/primarycamera->getForward().z),
+		phi=acos(primarycamera->getForward().y/glm::length(primarycamera->getForward()));
+	GraphicsHandler::vulkaninfo.skyboxpushconstants={
+		glm::normalize(primarycamera->getForward())*(1.0f/tan(primarycamera->getFovy())),
+//		glm::normalize(glm::vec3(1.0f/(float)GraphicsHandler::vulkaninfo.horizontalres, 0.0f, 0.0f)),
+		glm::normalize(glm::cross(primarycamera->getForward(), glm::vec3(0.0f, 1.0f, 0.0f))),
+//		glm::normalize(glm::vec3(0.0f, 1.0f/(float)GraphicsHandler::vulkaninfo.verticalres, 0.0f))
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		primarycamera->getPosition()
+	};
+	GraphicsHandler::vulkaninfo.skyboxpushconstants.dy=glm::normalize(glm::cross(primarycamera->getForward(), GraphicsHandler::vulkaninfo.skyboxpushconstants.dx));
+//	glm::quat yrot=glm::quat(cos(theta/2.0f), 0.0, sin(theta/2.0f), 0.0f);
+//	GraphicsHandler::vulkaninfo.skyboxpushconstants.dx=glm::rotate(yrot, GraphicsHandler::vulkaninfo.skyboxpushconstants.dx);
+//	GraphicsHandler::vulkaninfo.skyboxpushconstants.dy=glm::rotate(yrot, GraphicsHandler::vulkaninfo.skyboxpushconstants.dy);
+//	glm::vec3 arbaxis=glm::cross(primarycamera->getForward(), glm::vec3(0.0f, 1.0f, 0.0f));
+//	glm::quat arbrot=glm::quat(cos(phi/2.0f), arbaxis.x*sin(phi/2.0f), arbaxis.y*sin(phi/2.0f), arbaxis.z*sin(phi/2.0f));
+//	GraphicsHandler::vulkaninfo.skyboxpushconstants.dx=glm::rotate(arbrot, GraphicsHandler::vulkaninfo.skyboxpushconstants.dx);
+//	GraphicsHandler::vulkaninfo.skyboxpushconstants.dy=glm::rotate(arbrot, GraphicsHandler::vulkaninfo.skyboxpushconstants.dy);
 
 	//maybe move this to vulkaninfo struct? we don't have to, but it would be tidier, and might prove useful later???
 	uint32_t imageindex=-1u;
@@ -188,12 +225,32 @@ void WanglingEngine::draw(){
 				        &GraphicsHandler::vulkaninfo.imageinflightfences[imageindex],
 				        VK_TRUE,
 				        UINT64_MAX);
-		std::stringstream sstrm;;
-		sstrm<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps\n"
+		GraphicsHandler::troubleshootingsstrm<<(1.0f/std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count())<<" fps\n"
 			 <<"swapchain image: "<<imageindex<<" frame in flight: "<<GraphicsHandler::vulkaninfo.currentframeinflight<<'\n'
 			 <<"current tri: "<<std::hex<<physicshandler.getStandingTri()<<'\n'
-			 <<"change flag bits: "<<std::dec<<std::bitset<8>(GraphicsHandler::changeflags[(imageindex+1)%GraphicsHandler::vulkaninfo.numswapchainimages]);
-		troubleshootingtext->setMessage(sstrm.str(), imageindex);
+			 <<"change flag bits: "<<std::dec<<std::bitset<8>(GraphicsHandler::changeflags[(imageindex+1)%GraphicsHandler::vulkaninfo.numswapchainimages])
+	         <<"\ninterpolated standing uv: ("<<physicshandler.getStandingUV().x<<", "<<physicshandler.getStandingUV().y<<')';
+//			 <<"\ntheta: "<<theta
+//	         <<"\nphi: "<<phi
+//	         <<"\nfovy: "<<primarycamera->getFovy();
+		{
+			glm::mat3 yrotation={
+					{1.0f, 0.0f,                   0.0f},
+					{0.0f, cos((acos(primarycamera->getForward().y/glm::length(primarycamera->getForward())))), -sin((acos(primarycamera->getForward().y/glm::length(primarycamera->getForward()))))},
+					{0.0f, sin((acos(primarycamera->getForward().y/glm::length(primarycamera->getForward())))), cos((acos(primarycamera->getForward().y/glm::length(primarycamera->getForward()))))}
+			};
+			glm::mat3 xrotation={
+					{cos((atan(primarycamera->getForward().x/primarycamera->getForward().z))), 0.0f, sin((atan(primarycamera->getForward().x/primarycamera->getForward().z)))},
+					{0.0f, 1.0f, 0.0f},
+					{-sin((atan(primarycamera->getForward().x/primarycamera->getForward().z))), 0.0f, cos((atan(primarycamera->getForward().x/primarycamera->getForward().z)))}
+			};
+			glm::vec3 look=yrotation*xrotation*glm::vec3(float(1440.0f)/1440.0f-1.0f, -float(900.0f)/900.0f+1.0f, 1.0f/tan(primarycamera->getFovy()));
+//			sstrm<<"\nray (cast from center of camera): ("<<look.x<<", "<<look.y<<", "<<look.z<<')';
+//			sstrm<<"\nforward vector: ("<<GraphicsHandler::vulkaninfo.skyboxpushconstants.forward.x<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.forward.y<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.forward.z<<')';
+//			sstrm<<"\ndx: ("<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dx.x<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dx.y<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dx.z<<')';
+//			sstrm<<"\ndy: ("<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dy.x<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dy.y<<", "<<GraphicsHandler::vulkaninfo.skyboxpushconstants.dy.z<<')';
+		}
+		troubleshootingtext->setMessage(GraphicsHandler::troubleshootingsstrm.str(), imageindex);
 		//can add check here once we figure out change flag system
 		recordCommandBuffer(imageindex);
 	}
