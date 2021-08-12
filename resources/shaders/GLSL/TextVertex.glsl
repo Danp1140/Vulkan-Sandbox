@@ -7,12 +7,6 @@ layout(push_constant) uniform PushConstants{
 
 layout(location=0) out vec2 uvout;
 
-//const vec2 vertices[4]={
-//    vec2(0, 0),
-//    vec2(0, 1),
-//    vec2(1, 1),
-//    vec2(1, 0)
-//};
 vec2 positions[4]={
     pushconstants.position,
     pushconstants.position+vec2(0, pushconstants.scale.y),

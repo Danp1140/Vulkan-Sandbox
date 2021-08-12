@@ -10,6 +10,8 @@
 #include "Light.h"
 #include "Text.h"
 #include "PhysicsHandler.h"
+#include "TextureHandler.h"
+#include "Ocean.h"
 
 class WanglingEngine{
 private:
@@ -17,9 +19,10 @@ private:
 	std::vector<Mesh*>dynamicshadowcastingmeshes, landscapemeshes;
 	std::vector<const Mesh*>staticshadowcastingmeshes;
 	std::vector<Light*>lights;
+	Ocean*ocean;
 	Text*troubleshootingtext;
 	PhysicsHandler physicshandler;
-	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime;
+	TextureHandler texturehandler;
 
 	void recordCommandBuffer(uint32_t index);
 public:

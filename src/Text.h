@@ -18,9 +18,9 @@ private:
 	float fontsize;
 	TextPushConstants pushconstants;
 	VkDescriptorSet*descriptorsets;
-	TextureInfo texture;
+	TextureInfo*textures;
 
-	void regenFaces();
+	void regenFaces(bool init);
 	void initDescriptorSet();
 public:
 	FT_Library ftlib;

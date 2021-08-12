@@ -13,14 +13,14 @@ Text::Text(){
 	pushconstants.position=glm::vec2(0, 0);
 	pushconstants.scale=glm::vec2(1.0f, 1.0f);
 	pushconstants.rotation=0.0f;
-	texture={};
+	textures=new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
 	ftlib=FT_Library();
 	FT_Init_FreeType(&ftlib);
 	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
 	//unsure what params mean in this function...
 	FT_Set_Char_Size(face, 0, fontsize*64, 0, 72);
 	//probably shouldnt call this function on a null-init'd text
-	regenFaces();
+	regenFaces(true);
 	initDescriptorSet();
 }
 
@@ -32,36 +32,43 @@ Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
 	pushconstants.position=p;
 	pushconstants.scale=glm::vec2(2.0f/(float)hr, 2.0f/(float)vr);
 	pushconstants.rotation=0.0f;
-	texture={};
+	textures=new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
 	ftlib=FT_Library();
 	FT_Init_FreeType(&ftlib);
 	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
 	//unsure what params mean in this function...
 	//unit of width is ???, unit of resolution is dpi
-	FT_Set_Char_Size(face, 0, fontsize*64, 0, 72);
-	regenFaces();
+	FT_Set_Char_Size(face, 0, fontsize*64, 0, 36);
+	regenFaces(true);
 	initDescriptorSet();
 }
 
 Text::~Text(){
 	FT_Done_Face(face);
 	FT_Done_FreeType(ftlib);
-	vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.sampler, nullptr);
-	vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.imageview, nullptr);
-	vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.image, nullptr);
-	vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.memory, nullptr);
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
+		vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].sampler, nullptr);
+		vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].imageview, nullptr);
+		vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].image, nullptr);
+		vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].memory, nullptr);
+	}
 	delete[] descriptorsets;
+	delete[] textures;
 }
 
 void Text::setMessage(std::string m, uint32_t index){
 	message=m;
 	pushconstants.scale=glm::vec2(2.0f/(float)horizontalres, 2.0f/(float)verticalres);
-	regenFaces();
-	VkDescriptorImageInfo imginfo=texture.getDescriptorImageInfo();
+	regenFaces(false);
+	VkDescriptorImageInfo imginfo={
+		textures[GraphicsHandler::swapchainimageindex].sampler,
+		textures[GraphicsHandler::swapchainimageindex].imageview,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
 	VkWriteDescriptorSet write{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			nullptr,
-			descriptorsets[index],
+			descriptorsets[GraphicsHandler::swapchainimageindex],
 			0,
 			0,
 			1,
@@ -73,13 +80,7 @@ void Text::setMessage(std::string m, uint32_t index){
 	vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
 }
 
-void Text::regenFaces(){
-//	if(texture.image!=VK_NULL_HANDLE){
-//		vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.sampler, nullptr);
-//		vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.imageview, nullptr);
-//		vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.image, nullptr);
-//		vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, texture.memory, nullptr);
-//	}
+void Text::regenFaces(bool init){
 	unsigned int maxlinelength=0u, linelengthcounter=0u, numlines=1u;
 	for(char c:message){
 		if(c=='\n'){
@@ -117,19 +118,37 @@ void Text::regenFaces(){
 		}
 		penposition+=glm::vec2((face->glyph->metrics.horiAdvance-face->glyph->metrics.horiBearingX)/64, -face->glyph->metrics.horiBearingY/64);
 	}
-	//could get a memory leak if TextureInfo members aren't being freed/deleted properly
-	GraphicsHandler::VKHelperInitTexture(&texture,
-	                                     hres,
-	                                     vres,
-	                                     reinterpret_cast<void*>(&texturedata[0]),
-	                                     sizeof(float),
-	                                     VK_FORMAT_R32_SFLOAT);
+	//if we wanna differentiate between a startup init and on-the-fly update, we gotta do some indexing of the textures below
+//	GraphicsHandler::VKHelperInitTexture(&textures[GraphicsHandler::swapchainimageindex],
+//	                                     hres,
+//	                                     vres,
+//	                                     reinterpret_cast<void*>(&texturedata[0]),
+//	                                     VK_FORMAT_R32_SFLOAT,
+//	                                     textures[GraphicsHandler::swapchainimageindex].image!=VK_NULL_HANDLE);
+	if(init){
+		for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
+			GraphicsHandler::VKHelperInitTexture(&textures[x],
+			                                     hres,
+			                                     vres,
+			                                     reinterpret_cast<void*>(&texturedata[0]),
+			                                     VK_FORMAT_R32_SFLOAT,
+			                                     false);
+		}
+	}
+	else{
+		GraphicsHandler::VKHelperInitTexture(&textures[GraphicsHandler::swapchainimageindex],
+		                                     hres,
+		                                     vres,
+		                                     reinterpret_cast<void*>(&texturedata[0]),
+		                                     VK_FORMAT_R32_SFLOAT,
+		                                     true);
+	}
 	delete(texturedata);
 }
 
 void Text::initDescriptorSet(){
 	VkDescriptorSetLayout layoutstemp[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
-	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textdescriptorsetlayout;
+	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textgraphicspipeline.objectdsl;
 	descriptorsets=new VkDescriptorSet[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
 	VkDescriptorSetAllocateInfo allocinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -140,7 +159,7 @@ void Text::initDescriptorSet(){
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, &allocinfo, &descriptorsets[0]);
 	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++){
-		VkDescriptorImageInfo imginfo=texture.getDescriptorImageInfo();
+		VkDescriptorImageInfo imginfo=textures[x].getDescriptorImageInfo();
 		VkWriteDescriptorSet write{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			nullptr,

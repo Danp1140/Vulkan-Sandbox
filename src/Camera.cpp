@@ -43,20 +43,17 @@ void Camera::takeInputs(GLFWwindow*w){
 	//may place this all in callback(s) if that is more efficient
 	lastmousex=mousex; lastmousey=mousey;
 	glfwGetCursorPos(w, &mousex, &mousey);
-	double angletemp=-(mousex-lastmousex)/2.0f*mousesens;
-	glm::vec4 forwardtemp=glm::vec4(0, forward.x, forward.y, forward.z);
-	forward=glm::rotate(glm::quat(cos(angletemp), up.x*sin(angletemp), up.y*sin(angletemp), up.z*sin(angletemp)), forward);
-	glm::vec3 axistemp=glm::cross(forward, up);
-	angletemp=-(mousey-lastmousey)/2.0f*mousesens;
-	forward=glm::rotate(glm::quat(cos(angletemp), axistemp.x*sin(angletemp), axistemp.y*sin(angletemp), axistemp.z*sin(angletemp)), forward);
-
-	if(glfwGetKey(w, GLFW_KEY_W)==GLFW_PRESS) position+=forward*movementsens;
-	if(glfwGetKey(w, GLFW_KEY_A)==GLFW_PRESS) position+=glm::cross(forward, up)*-movementsens;
-	if(glfwGetKey(w, GLFW_KEY_S)==GLFW_PRESS) position+=forward*-movementsens;
-	if(glfwGetKey(w, GLFW_KEY_D)==GLFW_PRESS) position+=glm::cross(forward, up)*movementsens;
-	if(glfwGetKey(w, GLFW_KEY_SPACE)==GLFW_PRESS) position+=up*movementsens;
-	if(glfwGetKey(w, GLFW_KEY_Z)==GLFW_PRESS) position+=up*-movementsens;
-
+	if(lastmousex!=mousex||lastmousey!=mousey){
+		GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]|=CAMERA_LOOK_CHANGE_FLAG_BIT;
+		double angletemp=-(mousex-lastmousex)/2.0f*mousesens;
+		glm::vec4 forwardtemp=glm::vec4(0, forward.x, forward.y, forward.z);
+		forward=glm::rotate(glm::quat(cos(angletemp), up.x*sin(angletemp), up.y*sin(angletemp), up.z*sin(angletemp)),
+		                    forward);
+		glm::vec3 axistemp=glm::cross(forward, up);
+		angletemp=-(mousey-lastmousey)/2.0f*mousesens;
+		forward=glm::rotate(glm::quat(cos(angletemp), axistemp.x*sin(angletemp), axistemp.y*sin(angletemp),
+		                              axistemp.z*sin(angletemp)), forward);
+	}
 	recalculateViewMatrix();
 }
 
@@ -67,7 +64,8 @@ void Camera::recalculateProjectionMatrix(){
 }
 
 void Camera::recalculateViewMatrix(){
-	viewmatrix=glm::lookAt(position, position+forward, up);
+	//height addition should be cleaned up later
+	viewmatrix=glm::lookAt(position+glm::vec3(0.0f, 0.5f, 0.0f), position+forward+glm::vec3(0.0f, 0.5f, 0.0f), up);
 }
 
 void Camera::setPosition(glm::vec3 p){

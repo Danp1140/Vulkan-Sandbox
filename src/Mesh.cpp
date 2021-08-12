@@ -14,6 +14,8 @@ Mesh::Mesh(VulkanInfo*vki){
 	recalculateModelMatrix();
 	shadowtype=RADIUS;
 	updateBuffers();
+	diffusetexture={};
+	normaltexture={};
 }
 
 Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
@@ -23,30 +25,28 @@ Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
 	recalculateModelMatrix();
 	shadowtype=RADIUS;
 	updateBuffers();
-	srand(glfwGetTime());
-	glm::vec4*noisetexture=(glm::vec4*)malloc(2048*2048*sizeof(glm::vec4));
-	for(uint32_t x=0;x<2048;x++){
-		for(uint32_t y=0;y<2048;y++){
-//			noisetexture[x][y]=(float(rand())/float(RAND_MAX))*glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-			noisetexture[x*2048+y]=glm::vec4((float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), (float(rand())/float(RAND_MAX)), 1.0f);
-//			noisetexture[x][y]=glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-//			noisetexture[x*512+y]=glm::vec4(sin(x/10.0f), cos(y/10.0f), sin(x/10.0f+3.14f), 1.0f);
-//			noisetexture[x*512+y]=glm::vec4()
-		}
-	}
-	textures.push_back({});
-	//format and element size are kinda redundant
-	GraphicsHandler::VKHelperInitTexture(&textures.back(), 2048, 2048, (void*)(&noisetexture[0]), sizeof(glm::vec4), VK_FORMAT_R32G32B32A32_SFLOAT);
-	free(noisetexture);
+	diffusetexture={};
+	normaltexture={};
+	initDescriptorSets();
+}
+
+Mesh:: Mesh(glm::vec3 p){
+	vulkaninfo=&GraphicsHandler::vulkaninfo;
+	position=p;
+	recalculateModelMatrix();
+	shadowtype=RADIUS;
+	diffusetexture={};
+	normaltexture={};
 	initDescriptorSets();
 }
 
 Mesh::~Mesh(){
-	for(auto&t:textures){
-		vkDestroyImage(vulkaninfo->logicaldevice, t.image, nullptr);
-		vkFreeMemory(vulkaninfo->logicaldevice, t.memory, nullptr);
-		vkDestroyImageView(vulkaninfo->logicaldevice, t.imageview, nullptr);
-		vkDestroySampler(vulkaninfo->logicaldevice, t.sampler, nullptr);
+	TextureInfo*texturestemp[2]={&diffusetexture, &normaltexture};
+	for(auto&t:texturestemp){
+		vkDestroyImage(vulkaninfo->logicaldevice, t->image, nullptr);
+		vkFreeMemory(vulkaninfo->logicaldevice, t->memory, nullptr);
+		vkDestroyImageView(vulkaninfo->logicaldevice, t->imageview, nullptr);
+		vkDestroySampler(vulkaninfo->logicaldevice, t->sampler, nullptr);
 	}
 	vkFreeMemory(vulkaninfo->logicaldevice, indexbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo->logicaldevice, indexbuffer, nullptr);
@@ -88,7 +88,7 @@ void Mesh::updateBuffers(){
 	uint16_t indextemp[3*tris.size()];
 	for(int x=0;x<tris.size();x++){
 		for(int y=0;y<3;y++){
-			indextemp[3*x+y]=tris[x].vertices[y];
+			indextemp[3*x+y]=tris[x].vertexindices[y];
 		}
 	}
 	memcpy(indexdatatemp, (void*)indextemp, indexbuffersize);
@@ -109,8 +109,7 @@ void Mesh::updateBuffers(){
 
 void Mesh::initDescriptorSets(){
 	VkDescriptorSetLayout layoutstemp[vulkaninfo->numswapchainimages];
-	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++) layoutstemp[x]=vulkaninfo->primarygraphicspipeline.meshdescriptorsetlayout;
-	//maybe we can get away with one descriptor set, cause its not updating every frame?
+	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++) layoutstemp[x]=vulkaninfo->primarygraphicspipeline.objectdsl;
 	descriptorsets=new VkDescriptorSet[vulkaninfo->numswapchainimages];
 	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -119,27 +118,49 @@ void Mesh::initDescriptorSets(){
 		vulkaninfo->numswapchainimages,
 		&layoutstemp[0]
 	};
-	std::cout<<"alloc of "<<vulkaninfo->numswapchainimages<<" descriptor sets @"<<descriptorsets<<" result: "<<string_VkResult(vkAllocateDescriptorSets(vulkaninfo->logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]))<<std::endl;
+	vkAllocateDescriptorSets(vulkaninfo->logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
+}
 
-	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++){
-		VkDescriptorImageInfo imginfo={
-			textures[0].sampler,
-			textures[0].imageview,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+void Mesh::rewriteAllDescriptorSets(){
+	VkDescriptorImageInfo imginfo=diffusetexture.getDescriptorImageInfo();
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
+		VkWriteDescriptorSet write{
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				nullptr,
+				descriptorsets[x],
+				0,
+				0,
+				1,
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				&imginfo,
+				nullptr,
+				nullptr
 		};
-		VkWriteDescriptorSet writedescriptorset{
-			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			nullptr,
-			descriptorsets[x],
-			0,
-			0,
-			1,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			&imginfo,
-			nullptr,
-			nullptr
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+		                       1,
+		                       &write,
+		                       0,
+		                       nullptr);
+	}
+	imginfo=normaltexture.getDescriptorImageInfo();
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
+		VkWriteDescriptorSet write{
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				nullptr,
+				descriptorsets[x],
+				1,
+				0,
+				1,
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				&imginfo,
+				nullptr,
+				nullptr
 		};
-		vkUpdateDescriptorSets(vulkaninfo->logicaldevice, 1, &writedescriptorset, 0, nullptr);
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+		                       1,
+		                       &write,
+		                       0,
+		                       nullptr);
 	}
 }
 
@@ -150,6 +171,61 @@ void Mesh::recalculateModelMatrix(){
 void Mesh::setPosition(glm::vec3 p){
 	position=p;
 	recalculateModelMatrix();
+}
+
+void Mesh::cleanUpVertsAndTris(){
+	uint16_t dupecounter=0;
+	for(int x=0;x<vertices.size();x++){
+		for(int y=0;y<x;y++){
+			if(y!=x&&vertices[x]==vertices[y]){
+				for(int z=0;z<tris.size();z++){
+					for(int w=0;w<3;w++){
+						if(tris[z].vertexindices[w]==x) tris[z].vertexindices[w]=y;
+						else if(tris[z].vertexindices[w]>x) tris[z].vertexindices[w]--;
+					}
+				}
+				vertices.erase(vertices.begin()+x);
+				dupecounter++;
+				std::cout<<'\r'<<dupecounter<<" duplicates removed!";
+			}
+		}
+	}
+	std::cout<<std::endl;
+
+	bool adjacencyfound;
+	for(int x=0;x<tris.size();x++){
+		for(int y=0;y<tris.size();y++){
+			if(x!=y){
+				adjacencyfound=false;
+				for(int z=0;z<3;z++){
+					for(int w=0;w<3;w++){
+						if(vertices[tris[x].vertexindices[z]].position==vertices[tris[y].vertexindices[w]].position){
+							tris[x].adjacencies.push_back(&tris[y]);
+//							std::cout<<"adjacency found between tri "<<x<<" and tri "<<y<<std::endl;
+							adjacencyfound=true;
+							break;
+						}
+					}
+					if(adjacencyfound) break;
+				}
+			}
+		}
+		std::cout<<"\rfinding adjacencies (tri "<<(x+1)<<" of "<<tris.size()<<')';
+	}
+	std::cout<<std::endl;
+
+	for(uint32_t x=0;x<tris.size();x++){
+		for(uint16_t y=0;y<3;y++){
+			tris[x].vertices[y]=&vertices[tris[x].vertexindices[y]];
+			std::cout<<"\rgiving tris vertex addresses (tri "<<(x+1)<<" of "<<tris.size()<<')';
+		}
+	}
+	std::cout<<std::endl;
+
+	for(auto&t:tris){
+		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertexindices[1]].position-vertices[t.vertexindices[0]].position,
+		                                            vertices[t.vertexindices[2]].position-vertices[t.vertexindices[0]].position));
+	}
 }
 
 void Mesh::loadOBJ(const char*filepath){
@@ -197,11 +273,11 @@ void Mesh::loadOBJ(const char*filepath){
 	}
 
 	for(uint16_t x=0;x<vertexindices.size()/3;x++){
-		tris.push_back({{UINT16_MAX, UINT16_MAX, UINT16_MAX}, std::vector<Tri*>(), glm::vec3(0, 0, 0)});
+		tris.push_back({});
 		for(uint16_t y=0;y<3;y++){
-			std::cout<<"\rassembling all vertices and triangles ("<<(x*3+y+1)<<'/'<<vertexindices.size()<<')';
+			std::cout<<"\rassembling all vertexindices and triangles ("<<(x*3+y+1)<<'/'<<vertexindices.size()<<')';
 			vertices.push_back({vertextemps[vertexindices[3*x+y]], normaltemps[normalindices[3*x+y]], uvtemps[uvindices[3*x+y]]});
-			tris[tris.size()-1].vertices[y]=3*x+y;
+			tris[tris.size()-1].vertexindices[y]=3*x+y;
 		}
 	}
 	std::cout<<std::endl;
@@ -213,8 +289,8 @@ void Mesh::loadOBJ(const char*filepath){
 			if(y!=x&&vertices[x]==vertices[y]){
 				for(int z=0;z<tris.size();z++){
 					for(int w=0;w<3;w++){
-						if(tris[z].vertices[w]==x) tris[z].vertices[w]=y;
-						else if(tris[z].vertices[w]>x) tris[z].vertices[w]--;
+						if(tris[z].vertexindices[w]==x) tris[z].vertexindices[w]=y;
+						else if(tris[z].vertexindices[w]>x) tris[z].vertexindices[w]--;
 					}
 				}
 				vertices.erase(vertices.begin()+x);
@@ -232,7 +308,7 @@ void Mesh::loadOBJ(const char*filepath){
 				adjacencyfound=false;
 				for(int z=0;z<3;z++){
 					for(int w=0;w<3;w++){
-						if(vertices[tris[x].vertices[z]].position==vertices[tris[y].vertices[w]].position){
+						if(vertices[tris[x].vertexindices[z]].position==vertices[tris[y].vertexindices[w]].position){
 							tris[x].adjacencies.push_back(&tris[y]);
 //							std::cout<<"adjacency found between tri "<<x<<" and tri "<<y<<std::endl;
 							adjacencyfound=true;
@@ -247,9 +323,16 @@ void Mesh::loadOBJ(const char*filepath){
 	}
 	std::cout<<std::endl;
 
+	for(uint32_t x=0;x<tris.size();x++){
+		for(uint16_t y=0;y<3;y++){
+			tris[x].vertices[y]=&vertices[tris[x].vertexindices[y]];
+			std::cout<<"\rgiving tris vertex addresses (tri "<<(x+1)<<" of "<<tris.size()<<')';
+		}
+	}
+	std::cout<<std::endl;
+
 	for(auto&t:tris){
-		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertices[1]].position-vertices[t.vertices[0]].position,
-							   vertices[t.vertices[2]].position-vertices[t.vertices[0]].position));
-//		std::cout<<"algebraic normal: <"<<t.algebraicnormal.x<<", "<<t.algebraicnormal.y<<", "<<t.algebraicnormal.z<<">\n";
+		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertexindices[1]].position-vertices[t.vertexindices[0]].position,
+		                                            vertices[t.vertexindices[2]].position-vertices[t.vertexindices[0]].position));
 	}
 }
