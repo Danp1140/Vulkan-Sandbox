@@ -1,25 +1,21 @@
 #version 460 core
 
+layout(location=0) in vec3 fragpos;
+
 layout(push_constant) uniform PushConstants{
-    vec3 forward, dx, dy, sunposition;
+    mat4 cameravpmatrices;
+    vec3 sunposition;
 } pushconstants;
+layout(binding=0, set=0) uniform samplerCube skybox;
 
 layout(location=0) out vec4 color;
 
 void main() {
-    //unsure of the true scaling factors on this, should take some time to logic it out eventually
-    vec3 look=pushconstants.forward
-              +pushconstants.dx*(float(gl_FragCoord.x)-1440.0)
-              +pushconstants.dy*(float(gl_FragCoord.y)-900.0);
-
-    vec3 nlook=normalize(look);
-
-    //should pass an aspect ratio/horivert reses...
-    //could be a specialization constant
-    if(length(nlook-normalize(pushconstants.sunposition))<0.05){
-        color=vec4(1.0);
-        return;
+//    color=vec4((-nlook.y+1.0f)/2.0f, (-nlook.y+1.0f)/2.0f, 0.9f, 1.0f);
+//    color=vec4((-normalize(fragpos).y+1.)/2., (-normalize(fragpos).y+1.)/2., 0.9, 1.);
+    color=texture(skybox, fragpos);
+//      if(dot(fragpos, pushconstants.sunposition)/(length(fragpos)*length(pushconstants.sunposition))<0.05){
+    if(length(normalize(fragpos)-normalize(pushconstants.sunposition))<0.05){
+        color=vec4(1.);
     }
-
-    color=vec4((-nlook.y+1.0f)/2.0f, (-nlook.y+1.0f)/2.0f, 0.9f, 1.0f);
 }

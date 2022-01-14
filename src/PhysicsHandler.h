@@ -32,7 +32,7 @@ private:
 	float dt;
 	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime;
 
-	static bool edgeTest2D(glm::vec2 a, glm::vec2 b);
+	static inline bool edgeTest2D(glm::vec2 a, glm::vec2 b){return (a.y*b.x)>=(a.x*b.y);}
 	//could streamline this w/ input mask of zeroed out normals
 	static bool triIntersectionNoY(glm::vec3 tripoints[3], glm::vec3 q);
 	//could also pass input mask of zeroed normals for efficiency
@@ -44,11 +44,13 @@ public:
 	PhysicsHandler(Mesh*cl, Camera*c);
 
 	void update();
+	static bool triIntersection2D(glm::vec2 p[3], glm::vec2 q);
+	static inline float cross2D(glm::vec2 a, glm::vec2 b){return a.y*b.x-a.x*b.y;}
 	Tri*getStandingTri(){return standingtri;}
 	glm::vec2 getStandingUV(){return standinguv;}
 	//this is p bad practice lol
 	float*getDtPtr(){return&dt;}
-	glm::vec3 getWindVelocity(glm::vec3 p);
+	static glm::vec3 getWindVelocity(glm::vec3 p);
 };
 
 

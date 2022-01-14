@@ -4,8 +4,6 @@
 
 #include "Text.h"
 
-int Text::horizontalres=0, Text::verticalres=0;
-
 Text::Text(){
 	message="";
 	fontcolor=glm::vec4(0.5, 0.5, 0.5, 1);
@@ -22,6 +20,7 @@ Text::Text(){
 	//probably shouldnt call this function on a null-init'd text
 	regenFaces(true);
 	initDescriptorSet();
+	initCommandBuffers();
 }
 
 Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
@@ -32,7 +31,7 @@ Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
 	pushconstants.position=p;
 	pushconstants.scale=glm::vec2(2.0f/(float)hr, 2.0f/(float)vr);
 	pushconstants.rotation=0.0f;
-	textures=new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
+	textures=new TextureInfo[MAX_FRAMES_IN_FLIGHT];
 	ftlib=FT_Library();
 	FT_Init_FreeType(&ftlib);
 	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
@@ -41,6 +40,7 @@ Text::Text(std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr){
 	FT_Set_Char_Size(face, 0, fontsize*64, 0, 36);
 	regenFaces(true);
 	initDescriptorSet();
+	initCommandBuffers();
 }
 
 Text::~Text(){
@@ -61,14 +61,14 @@ void Text::setMessage(std::string m, uint32_t index){
 	pushconstants.scale=glm::vec2(2.0f/(float)horizontalres, 2.0f/(float)verticalres);
 	regenFaces(false);
 	VkDescriptorImageInfo imginfo={
-		textures[GraphicsHandler::swapchainimageindex].sampler,
-		textures[GraphicsHandler::swapchainimageindex].imageview,
+		textures[GraphicsHandler::vulkaninfo.currentframeinflight].sampler,
+		textures[GraphicsHandler::vulkaninfo.currentframeinflight].imageview,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
 	VkWriteDescriptorSet write{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			nullptr,
-			descriptorsets[GraphicsHandler::swapchainimageindex],
+			descriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight],
 			0,
 			0,
 			1,
@@ -93,7 +93,8 @@ void Text::regenFaces(bool init){
 		linelengthcounter+=face->glyph->metrics.horiAdvance;
 	}
 	if(linelengthcounter>maxlinelength) maxlinelength=linelengthcounter;
-	const uint32_t hres=maxlinelength/64u, vres=numlines*face->size->metrics.height/64u;
+//	const uint32_t hres=maxlinelength/64u, vres=numlines*face->size->metrics.height/64u;
+	const uint32_t hres=MAX_TEXTURE_WIDTH, vres=MAX_TEXTURE_HEIGHT;
 	float*texturedata=(float*)malloc(hres*vres*sizeof(float));
 	memset(&texturedata[0], 0.0f, hres*vres*sizeof(float));
 	pushconstants.scale*=glm::vec2(hres, vres);
@@ -118,47 +119,41 @@ void Text::regenFaces(bool init){
 		}
 		penposition+=glm::vec2((face->glyph->metrics.horiAdvance-face->glyph->metrics.horiBearingX)/64, -face->glyph->metrics.horiBearingY/64);
 	}
-	//if we wanna differentiate between a startup init and on-the-fly update, we gotta do some indexing of the textures below
-//	GraphicsHandler::VKHelperInitTexture(&textures[GraphicsHandler::swapchainimageindex],
-//	                                     hres,
-//	                                     vres,
-//	                                     reinterpret_cast<void*>(&texturedata[0]),
-//	                                     VK_FORMAT_R32_SFLOAT,
-//	                                     textures[GraphicsHandler::swapchainimageindex].image!=VK_NULL_HANDLE);
 	if(init){
-		for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
-			GraphicsHandler::VKHelperInitTexture(&textures[x],
-			                                     hres,
-			                                     vres,
-			                                     reinterpret_cast<void*>(&texturedata[0]),
-			                                     VK_FORMAT_R32_SFLOAT,
-			                                     false);
+		for(uint32_t x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
+			GraphicsHandler::VKHelperInitTexture(
+					&textures[x],
+					hres,
+					vres,
+					VK_FORMAT_R32_SFLOAT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					TEXTURE_TYPE_DIFFUSE,
+					VK_IMAGE_VIEW_TYPE_2D,
+					GraphicsHandler::genericsampler);
 		}
 	}
 	else{
-		GraphicsHandler::VKHelperInitTexture(&textures[GraphicsHandler::swapchainimageindex],
-		                                     hres,
-		                                     vres,
-		                                     reinterpret_cast<void*>(&texturedata[0]),
-		                                     VK_FORMAT_R32_SFLOAT,
-		                                     true);
+		//could we just use VK_FORMAT_R8_UNORM? probably would need reformatting cause UNORM
+		GraphicsHandler::VKHelperUpdateWholeVisibleTexture(
+				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
+				reinterpret_cast<void*>(texturedata));
 	}
 	delete(texturedata);
 }
 
 void Text::initDescriptorSet(){
-	VkDescriptorSetLayout layoutstemp[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
-	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textgraphicspipeline.objectdsl;
-	descriptorsets=new VkDescriptorSet[GraphicsHandler::getVulkanInfoPtr()->numswapchainimages];
+	VkDescriptorSetLayout layoutstemp[MAX_FRAMES_IN_FLIGHT];
+	for(uint32_t x=0;x<MAX_FRAMES_IN_FLIGHT;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textgraphicspipeline.objectdsl;
+	descriptorsets=new VkDescriptorSet[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSetAllocateInfo allocinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
 		GraphicsHandler::getVulkanInfoPtr()->descriptorpool,
-		GraphicsHandler::getVulkanInfoPtr()->numswapchainimages,
+		MAX_FRAMES_IN_FLIGHT,
 		&layoutstemp[0]
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, &allocinfo, &descriptorsets[0]);
-	for(uint32_t x=0;x<GraphicsHandler::getVulkanInfoPtr()->numswapchainimages;x++){
+	for(uint32_t x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		VkDescriptorImageInfo imginfo=textures[x].getDescriptorImageInfo();
 		VkWriteDescriptorSet write{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -175,3 +170,56 @@ void Text::initDescriptorSet(){
 		vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
 	}
 }           //perhaps make a more general version of this as a VKHelper, cause we're doing this in a couple places
+
+void Text::initCommandBuffers(){
+	commandbuffers=new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
+	VkCommandBufferAllocateInfo cmdbufallocinfo{
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.commandpool,
+		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+		MAX_FRAMES_IN_FLIGHT
+	};
+	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
+}
+
+void Text::recordCommandBuffer(uint8_t fifindex, uint8_t sciindex){
+	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			0,
+			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+			&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+	vkCmdBindPipeline(
+			commandbuffers[fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipeline);
+	vkCmdPushConstants(
+			commandbuffers[fifindex],
+			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			0,
+			sizeof(TextPushConstants),
+			&pushconstants);
+	vkCmdBindDescriptorSets(
+			commandbuffers[fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+			0,
+			1,
+			&descriptorsets[fifindex],
+			0, nullptr);
+	vkCmdDraw(commandbuffers[fifindex], 6, 1, 0, 0);
+	vkEndCommandBuffer(commandbuffers[fifindex]);
+}

@@ -34,14 +34,14 @@ PhysicsHandler::PhysicsHandler(Mesh*cl, Camera*c){
 	lasttime=std::chrono::high_resolution_clock::now();
 }
 
-inline bool PhysicsHandler::edgeTest2D(glm::vec2 a, glm::vec2 b){
-	return (a.y*b.x)>(a.x*b.y);
-}
-
 bool PhysicsHandler::triIntersectionNoY(glm::vec3 tripoints[3], glm::vec3 q){
 	return edgeTest2D(glm::vec2(tripoints[1].x-tripoints[0].x, tripoints[1].z-tripoints[0].z), glm::vec2(q.x-tripoints[0].x, q.z-tripoints[0].z))
 		&&edgeTest2D(glm::vec2(tripoints[2].x-tripoints[1].x, tripoints[2].z-tripoints[1].z), glm::vec2(q.x-tripoints[1].x, q.z-tripoints[1].z))
 		&&edgeTest2D(glm::vec2(tripoints[0].x-tripoints[2].x, tripoints[0].z-tripoints[2].z), glm::vec2(q.x-tripoints[2].x, q.z-tripoints[2].z));
+}
+
+bool PhysicsHandler::triIntersection2D(glm::vec2 p[3], glm::vec2 q){
+	return edgeTest2D(p[1]-p[0], q-p[0])&&edgeTest2D(p[2]-p[1], q-p[1])&&edgeTest2D(p[0]-p[2], q-p[2]);
 }
 
 bool PhysicsHandler::cylinderTriIntersection(Tri tri, glm::vec3 cylinderorigin, float r, float h){
@@ -212,9 +212,9 @@ void PhysicsHandler::updateCameraPos(){
 
 void PhysicsHandler::update(){
 	dt=std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count();
+	lasttime=std::chrono::high_resolution_clock::now();
 	//should the lasttime reset go here???
 	updateCameraPos();
-	lasttime=std::chrono::high_resolution_clock::now();
 }
 
 glm::vec3 PhysicsHandler::getWindVelocity(glm::vec3 p){

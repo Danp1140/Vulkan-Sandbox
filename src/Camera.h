@@ -27,11 +27,13 @@ public:
 	Camera();
 	Camera(GLFWwindow*w, int hres, int vres);
 	void takeInputs(GLFWwindow*w);
+	void calculateFrustum(glm::vec3*dst);
 	void setPosition(glm::vec3 p);
 	glm::vec3 getPosition(){return position;}
 	glm::vec3 getForward(){return forward;}
 	glm::mat4 getProjectionMatrix(){return projectionmatrix;}
 	glm::mat4 getViewMatrix(){return viewmatrix;}
+	glm::mat4 calcAndGetSkyboxViewMatrix();
 	float getFovy(){return fovy;}
 };
 

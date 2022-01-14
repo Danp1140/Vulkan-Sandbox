@@ -6,39 +6,39 @@
 #define VULKANSANDBOX_TEXTUREHANDLER_H
 
 #include "GraphicsHandler.h"
+#include "PhysicsHandler.h"
 
 class TextureHandler{
 private:
 	std::default_random_engine randomengine;
-//	std::lognormal_distribution<float> lognormdist;
+	float**turbulence;
+	uint32_t turbulenceresolution;
 public:
 	TextureHandler();
-	//maybe don't make static
-	void generateStaticSandTextures(
-			glm::vec4 sedimentdiffusegradient[2],
-			uint32_t hres,
-			uint32_t vres,
-			TextureInfo*diffusetex,
-			TextureInfo*normaltex);
-	void generateMonotoneTextures(
-			glm::vec4 color,
-			uint32_t hres,
-			uint32_t vres,
-			TextureInfo*diffusetex,
-			TextureInfo*normaltex);
+	void generateGridTextures(
+			TextureInfo**texdsts,
+			uint8_t numtexes);
+	void generateSandTextures(
+			TextureInfo**texdsts,
+			uint8_t numtexes,
+			glm::vec4*sedimentdiffusegradient,
+			std::vector<Tri>tris,
+			glm::vec3(*windVVF)(glm::vec3));
+	void generateTestTextures(
+			TextureInfo**texdsts,
+			uint8_t numtexes);
 	void generateOceanTextures(
-			uint32_t hres,
-			uint32_t vres,
-			TextureInfo*heighttex,
-			TextureInfo*normaltex);
-	void updateOceanTextures(
-			uint32_t hres,
-			uint32_t vres,
-			TextureInfo*heighttex,
-			TextureInfo*normaltex);
+			TextureInfo**texdsts,
+			uint8_t numtexes);
+	void generateSkyboxTexture(TextureInfo*texdst);
 	void generateVec4MipmapData(uint32_t numlevels,
 									   uint32_t res,
 									   glm::vec4**data);
+	float linearInterpolatedNoise(glm::vec2 T, uint32_t N, float**noise);
+	float turbulentNoise(glm::ivec2 T, uint32_t N, uint32_t reslev, float**noise);
+	void generateNormalFromHeight(float**src, glm::vec4**dst, uint32_t resh, uint32_t resn, float worldspacetotexspace);
+	glm::vec4 normalizedColorRamp(float x);
+	void normalizedColorMap(float**src, glm::vec4**dst, uint32_t dim, uint32_t numcols);
 };
 
 

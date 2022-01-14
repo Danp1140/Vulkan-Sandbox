@@ -9,12 +9,16 @@ ChangeFlag*GraphicsHandler::changeflags=nullptr;
 std::stringstream GraphicsHandler::troubleshootingsstrm=std::stringstream();
 std::map<int, KeyInfo>GraphicsHandler::keyvalues=std::map<int, KeyInfo>();
 uint32_t GraphicsHandler::swapchainimageindex=-1u;
-VkDescriptorSet*GraphicsHandler::scenedescriptorsets=nullptr;
+VkSampler GraphicsHandler::genericsampler=VK_NULL_HANDLE,
+	GraphicsHandler::linearminsampler=VK_NULL_HANDLE,
+	GraphicsHandler::linearminmagsampler=VK_NULL_HANDLE,
+	GraphicsHandler::clamptobordersampler=VK_NULL_HANDLE,
+	GraphicsHandler::depthsampler=VK_NULL_HANDLE;
 
 GraphicsHandler::GraphicsHandler(){}
 
 GraphicsHandler::~GraphicsHandler(){
-	vkWaitForFences(vulkaninfo.logicaldevice, MAX_FRAMES_IN_FLIGHT, &vulkaninfo.frameinflightfences[0], VK_TRUE, UINT64_MAX);
+//	vkWaitForFences(vulkaninfo.logicaldevice, MAX_FRAMES_IN_FLIGHT, &vulkaninfo.frameinflightfences[0], VK_TRUE, UINT64_MAX);
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 	vkQueueWaitIdle(vulkaninfo.presentationqueue);
 	vkDeviceWaitIdle(vulkaninfo.logicaldevice);
@@ -22,7 +26,7 @@ GraphicsHandler::~GraphicsHandler(){
 	for(int x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.renderfinishedsemaphores[x], nullptr);
 		vkDestroySemaphore(vulkaninfo.logicaldevice, vulkaninfo.imageavailablesemaphores[x], nullptr);
-		vkDestroyFence(vulkaninfo.logicaldevice, vulkaninfo.frameinflightfences[x], nullptr);
+//		vkDestroyFence(vulkaninfo.logicaldevice, vulkaninfo.frameinflightfences[x], nullptr);
 	}
 	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, vulkaninfo.textdescriptorsetlayout, nullptr);
 	vkDestroyDescriptorPool(vulkaninfo.logicaldevice, vulkaninfo.descriptorpool, nullptr);
@@ -32,7 +36,7 @@ GraphicsHandler::~GraphicsHandler(){
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
 		vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffers[x], nullptr);
 		vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.lightuniformbuffermemories[x], nullptr);
-		vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.framebuffers[x], nullptr);
+		vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.primaryframebuffers[x], nullptr);
 	}
 	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.pipeline, nullptr);
 	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipeline, nullptr);
@@ -50,71 +54,89 @@ GraphicsHandler::~GraphicsHandler(){
 	delete[] vulkaninfo.lightuniformbuffers;
 	delete[] vulkaninfo.lightuniformbuffermemories;
 	delete[] vulkaninfo.commandbuffers;
-	delete[] vulkaninfo.framebuffers;
+	delete[] vulkaninfo.primaryframebuffers;
 	delete[] vulkaninfo.swapchainimageviews;
 	delete[] vulkaninfo.swapchainimages;
 }
 
-void GraphicsHandler::VKInit(){
+void GraphicsHandler::VKInit(uint32_t nummeshes){
 	VKSubInitWindow();
 	VKSubInitInstance();
 	VKSubInitDebug();
 	VKSubInitDevices();
 	VKSubInitQueues();
 	VKSubInitSwapchain();
-	VKSubInitRenderpass();
+	VKSubInitRenderpasses();
 	VKSubInitCommandPool();
 	VKSubInitDepthBuffer();
 	VKSubInitFramebuffers();
 	VKSubInitSemaphoresAndFences();
+	VKSubInitDescriptorPool(nummeshes);
 }
 
-void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
-	VKSubInitDescriptorPool(nummeshes);
+void GraphicsHandler::VKInitPipelines(){
+	//default
 	{
-		VkDescriptorSetLayoutBinding scenedslbindings[1]{{
+		VkDescriptorSetLayoutBinding objecttexdslbindings[5]{
+		{
 			0,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		},                      {
+			2,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		},                      {
+			3,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			4,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			VULKAN_MAX_LIGHTS,
 			VK_SHADER_STAGE_FRAGMENT_BIT,
 			nullptr
-		}},
-		objectdslbindings[2]{{
-			0,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			1,
-			VK_SHADER_STAGE_FRAGMENT_BIT,
-			nullptr
-		}, {
-			1,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			1,
-			VK_SHADER_STAGE_FRAGMENT_BIT,
-			nullptr
 		}};
-		VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2]{{
+		VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[3]{
+			scenedslcreateinfo,
+		{
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
 			0,
-			1,
-			&scenedslbindings[0]
-		}, {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			nullptr,
-			0,
-			2,
-			&objectdslbindings[0]
+			5,
+			&objecttexdslbindings[0]
 		}};
 		VkVertexInputBindingDescription vertinbindingdesc{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc[3]{{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
 	                                                          {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
 		                                                      {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
-		const char*shaderfilepathstemp[2]={"../resources/shaders/SPIRV/defaultvert.spv", "../resources/shaders/SPIRV/defaultfrag.spv"};
+		const char*shaderfilepathstemp[4]={"../resources/shaders/SPIRV/defaultvert.spv",
+										   "../resources/shaders/SPIRV/defaulttesc.spv",
+										   "../resources/shaders/SPIRV/defaulttese.spv",
+										   "../resources/shaders/SPIRV/defaultfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+						  VK_SHADER_STAGE_VERTEX_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+						  |VK_SHADER_STAGE_FRAGMENT_BIT,
 						  &shaderfilepathstemp[0],
 						  &descsetlayoutcreateinfos[0],
-						  {VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)},
+						  {VK_SHADER_STAGE_VERTEX_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+						  |VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)},
 						  {
 							VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 							nullptr,
@@ -123,9 +145,10 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 							&vertinbindingdesc,
 							3,
 							&vertinattribdesc[0]
-						  });
-		VKSubInitUniformBuffer(&scenedescriptorsets, 0, sizeof(LightUniformBuffer), VULKAN_MAX_LIGHTS, &vulkaninfo.lightuniformbuffers, &vulkaninfo.lightuniformbuffermemories);
+						  },
+						  true);
 	}
+	//text
 	{
 		VkDescriptorSetLayoutBinding objectdslbinding{
 			0,
@@ -161,16 +184,26 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 							nullptr,
 							0,
 							nullptr
-						  });
+						  },
+						  false);
 	}
+	//skybox
 	{
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2]{{
-                  VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                  nullptr,
-                  0,
-                  0,
-                  nullptr
-          }, {
+		VkDescriptorSetLayoutBinding binding[1]{{
+            0,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+		}};
+		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2]{
+		{      //ideally migrate this to either all scenedsl, or no scenedsl and all objectdsl
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&binding[0]
+		}, {
                   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                   nullptr,
                   0,
@@ -182,7 +215,7 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 		                  VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
 		                  &shaderfilepathstemp[0],
 		                  &dslcreateinfos[0],
-		                  {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPushConstants)},
+		                  {VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPushConstants)},
 		                  {
 				                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 				                  nullptr,
@@ -191,10 +224,12 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 				                  nullptr,
 				                  0,
 				                  nullptr
-		                  });
+		                  },
+						  false);
 	}
+	//ocean graph
 	{
-		VkDescriptorSetLayoutBinding objectdslbindings[2]{{
+		VkDescriptorSetLayoutBinding objectdslbindings[3]{{
 			0,
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			1,
@@ -205,6 +240,64 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			1,
 			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			2,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}};
+		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2]{
+			scenedslcreateinfo,
+		{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			3, &objectdslbindings[0]
+		}};
+		VkVertexInputBindingDescription vertinbindingdesc{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+		VkVertexInputAttributeDescription vertinattribdesc[3]{{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
+		                                                      {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+		                                                      {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
+		const char*shaderfilepathstemp[4]={"../resources/shaders/SPIRV/oceanvert.spv",
+								         "../resources/shaders/SPIRV/oceantesc.spv",
+								         "../resources/shaders/SPIRV/oceantese.spv",
+								         "../resources/shaders/SPIRV/oceanfrag.spv"};
+		VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
+						  VK_SHADER_STAGE_VERTEX_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+						  |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+						  |VK_SHADER_STAGE_FRAGMENT_BIT,
+						  &shaderfilepathstemp[0],
+						  &dslcreateinfos[0],
+						  {VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+							|VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+							|VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OceanPushConstants)},
+						  {
+							VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+							nullptr,
+							0,
+							1,
+							&vertinbindingdesc,
+							3,
+							&vertinattribdesc[0]
+						  },
+						  true);
+	}
+	//ocean comp
+	{
+		VkDescriptorSetLayoutBinding objdslbindings[2]{{
+			0,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_COMPUTE_BIT,
 			nullptr
 		}};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2]{{
@@ -218,36 +311,230 @@ void GraphicsHandler::VKInitPipelines(uint32_t nummeshes, uint32_t numlights){
 			nullptr,
 			0,
 			2,
-			&objectdslbindings[0]
+			&objdslbindings[0]
 		}};
-		VkVertexInputBindingDescription vertinbindingdesc{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-		VkVertexInputAttributeDescription vertinattribdesc[3]{{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
-		                                                      {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
-		                                                      {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
-		const char*shaderfilepathstemp[4]={"../resources/shaders/SPIRV/oceanvert.spv",
-								         "../resources/shaders/SPIRV/oceantesc.spv",
-								         "../resources/shaders/SPIRV/oceantese.spv",
-//								         "../resources/shaders/SPIRV/oceangeom.spv",
-								         "../resources/shaders/SPIRV/oceanfrag.spv"};
-		VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT
-						  |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-						  |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-//						  |VK_SHADER_STAGE_GEOMETRY_BIT
-						  |VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepathstemp[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, 0, sizeof(OceanPushConstants)},
-						  {
-							VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-							nullptr,
-							0,
-							1,
-							&vertinbindingdesc,
-							3,
-							&vertinattribdesc[0]
-						  });
+		const char*shaderfilepaths[1]={"../resources/shaders/SPIRV/oceancomp.spv"};
+		VKSubInitPipeline(&vulkaninfo.oceancomputepipeline,
+							VK_SHADER_STAGE_COMPUTE_BIT,
+							&shaderfilepaths[0],
+							&dslcreateinfos[0],
+                            {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)},
+                            {
+								VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+								nullptr,
+								0,
+								0,
+								nullptr,
+								0,
+								nullptr
+							},
+							false);
 	}
+	//grass (more like gross lol)
+	{
+		VkDescriptorSetLayoutBinding objectbinding{
+			0,
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		};
+		VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2]{
+//			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+//			nullptr,
+//			0,
+//			0,
+//			nullptr
+//		}, {
+		scenedslcreateinfo,{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&objectbinding
+		}};
+		VkVertexInputBindingDescription vertinbindingdescs{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+		VkVertexInputAttributeDescription vertinattribdescs[2]{
+			{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
+			{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)}};
+		const char*shaderfilepaths[4]{"../resources/shaders/SPIRV/grassvert.spv",
+		                              "../resources/shaders/SPIRV/grasstesc.spv",
+		                              "../resources/shaders/SPIRV/grasstese.spv",
+		                              "../resources/shaders/SPIRV/grassfrag.spv"};
+		VKSubInitPipeline(
+				&vulkaninfo.grassgraphicspipeline,
+				VK_SHADER_STAGE_VERTEX_BIT
+				|VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+				|VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+				|VK_SHADER_STAGE_FRAGMENT_BIT,
+				&shaderfilepaths[0],
+				&descsetlayoutcreateinfos[0],
+				{
+					VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+					0,
+					sizeof(glm::mat4)
+				},
+				{
+					VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+					nullptr,
+					0,
+					1,
+					&vertinbindingdescs,
+					2,
+					&vertinattribdescs[0]
+				},
+				true);
+	}
+	//shadowmap
+	{
+		VkDescriptorSetLayoutBinding objecttexdslbindings[5]{
+				{
+						0,
+						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+						1,
+						VK_SHADER_STAGE_VERTEX_BIT,
+						nullptr
+				}, {
+						1,
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						1,
+						VK_SHADER_STAGE_FRAGMENT_BIT,
+						nullptr
+				},                      {
+						2,
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						1,
+						VK_SHADER_STAGE_FRAGMENT_BIT,
+						nullptr
+				},                      {
+						3,
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						1,
+						VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+						nullptr
+				}, {
+						4,
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						VULKAN_MAX_LIGHTS,
+						VK_SHADER_STAGE_FRAGMENT_BIT,
+						nullptr
+				}};
+		VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2]{  //perhaps this much superfluous info is inefficient???
+			scenedslcreateinfo,
+			{
+				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+				nullptr,
+				0,
+				5,
+				&objecttexdslbindings[0]
+			}
+		};
+		VkVertexInputBindingDescription vertinbindingdesc{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+		VkVertexInputAttributeDescription vertinattribdesc{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)};
+		const char* shaderfilepaths[2]{"../resources/shaders/SPIRV/shadowmapvert.spv",
+									   "../resources/shaders/SPIRV/shadowmapfrag.spv"};
+		VKSubInitPipeline(
+				&vulkaninfo.shadowmapgraphicspipeline,
+				VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+				&shaderfilepaths[0],
+				&descriptorsetlayoutcreateinfos[0],
+				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowmapPushConstants)},
+				{
+					VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+					nullptr,
+					0,
+					1,
+					&vertinbindingdesc,
+					1,
+					&vertinattribdesc
+				},
+				true);
+	}
+	//texmon
+	{
+		VkDescriptorSetLayoutBinding descriptorsetlayoutbinding{
+			0,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		};
+		VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2]{
+		{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			0,
+			nullptr
+		}, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&descriptorsetlayoutbinding
+		}};
+		const char*shaderfilepaths[2]{"../resources/shaders/SPIRV/texmonvert.spv",
+									  "../resources/shaders/SPIRV/texmonfrag.spv"};
+		VKSubInitPipeline(
+				&GraphicsHandler::vulkaninfo.texmongraphicspipeline,
+				VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+				&shaderfilepaths[0],
+				&descriptorsetlayoutcreateinfos[0],
+				{},
+				{
+					VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+					nullptr,
+					0,
+					0,
+					nullptr,
+					0,
+					nullptr
+				},
+				false);
+	}
+
+
+	//move to own samplerinit function in first VKInit
+	VkSamplerCreateInfo samplercreateinfo{
+		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		nullptr,
+		0,
+		VK_FILTER_NEAREST,
+		VK_FILTER_NEAREST,
+		VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		0.0,
+		VK_FALSE,
+		1.0,
+		VK_FALSE,
+		VK_COMPARE_OP_LESS,
+		0.0,
+		0.0,
+		VK_BORDER_COLOR_INT_OPAQUE_WHITE,
+		VK_FALSE
+	};
+	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &genericsampler);
+	samplercreateinfo.minFilter=VK_FILTER_LINEAR;
+	samplercreateinfo.magFilter=VK_FILTER_LINEAR;
+	samplercreateinfo.compareEnable=VK_TRUE;
+	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &depthsampler);
+	samplercreateinfo.minFilter=VK_FILTER_NEAREST;
+	samplercreateinfo.magFilter=VK_FILTER_NEAREST;
+	samplercreateinfo.compareEnable=VK_FALSE;
+	samplercreateinfo.addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplercreateinfo.addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplercreateinfo.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &clamptobordersampler);
+	samplercreateinfo.addressModeU=VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplercreateinfo.addressModeV=VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplercreateinfo.addressModeW=VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplercreateinfo.minFilter=VK_FILTER_LINEAR;
+	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminsampler);
+	samplercreateinfo.magFilter=VK_FILTER_LINEAR;
+	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminmagsampler);
+
 }
 
 void GraphicsHandler::VKSubInitWindow(){
@@ -256,16 +543,17 @@ void GraphicsHandler::VKSubInitWindow(){
 	keyvalues.emplace(GLFW_KEY_A, infotemp);
 	keyvalues.emplace(GLFW_KEY_S, infotemp);
 	keyvalues.emplace(GLFW_KEY_D, infotemp);
-	glfwInit();
+	std::cout<<(glfwInit()==GLFW_TRUE?"":"glfw failed to init\n");
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	const GLFWvidmode*mode=glfwGetVideoMode(glfwGetPrimaryMonitor());
 	vulkaninfo.width=mode->width; vulkaninfo.height=mode->height;
-	vulkaninfo.window=glfwCreateWindow(vulkaninfo.width, vulkaninfo.height, "Vulkan Sandbox", glfwGetPrimaryMonitor(), nullptr);
+	vulkaninfo.window=glfwCreateWindow(vulkaninfo.width, vulkaninfo.height, "Vulkan Sandbox", nullptr, nullptr);
 	glfwGetFramebufferSize(vulkaninfo.window, &vulkaninfo.horizontalres, &vulkaninfo.verticalres);
 	glfwMakeContextCurrent(vulkaninfo.window);
 	glfwSetInputMode(vulkaninfo.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetKeyCallback(vulkaninfo.window, keystrokeCallback);
+	glfwSetErrorCallback(glfwErrorCallback);
 }
 
 void GraphicsHandler::VKSubInitInstance(){
@@ -278,7 +566,6 @@ void GraphicsHandler::VKSubInitInstance(){
 			VK_MAKE_VERSION(1, 0, 0),
 			VK_MAKE_API_VERSION(1, 1, 0, 0)
 	};
-
 	const char*layernames[1]={"VK_LAYER_KHRONOS_validation"};
 
 	uint32_t instanceextcount=-1u;
@@ -286,10 +573,9 @@ void GraphicsHandler::VKSubInitInstance(){
 	VkExtensionProperties instanceextprops[instanceextcount];
 	vkEnumerateInstanceExtensionProperties(nullptr, &instanceextcount, &instanceextprops[0]);
 	char*instanceextnames[instanceextcount];
-	std::cout<<"instance exts:\n";
 	for(uint32_t x=0;x<instanceextcount;x++){
-		std::cout<<instanceextprops[x].extensionName<<std::endl;
 		instanceextnames[x]=instanceextprops[x].extensionName;
+//		std::cout<<"just added ext number "<<x<<", name is "<<instanceextnames[x]<<std::endl;
 	}
 
 	VkInstanceCreateInfo instancecreateinfo{
@@ -299,6 +585,7 @@ void GraphicsHandler::VKSubInitInstance(){
 			&appinfo,
 			1,
 			&layernames[0],
+//			0, nullptr,
 			instanceextcount,
 			&instanceextnames[0]
 	};
@@ -335,7 +622,6 @@ void GraphicsHandler::VKSubInitDevices(){
 	VkQueueFamilyProperties queuefamilyprops[queuefamilycount];
 	vkGetPhysicalDeviceQueueFamilyProperties(vulkaninfo.physicaldevice, &queuefamilycount, &queuefamilyprops[0]);
 
-//	vulkaninfo.queuefamilyindices=new uint32_t[2];
 	vulkaninfo.graphicsqueuefamilyindex=-1u; vulkaninfo.presentqueuefamilyindex=-1u; vulkaninfo.transferqueuefamilyindex=-1u;
 	VkBool32 supportssurfacepresentation;
 	for(uint32_t x=0;x<queuefamilycount;x++){
@@ -374,27 +660,12 @@ void GraphicsHandler::VKSubInitDevices(){
             &queuepriority
 		});
 	}
-	VkDeviceQueueCreateInfo devicequeuecreateinfos[2]{{
-		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-		nullptr,
-		0,
-		vulkaninfo.graphicsqueuefamilyindex,
-		1,
-		&queuepriority
-	}, {
-		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-		nullptr,
-		0,
-		vulkaninfo.presentqueuefamilyindex,
-		1,
-		&queuepriority
-	}};
 	vkEnumerateDeviceExtensionProperties(vulkaninfo.physicaldevice, nullptr, &deviceextcount, nullptr);
 	VkExtensionProperties deviceextprops[deviceextcount];
 	vkEnumerateDeviceExtensionProperties(vulkaninfo.physicaldevice, nullptr, &deviceextcount, &deviceextprops[0]);
 	std::vector<const char*> deviceextnames;
 	for(uint32_t x=0;x<deviceextcount;x++){
-		std::cout<<deviceextprops[x].extensionName<<std::endl;
+//		std::cout<<deviceextprops[x].extensionName<<std::endl;
 		if(strcmp(deviceextprops[x].extensionName, "VK_KHR_portability_subset")) deviceextnames.push_back("VK_KHR_portability_subset");
 		if(strcmp(deviceextprops[x].extensionName, "VK_KHR_swapchain")) deviceextnames.push_back("VK_KHR_swapchain");
 	}
@@ -405,13 +676,15 @@ void GraphicsHandler::VKSubInitDevices(){
 	physicaldevicefeatures.fillModeNonSolid=VK_TRUE;
 	VkPhysicalDeviceProperties pdprops;
 	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
-	std::cout<<"tess lims: "<<pdprops.limits.maxTessellationGenerationLevel<<'\n';
-	std::cout<<pdprops.limits.maxComputeWorkGroupCount<<std::endl;
 	//dont forget about anisotropy
 	//could include all available, but for now will include none
+	VkPhysicalDevicePortabilitySubsetFeaturesKHR portsubfeats{};
+	portsubfeats.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR;
+	portsubfeats.pNext=nullptr;
+	portsubfeats.mutableComparisonSamplers=VK_TRUE;
 	VkDeviceCreateInfo devicecreateinfo{
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-			nullptr,
+			&portsubfeats,
 			0,
 			(uint32_t)queuecreateinfos.size(),
 			queuecreateinfos.data(),
@@ -445,7 +718,7 @@ void GraphicsHandler::VKSubInitSwapchain(){
 		VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
 		vulkaninfo.swapchainextent,
 		1,
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 		queuefamilyindicesaresame?VK_SHARING_MODE_EXCLUSIVE:VK_SHARING_MODE_CONCURRENT,
 		queuefamilyindicesaresame?0u:2u,
 		queuefamilyindicesaresame?nullptr:&vulkaninfo.graphicsqueuefamilyindex,
@@ -457,7 +730,6 @@ void GraphicsHandler::VKSubInitSwapchain(){
 	};
 	vkCreateSwapchainKHR(vulkaninfo.logicaldevice, &swapchaincreateinfo, nullptr, &vulkaninfo.swapchain);
 	uint32_t imgcounttemp=-1u;
-	//lol i have to call this to get the number once before i can call for values lmao
 	vkGetSwapchainImagesKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, &imgcounttemp, nullptr);
 	vulkaninfo.swapchainimages=new VkImage[vulkaninfo.numswapchainimages];
 	vkGetSwapchainImagesKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, &vulkaninfo.numswapchainimages, &vulkaninfo.swapchainimages[0]);
@@ -480,8 +752,64 @@ void GraphicsHandler::VKSubInitSwapchain(){
 	swapchainimageindex=0u;
 }
 
-void GraphicsHandler::VKSubInitRenderpass(){
-	VkAttachmentDescription attachmentdescription{
+void GraphicsHandler::VKSubInitRenderpasses(){
+	//shadowmap renderpass (template)
+	VkAttachmentDescription shadowattachmentdescription{
+			0,
+			VK_FORMAT_D32_SFLOAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_CLEAR,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+	VkAttachmentReference shadowattachmentreference{0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+	VkSubpassDescription shadowsubpassdescription{
+		0,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		0,
+		nullptr,
+		0,
+		nullptr,
+		nullptr,
+		&shadowattachmentreference,
+		0,
+		nullptr
+	};
+	VkSubpassDependency shadowsubpassdependencies[2]{{
+         VK_SUBPASS_EXTERNAL,
+         0,
+         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+         VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+         VK_ACCESS_SHADER_READ_BIT,
+         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+         0
+	}, {
+		0,
+		VK_SUBPASS_EXTERNAL,
+		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		0
+	}};
+	VkRenderPassCreateInfo shadowrenderpasscreateinfo{
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&shadowattachmentdescription,
+		1,
+		&shadowsubpassdescription,
+		2,
+		&shadowsubpassdependencies[0]
+	};
+	vkCreateRenderPass(vulkaninfo.logicaldevice, &shadowrenderpasscreateinfo, nullptr, &vulkaninfo.templateshadowrenderpass);
+
+	//primary renderpass
+	VkAttachmentDescription swapchainattachmentdescription{
 		0,
 		VULKAN_SWAPCHAIN_IMAGE_FORMAT,
 		VK_SAMPLE_COUNT_1_BIT,
@@ -490,25 +818,24 @@ void GraphicsHandler::VKSubInitRenderpass(){
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR //CHANGED FOR A SEC SO I CAN DO OTHER STUFF FO A SEC, USED TO BE GENERAL
 	};
 	VkAttachmentDescription depthattachmentdescription{
-		0,
-		VK_FORMAT_D32_SFLOAT,
-		VK_SAMPLE_COUNT_1_BIT,
-		VK_ATTACHMENT_LOAD_OP_CLEAR,
-		VK_ATTACHMENT_STORE_OP_STORE,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			0,
+			VK_FORMAT_D32_SFLOAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_CLEAR,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
-	VkAttachmentReference attachmentrefs[2]{{
-		0,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+
+	VkAttachmentReference primaryattachmentreferences[2]={{
+		0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	}, {
-		1,
-		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	}};
 	VkSubpassDescription subpassdescription{
 		0,
@@ -516,64 +843,132 @@ void GraphicsHandler::VKSubInitRenderpass(){
 		0,
 		nullptr,
 		1,
-		&attachmentrefs[0],
+		&primaryattachmentreferences[0],
 		nullptr,
-		&attachmentrefs[1],
+		&primaryattachmentreferences[1],
 		0,
 		nullptr
 	};
-	VkSubpassDependency subpassdependency{
-		VK_SUBPASS_EXTERNAL,
-		0,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		0,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		0
+	VkSubpassDependency primarysubpassdependency{
+            VK_SUBPASS_EXTERNAL,
+            0,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            0,
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            0
+    };
+	VkAttachmentDescription primaryattachmentdescriptions[2]{
+			swapchainattachmentdescription,
+			depthattachmentdescription
 	};
-	VkAttachmentDescription attachmentdescriptionstemp[2]{attachmentdescription, depthattachmentdescription};
 	VkRenderPassCreateInfo renderpasscreateinfo{
 		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		nullptr,
 		0,
-		2,
-		&attachmentdescriptionstemp[0],
-		1,
-		&subpassdescription,
-		1,
-		&subpassdependency
+		2, &primaryattachmentdescriptions[0],
+		1, &subpassdescription,
+		1, &primarysubpassdependency
 	};
 	vkCreateRenderPass(vulkaninfo.logicaldevice, &renderpasscreateinfo, nullptr, &vulkaninfo.primaryrenderpass);
+
+	//water renderpass
+	VkAttachmentDescription waterattachmentdescriptions[2]{{
+		0,
+		VULKAN_SWAPCHAIN_IMAGE_FORMAT,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_LOAD,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	}, {
+		0,
+		VK_FORMAT_D32_SFLOAT,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_LOAD,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	}};
+	VkAttachmentReference waterattachrefs[2]{
+		{0, VK_IMAGE_LAYOUT_GENERAL},
+		{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}
+	};
+	VkSubpassDescription watersubpassdescription{
+		0,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		0, nullptr,
+		1, &waterattachrefs[0],
+		nullptr,
+		&waterattachrefs[1],
+		0, nullptr
+	};
+	VkSubpassDependency watersubpassdepend{
+		VK_SUBPASS_EXTERNAL, 0,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT|
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		0,
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		0
+	};
+	VkRenderPassCreateInfo waterrenderpasscreateinfo{
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		nullptr,
+		0,
+		2, &waterattachmentdescriptions[0],
+		1, &watersubpassdescription,
+		1, &watersubpassdepend
+	};
+	vkCreateRenderPass(vulkaninfo.logicaldevice, &waterrenderpasscreateinfo, nullptr, &vulkaninfo.waterrenderpass);
 }
 
 void GraphicsHandler::VKSubInitDescriptorPool(uint32_t nummeshes){
-	VkDescriptorPoolSize descriptorpoolsizes[2]{{
+	//one ubo per light
+	//three imgsamplers per mesh, one for text, two for ocean
+	//two storageimg for ocean
+	//one for particle system, plus 3 auto-init'd by mesh parent
+	//we should find a better way to do this lol
+	VkDescriptorPoolSize descriptorpoolsizes[4]{{
 		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		vulkaninfo.numswapchainimages*VULKAN_MAX_LIGHTS
+		vulkaninfo.numswapchainimages*(2*VULKAN_MAX_LIGHTS+nummeshes)
 	}, {
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		vulkaninfo.numswapchainimages*(2*nummeshes+1+2)
+		vulkaninfo.numswapchainimages*(4*nummeshes+2+1+1+1+1+1)+MAX_FRAMES_IN_FLIGHT
+	}, {
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		vulkaninfo.numswapchainimages*2
+	}, {
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		vulkaninfo.numswapchainimages
 	}};
 	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		nullptr,
-		VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,      //perhaps look into flags
-		vulkaninfo.numswapchainimages*(VULKAN_MAX_LIGHTS+nummeshes+1+2),
-		2,
+		VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,      //perhaps look into flags; do we really need update after bind?
+		vulkaninfo.numswapchainimages*(2*VULKAN_MAX_LIGHTS+4*nummeshes+2+1+1+1+1)+MAX_FRAMES_IN_FLIGHT,
+		4,
 		&descriptorpoolsizes[0]
 	};
 	vkCreateDescriptorPool(vulkaninfo.logicaldevice, &descriptorpoolcreateinfo, nullptr, &vulkaninfo.descriptorpool);
 }
 
-void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
-											 uint32_t binding,
-											 VkDeviceSize elementsize,
-											 uint32_t elementcount,
-											 VkBuffer**buffers,
-											 VkDeviceMemory**memories){
-	*descsets=new VkDescriptorSet[vulkaninfo.numswapchainimages];
+void GraphicsHandler::VKSubInitUniformBuffer(
+		VkDescriptorSet**descsets,
+		uint32_t binding,
+		VkDeviceSize elementsize,
+		uint32_t elementcount,
+		VkBuffer**buffers,
+		VkDeviceMemory**memories,
+		VkDescriptorSetLayout descsetlayout){
+	*descsets=new VkDescriptorSet[vulkaninfo.numswapchainimages];       //is this really something we should be doing inside the method???
 	VkDescriptorSetLayout dsltemp[vulkaninfo.numswapchainimages];
-	for(unsigned char x=0;x<vulkaninfo.numswapchainimages;x++) dsltemp[x]=vulkaninfo.primarygraphicspipeline.scenedsl;
+	for(unsigned char x=0;x<vulkaninfo.numswapchainimages;x++) dsltemp[x]=descsetlayout;
 	VkDescriptorSetAllocateInfo descsetallocinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
@@ -583,7 +978,7 @@ void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
 	};
 	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descsetallocinfo, *descsets);
 
-	*buffers=new VkBuffer[vulkaninfo.numswapchainimages];
+	*buffers=new VkBuffer[vulkaninfo.numswapchainimages];   //kinda dangerous to do this dynamic allocation within function
 	*memories=new VkDeviceMemory[vulkaninfo.numswapchainimages];
 
 	VkPhysicalDeviceProperties pdprops;
@@ -594,6 +989,7 @@ void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
 	}
 
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
+		//why arent we using VKHelperCreateAndAllocateBuffer?
 		VkBufferCreateInfo buffcreateinfo{
 				VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 				nullptr,
@@ -604,7 +1000,7 @@ void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
 				0,
 				nullptr
 		};
-		vkCreateBuffer(vulkaninfo.logicaldevice, &buffcreateinfo, nullptr, &(*buffers)[x]);
+		vkCreateBuffer(vulkaninfo.logicaldevice, &buffcreateinfo, nullptr, &((*buffers)[x]));
 		VkMemoryRequirements memrequirements{};
 		vkGetBufferMemoryRequirements(vulkaninfo.logicaldevice, (*buffers)[x], &memrequirements);
 		VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
@@ -636,7 +1032,7 @@ void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
 		VkWriteDescriptorSet writedescriptorset{
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
-				scenedescriptorsets[x],
+				(*descsets)[x],
 				binding,
 				0,
 				elementcount,      //i mean, we only /really/ have to update the buffers for active lights
@@ -649,304 +1045,70 @@ void GraphicsHandler::VKSubInitUniformBuffer(VkDescriptorSet**descsets,
 	}
 }
 
-//void GraphicsHandler::VKSubInitGraphicsPipeline(){
-//	VkDescriptorSetLayoutBinding scenedslbinding{
-//		0,
-//		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-//		VULKAN_MAX_LIGHTS,
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		nullptr
-//	};
-//	VkDescriptorSetLayoutCreateInfo scenedslcreateinfo{
-//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//		nullptr,
-//		0,
-//		1,
-//		&scenedslbinding
-//	};
-//	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &scenedslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout);
-//	VkDescriptorSetLayoutBinding meshdslbinding[2]={{
-//			0,
-//			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//			1,
-//			VK_SHADER_STAGE_FRAGMENT_BIT,
-//			nullptr
-//	}, {
-//		1,
-//		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//		1,
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		nullptr
-//	}};
-//	VkDescriptorSetLayoutCreateInfo meshdslcreateinfo{
-//			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//			nullptr,
-//			0,
-//			2,
-//			&meshdslbinding[0]
-//	};
-//	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &meshdslcreateinfo, nullptr, &vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout);
-//
-//	VkDescriptorSetLayout descriptorsetlayoutstemp[vulkaninfo.numswapchainimages];
-//	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++) descriptorsetlayoutstemp[x]=vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout;
-//	vulkaninfo.primarygraphicspipeline.descriptorset=new VkDescriptorSet[vulkaninfo.numswapchainimages];
-//	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
-//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-//		nullptr,
-//		vulkaninfo.descriptorpool,
-//		vulkaninfo.numswapchainimages,
-//		&descriptorsetlayoutstemp[0]
-//	};
-//	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descriptorsetallocinfo, &vulkaninfo.primarygraphicspipeline.descriptorset[0]);
-//
-//	vulkaninfo.lightuniformbuffers=new VkBuffer[vulkaninfo.numswapchainimages];
-//	vulkaninfo.lightuniformbuffermemories=new VkDeviceMemory[vulkaninfo.numswapchainimages];
-//	VKSubInitUniformBuffer(&vulkaninfo.primarygraphicspipeline,
-//						   0,
-//						   sizeof(LightUniformBuffer),
-//						   VULKAN_MAX_LIGHTS,
-//						   vulkaninfo.lightuniformbuffers,
-//						   vulkaninfo.lightuniformbuffermemories);
-//
-//	VkPushConstantRange pushconstantrange{
-//		VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//		0,
-//		sizeof(PrimaryGraphicsPushConstants)
-//	};
-//	VkVertexInputBindingDescription vertinbindingdescription{
-//		0,
-//		sizeof(Vertex),
-//		VK_VERTEX_INPUT_RATE_VERTEX
-//	};
-//	VkVertexInputAttributeDescription vertinattribdescription[3]{{
-//		0,
-//		0,
-//		VK_FORMAT_R32G32B32_SFLOAT,
-//		offsetof(Vertex, position)
-//	}, {
-//		1,
-//		0,
-//		VK_FORMAT_R32G32B32_SFLOAT,
-//		offsetof(Vertex, normal)
-//	}, {
-//		2,
-//		0,
-//		VK_FORMAT_R32G32_SFLOAT,
-//		offsetof(Vertex, uv)
-//	}};
-//	VkPipelineVertexInputStateCreateInfo vertinstatecreateinfo{
-//		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-//		nullptr,
-//		0,
-//		1,
-//		&vertinbindingdescription,
-//		3,
-//		&vertinattribdescription[0]
-//	};
-//	VkDescriptorSetLayout layoutstemp[2]{vulkaninfo.primarygraphicspipeline.scenedescriptorsetlayout, vulkaninfo.primarygraphicspipeline.meshdescriptorsetlayout};
-//	const char*filepaths[2]={"../resources/shaders/SPIRV/defaultvert.spv", "../resources/shaders/SPIRV/defaultfrag.spv"};
-//	VkShaderModule*modules=new VkShaderModule[2];
-//	VkPipelineShaderStageCreateInfo*shadercreateinfos=new VkPipelineShaderStageCreateInfo[2];
-//	VKSubInitShaders(VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//				     filepaths,
-//				     &modules,
-//				     &shadercreateinfos,
-//				     nullptr);
-//	VKSubInitPipeline(&vulkaninfo.primarygraphicspipeline,
-//			          2u,
-//			          &layoutstemp[0],
-//			          &pushconstantrange,
-//			          &vulkaninfo.primaryrenderpass,
-//			          VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//			          &shadercreateinfos[0],
-//			          &vertinstatecreateinfo,
-//			          nullptr);
-//	delete[]shadercreateinfos;
-//	for(unsigned char x=0;x<2;x++) vkDestroyShaderModule(vulkaninfo.logicaldevice, modules[x], nullptr);
-//	delete[] modules;
-//}
-//
-//void GraphicsHandler::VKSubInitTextGraphicsPipeline(){
-//	VkPipelineShaderStageCreateInfo vertsci, fragsci;
-//	VKSubInitLoadShaders("../resources/shaders/SPIRV/textvert.spv",
-//					     "../resources/shaders/SPIRV/textfrag.spv",
-//					     &vulkaninfo.textgraphicspipeline.vertexshadermodule,
-//					     &vulkaninfo.textgraphicspipeline.fragmentshadermodule,
-//					     &vertsci,
-//					     &fragsci);
-//	VkPipelineShaderStageCreateInfo shaderscitemps[2]{vertsci, fragsci};
-//	VkPipelineVertexInputStateCreateInfo vertexinputsci{
-//		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-//		nullptr,
-//		0,
-//		0,
-//		nullptr,
-//		0,
-//		nullptr
-//	};
-//	VkDescriptorSetLayoutBinding layoutbinding{
-//		0,
-//		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//		1,
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		nullptr
-//	};
-//	VkDescriptorSetLayoutCreateInfo layoutcreateinfo{
-//		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//		nullptr,
-//		0,
-//		1,
-//		&layoutbinding
-//	};
-//	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &layoutcreateinfo, nullptr, &vulkaninfo.textdescriptorsetlayout);
-//	VkPushConstantRange pushconstantrange{
-//		VK_SHADER_STAGE_VERTEX_BIT,
-//		0,
-//		sizeof(TextPushConstants)
-//	};
-//	VKSubInitPipeline(&vulkaninfo.textgraphicspipeline,
-//			          1,
-//			          &vulkaninfo.textdescriptorsetlayout,
-//			          &pushconstantrange,
-//			          &vulkaninfo.primaryrenderpass,
-//			          VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//			          &shaderscitemps[0],
-//			          &vertexinputsci,
-//			          nullptr);
-//}
-//
-//void GraphicsHandler::VKSubInitSkyboxGraphicsPipeline(){
-//	VkPushConstantRange pushconstantrange{
-//		VK_SHADER_STAGE_FRAGMENT_BIT,
-//		0,
-//		sizeof(SkyboxPushConstants)
-//	};
-//	const char*filepaths[2]={"../resources/shaders/SPIRV/skyboxvert.spv", "../resources/shaders/SPIRV/skyboxfrag.spv"};
-//	VkShaderModule*modules=new VkShaderModule[2];
-//	VkPipelineShaderStageCreateInfo*shaderstagecreateinfos=new VkPipelineShaderStageCreateInfo[2];
-//	VKSubInitShaders(VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//					 &filepaths[0],
-//					 &modules,
-//					 &shaderstagecreateinfos,
-//					 nullptr);
-//
-////	VKSubInitLoadShaders("../resources/shaders/SPIRV/skyboxvert.spv",
-////					     "../resources/shaders/SPIRV/skyboxfrag.spv",
-////					     &vulkaninfo.skyboxgraphicspipeline.vertexshadermodule,
-////					     &vulkaninfo.skyboxgraphicspipeline.fragmentshadermodule,
-////					     &shaderstagecreateinfos[0],
-////					     &shaderstagecreateinfos[1]);
-//	VkPipelineVertexInputStateCreateInfo vertinstatecreateinfo{
-//		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-//		nullptr,
-//		0,
-//		0,
-//		nullptr,
-//		0,
-//		nullptr
-//	};
-//	VKSubInitPipeline(&vulkaninfo.skyboxgraphicspipeline,
-//			          0,
-//			          nullptr,
-//			          &pushconstantrange,
-//			          &vulkaninfo.primaryrenderpass,
-//			          VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//			          &shaderstagecreateinfos[0],
-//			          &vertinstatecreateinfo,
-//			          nullptr);
-//	delete[] shaderstagecreateinfos;
-//	for(unsigned char x=0;x<2;x++) vkDestroyShaderModule(vulkaninfo.logicaldevice);
-//}
-//
-//void GraphicsHandler::VKSubInitOceanGraphicsPipeline(){
-//	VkPushConstantRange pushconstantrange{
-//		VK_SHADER_STAGE_VERTEX_BIT,
-//		0,
-//		sizeof(OceanPushConstants)
-//	};
-//	const char*shaderfilepaths[4]={"../resources/shaders/SPIRV/oceanvert.spv",
-//								   "../resources/shaders/SPIRV/oceantesc.spv",
-//								   "../resources/shaders/SPIRV/oceantese.spv",
-//								   "../resources/shaders/SPIRV/oceanfrag.spv",};
-//	VkShaderModule*modules=new VkShaderModule[4];
-//	VkPipelineShaderStageCreateInfo*shadercreateinfos=new VkPipelineShaderStageCreateInfo[4];
-//	VKSubInitShaders(VK_SHADER_STAGE_VERTEX_BIT
-//					 |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-//					 |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-//					 |VK_SHADER_STAGE_FRAGMENT_BIT,
-//				     &shaderfilepaths[0],
-//					 &modules,
-//				     &shadercreateinfos,
-//				     nullptr);
-//	VkVertexInputBindingDescription vertinbindingdescription{
-//			0,
-//			sizeof(Vertex),
-//			VK_VERTEX_INPUT_RATE_VERTEX
-//	};
-//	VkVertexInputAttributeDescription vertinattribdescription[3]{{
-//             0,
-//             0,
-//             VK_FORMAT_R32G32B32_SFLOAT,
-//             offsetof(Vertex, position)
-//     }, {
-//             1,
-//             0,
-//             VK_FORMAT_R32G32B32_SFLOAT,
-//             offsetof(Vertex, normal)
-//     }, {
-//             2,
-//             0,
-//             VK_FORMAT_R32G32_SFLOAT,
-//             offsetof(Vertex, uv)
-//     }};
-//	VkPipelineVertexInputStateCreateInfo vertinstatecreateinfo{
-//			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-//			nullptr,
-//			0,
-//			1,
-//			&vertinbindingdescription,
-//			3,
-//			&vertinattribdescription[0]
-//	};
-//	VkPipelineTessellationStateCreateInfo tessstatecreateinfo{
-//		VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-//		nullptr,
-//		0,
-//		3
-//	};
-//	VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
-//			          0,
-//			          nullptr,
-//			          &pushconstantrange,
-//			          &vulkaninfo.primaryrenderpass,
-//			          VK_SHADER_STAGE_VERTEX_BIT
-//			          |VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-//			          |VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-//			          |VK_SHADER_STAGE_FRAGMENT_BIT,
-//			          shadercreateinfos,
-//			          &vertinstatecreateinfo,
-//			          &tessstatecreateinfo);
-//	delete[] shadercreateinfos;
-//    for(unsigned char x=0;x<2;x++) vkDestroyShaderModule(vulkaninfo.logicaldevice, modules[x], nullptr);
-//    delete[] modules;
-//}
+void GraphicsHandler::VKSubInitStorageBuffer(
+		VkDescriptorSet**descriptorsets,
+		uint32_t binding,
+		VkDeviceSize elementsize,
+		uint32_t elementcount,
+		VkBuffer**buffers,
+		VkDeviceMemory**memories){
+	VkPhysicalDeviceProperties pdprops;
+	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
+	VkDeviceSize roundedupsize=elementsize;
+	if(elementsize%pdprops.limits.minUniformBufferOffsetAlignment!=0){
+		roundedupsize=(1+floor((float)elementsize/(float)pdprops.limits.minUniformBufferOffsetAlignment))*pdprops.limits.minUniformBufferOffsetAlignment;
+	}
+	for(uint8_t scii=0;scii<GraphicsHandler::vulkaninfo.numswapchainimages;scii++){
+		VKHelperCreateAndAllocateBuffer(
+				&buffers[0][scii],
+				roundedupsize*elementcount,
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				&memories[0][scii],
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		//unneccesary, clean up later
+		VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
+		for(uint32_t y=0;y<elementcount;y++){
+			descriptorbuffinfos[y].buffer=(*buffers)[scii];
+			descriptorbuffinfos[y].offset=y*roundedupsize;
+			descriptorbuffinfos[y].range=elementsize;
+		}
+		//clearly my understanding of this struct, esp the elementcount field, is flawed
+		VkWriteDescriptorSet writedescriptorset{
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				nullptr,
+				(*descriptorsets)[scii],
+				binding,
+				0,
+				1,      //i mean, we only /really/ have to update the buffers for active lights
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				nullptr,
+				&descriptorbuffinfos[0],
+				nullptr
+		};
+		vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
+	}
+}
 
 void GraphicsHandler::VKSubInitFramebuffers(){
-	vulkaninfo.framebuffers=new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.primaryframebuffers=new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.waterframebuffers=new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo.numswapchainimages;x++){
-		VkImageView attachmentstemp[2]={vulkaninfo.swapchainimageviews[x], vulkaninfo.depthbuffer.imageview};
+//		VKHelperInitImage();
+		VkImageView attachmentstemp[2]={attachmentstemp[0]=vulkaninfo.swapchainimageviews[x], vulkaninfo.depthbuffer.imageview};
 		VkFramebufferCreateInfo framebuffercreateinfo{
 			VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 			nullptr,
 			0,
 			vulkaninfo.primaryrenderpass,
-			2,
-			&attachmentstemp[0],
+			2, &attachmentstemp[0],
 			vulkaninfo.swapchainextent.width,
 			vulkaninfo.swapchainextent.height,
 			1
 		};
-		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr, &vulkaninfo.framebuffers[x]);
+		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr, &vulkaninfo.primaryframebuffers[x]);
+		framebuffercreateinfo.renderPass=vulkaninfo.waterrenderpass;
+//		attachmentstemp[0]=vulkaninfo.swapchainimageviews[x];
+		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr, &vulkaninfo.waterframebuffers[x]);
 	}
 }
 
@@ -963,13 +1125,13 @@ void GraphicsHandler::VKSubInitCommandPool(){
 		nullptr,
 		vulkaninfo.commandpool,
 		VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		vulkaninfo.numswapchainimages
+		MAX_FRAMES_IN_FLIGHT
 	};
-	vulkaninfo.commandbuffers=new VkCommandBuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.commandbuffers=new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &vulkaninfo.commandbuffers[0]);
 	cmdbufferallocateinfo.commandBufferCount=1;
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
-	vulkaninfo.clears[0]={0.0f, 0.0f, 0.01f, 1.0f};
+	vulkaninfo.clears[0]={0.0f, 0.0f, 0.1f, 1.0f};
 	vulkaninfo.clears[1]={1.0f, 0.0f};
 }
 
@@ -985,22 +1147,74 @@ void GraphicsHandler::VKSubInitSemaphoresAndFences(){
 		nullptr,
 		VK_FENCE_CREATE_SIGNALED_BIT
 	};
+	//eventually move to statically size array instead of ptr
+	vulkaninfo.submitfinishedfences=new VkFence[MAX_FRAMES_IN_FLIGHT];
+	vulkaninfo.presentfinishedfences=new VkFence[MAX_FRAMES_IN_FLIGHT];
 	for(int x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr, &vulkaninfo.imageavailablesemaphores[x]);
 		vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr, &vulkaninfo.renderfinishedsemaphores[x]);
-		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.frameinflightfences[x]);
+		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.submitfinishedfences[x]);
+		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.presentfinishedfences[x]);
+//		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.frameinflightfences[x]);
 	}
+	vulkaninfo.recordinginvalidfences=new VkFence[vulkaninfo.numswapchainimages];
 	for(int x=0;x<vulkaninfo.numswapchainimages;x++){
-		vulkaninfo.imageinflightfences[x]=VK_NULL_HANDLE;
+//		vulkaninfo.imageinflightfences[x]=VK_NULL_HANDLE;
+		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.recordinginvalidfences[x]);
 	}
 }
 
-void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
-                                        VkShaderStageFlags shaderstages,
-                                        const char**shaderfilepaths,
-                                        VkDescriptorSetLayoutCreateInfo*descsetlayoutcreateinfos,
-                                        VkPushConstantRange pushconstantrange,
-                                        VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo){
+void GraphicsHandler::VKSubInitPipeline(
+		PipelineInfo*pipelineinfo,
+		VkShaderStageFlags shaderstages,
+		const char**shaderfilepaths,
+		VkDescriptorSetLayoutCreateInfo*descsetlayoutcreateinfos,
+		VkPushConstantRange pushconstantrange,
+		VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo,
+		bool depthtest){
+	//heyyyyy, can we make some of the below structs static objects???
+	if(shaderstages&VK_SHADER_STAGE_COMPUTE_BIT){
+		//potential optimization for compute shader?
+		vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &descsetlayoutcreateinfos[0], nullptr, &pipelineinfo->scenedsl);
+		vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &descsetlayoutcreateinfos[1], nullptr, &pipelineinfo->objectdsl);
+		VkDescriptorSetLayout descsetlayoutstemp[2]={pipelineinfo->scenedsl, pipelineinfo->objectdsl};
+		bool scenedslexists=descsetlayoutcreateinfos[0].bindingCount!=0u,
+				objectdslexists=descsetlayoutcreateinfos[1].bindingCount!=0u;
+		VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo{
+				VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				nullptr,
+				0,
+				(uint32_t)scenedslexists+(uint32_t)objectdslexists,
+				(scenedslexists|objectdslexists)?&descsetlayoutstemp[scenedslexists?0:1]:nullptr,
+				pushconstantrange.size==0?0u:1u,
+				&pushconstantrange
+		};
+		vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, &pipelineinfo->pipelinelayout);
+
+		VkShaderModule*shadermodule=new VkShaderModule;
+		VkPipelineShaderStageCreateInfo*shaderstagecreateinfo=new VkPipelineShaderStageCreateInfo;
+		VKSubInitShaders(VK_SHADER_STAGE_COMPUTE_BIT,
+				            shaderfilepaths,
+				            &shadermodule,
+				            &shaderstagecreateinfo,
+				            nullptr);
+		VkComputePipelineCreateInfo pipelinecreateinfo{
+			VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			nullptr,
+			0,
+			*shaderstagecreateinfo,
+			pipelineinfo->pipelinelayout,
+			VK_NULL_HANDLE,
+			-1
+		};
+		vkCreateComputePipelines(vulkaninfo.logicaldevice, VK_NULL_HANDLE, 1, &pipelinecreateinfo, nullptr,
+						   &pipelineinfo->pipeline);
+		delete shaderstagecreateinfo;
+		vkDestroyShaderModule(vulkaninfo.logicaldevice, *shadermodule, nullptr);
+		delete shadermodule;
+		return;
+	}
+
 	uint32_t numshaderstages=0;
 	for(unsigned char x=0;x<VULKAN_NUM_SHADER_STAGES_SUPPORTED;x++){
 		if(supportedshaderstages[x]&shaderstages) numshaderstages++;
@@ -1038,17 +1252,19 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		0,
 		3
 	};
+	bool issm=pipelineinfo==&GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline;
 	VkViewport viewporttemp{
 		0.0f,
 		0.0f,
-		(float)vulkaninfo.swapchainextent.width,
-		(float)vulkaninfo.swapchainextent.height,
+		issm?4096:(float)vulkaninfo.swapchainextent.width,
+		issm?4096:(float)vulkaninfo.swapchainextent.height,
 		0.0f,
 		1.0f
 	};
+	VkExtent2D tempext{4096, 4096};
 	VkRect2D scissortemp{
 		{0, 0},
-		vulkaninfo.swapchainextent
+		issm?tempext:vulkaninfo.swapchainextent
 	};
 	VkPipelineViewportStateCreateInfo viewportstatecreateinfo{
 		VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -1067,7 +1283,9 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		VK_FALSE,
 //		shaderstages&VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_FILL,
 		VK_POLYGON_MODE_FILL,
-		VK_CULL_MODE_BACK_BIT,
+//		VK_CULL_MODE_BACK_BIT,
+		issm?VK_CULL_MODE_FRONT_BIT:(pipelineinfo==&GraphicsHandler::vulkaninfo.grassgraphicspipeline?VK_CULL_MODE_NONE:VK_CULL_MODE_BACK_BIT),
+//		issm?VK_CULL_MODE_BACK_BIT:(pipelineinfo==&GraphicsHandler::vulkaninfo.grassgraphicspipeline?VK_CULL_MODE_NONE:VK_CULL_MODE_BACK_BIT),
 		VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		VK_FALSE,
 		0.0f,
@@ -1086,20 +1304,39 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		VK_FALSE,
 		VK_FALSE
 	};
-	VkPipelineDepthStencilStateCreateInfo depthstencilstatecreateinfo{
+	VkPipelineDepthStencilStateCreateInfo depthstencilstatecreateinfo;
+	if(depthtest){
+		depthstencilstatecreateinfo={
+				VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+				nullptr,
+				0,
+				VK_TRUE,
+				VK_TRUE,
+				VK_COMPARE_OP_LESS,
+				VK_FALSE,
+				VK_FALSE,
+				{},
+				{},
+				0.0f,
+				1.0f
+		};
+	}
+	else{
+		depthstencilstatecreateinfo={
 			VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 			nullptr,
 			0,
-			VK_TRUE,
-			VK_TRUE,
-			VK_COMPARE_OP_LESS,
+			VK_FALSE,
+			VK_FALSE,
+			VK_COMPARE_OP_NEVER,
 			VK_FALSE,
 			VK_FALSE,
 			{},
 			{},
 			0.0f,
 			1.0f
-	};
+		};
+	}
 	//would like to figure out how this blend state works better
 	VkPipelineColorBlendAttachmentState colorblendattachmentstate{
 		VK_TRUE,
@@ -1133,11 +1370,12 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 		&viewportstatecreateinfo,
 		&rasterizationstatecreateinfo,
 		&multisamplestatecreateinfo,
+//		depthtest?&depthstencilstatecreateinfo:nullptr,
 		&depthstencilstatecreateinfo,
 		&colorblendstatecreateinfo,
 		nullptr,
 		pipelineinfo->pipelinelayout,
-		vulkaninfo.primaryrenderpass,
+		issm?vulkaninfo.templateshadowrenderpass:(pipelineinfo==&vulkaninfo.oceangraphicspipeline?vulkaninfo.waterrenderpass:vulkaninfo.primaryrenderpass),
 		0,
 		VK_NULL_HANDLE,
 		-1
@@ -1149,67 +1387,12 @@ void GraphicsHandler::VKSubInitPipeline(PipelineInfo*pipelineinfo,
 	delete[] shadermodules;
 }
 
-void GraphicsHandler::VKSubInitLoadShaders(const char*vertexshaderfilepath,
-		                                   const char*fragmentshaderfilepath,
-		                                   VkShaderModule*vertexshadermodule,
-		                                   VkShaderModule*fragmentshadermodule,
-		                                   VkPipelineShaderStageCreateInfo*vertexshaderstatecreateinfo,
-		                                   VkPipelineShaderStageCreateInfo*fragmentshaderstatecreateinfo){
-	std::ifstream shaderstream=std::ifstream(vertexshaderfilepath, std::ios::ate|std::ios::binary);
-	size_t vertshadersize=shaderstream.tellg(), fragshadersize;
-	shaderstream.seekg(0);
-	char vertshadersrc[vertshadersize];
-	shaderstream.read(&vertshadersrc[0], vertshadersize);
-	shaderstream.close();
-	shaderstream=std::ifstream(fragmentshaderfilepath, std::ios::ate|std::ios::binary);
-	fragshadersize=shaderstream.tellg();
-	shaderstream.seekg(0);
-	char fragshadersrc[fragshadersize];
-	shaderstream.read(&fragshadersrc[0], fragshadersize);
-	shaderstream.close();
-
-	VkShaderModuleCreateInfo vertshadermodcreateinfo{
-		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		nullptr,
-		0,
-		vertshadersize,
-		reinterpret_cast<const uint32_t*>(vertshadersrc)
-	}, fragshadermodcreateinfo{
-		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		nullptr,
-		0,
-		fragshadersize,
-		reinterpret_cast<const uint32_t*>(fragshadersrc)
-	};
-	vkCreateShaderModule(vulkaninfo.logicaldevice, &vertshadermodcreateinfo, nullptr, vertexshadermodule);
-	vkCreateShaderModule(vulkaninfo.logicaldevice, &fragshadermodcreateinfo, nullptr, fragmentshadermodule);
-
-	*vertexshaderstatecreateinfo={
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		nullptr,
-		0,
-		VK_SHADER_STAGE_VERTEX_BIT,
-		*vertexshadermodule,
-		"main",
-		nullptr
-	};
-	*fragmentshaderstatecreateinfo={
-		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		nullptr,
-		0,
-		VK_SHADER_STAGE_FRAGMENT_BIT,
-		*fragmentshadermodule,
-		"main",
-		nullptr
-	};
-	//consider deleting shader modules after we get it working
-}
-
-void GraphicsHandler::VKSubInitShaders(VkShaderStageFlags stages,
-									   const char**filepaths,
-									   VkShaderModule**modules,
-                                       VkPipelineShaderStageCreateInfo**createinfos,
-                                       VkSpecializationInfo*specializationinfos){
+void GraphicsHandler::VKSubInitShaders(
+		VkShaderStageFlags stages,
+		const char**filepaths,
+		VkShaderModule**modules,
+		VkPipelineShaderStageCreateInfo**createinfos,
+		VkSpecializationInfo*specializationinfos){
 	std::ifstream filestream;
 	size_t shadersrcsize;
 	char*shadersrc;
@@ -1305,16 +1488,18 @@ void GraphicsHandler::VKSubInitDepthBuffer(){
 	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &vulkaninfo.depthbuffer.imageview);
 
 	GraphicsHandler::VKHelperTransitionImageLayout(vulkaninfo.depthbuffer.image,
+												   1,
 												   VK_FORMAT_D32_SFLOAT,
 												   VK_IMAGE_LAYOUT_UNDEFINED,
 												   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
-void GraphicsHandler::VKHelperCreateAndAllocateBuffer(VkBuffer*buffer,
-												VkDeviceSize buffersize,
-												VkBufferUsageFlags bufferusage,
-												VkDeviceMemory*buffermemory,
-												VkMemoryPropertyFlags reqprops){
+void GraphicsHandler::VKHelperCreateAndAllocateBuffer(
+		VkBuffer*buffer,
+		VkDeviceSize buffersize,
+		VkBufferUsageFlags bufferusage,
+		VkDeviceMemory*buffermemory,
+		VkMemoryPropertyFlags reqprops){
 	VkBufferCreateInfo buffercreateinfo{
 		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		nullptr,
@@ -1349,9 +1534,10 @@ void GraphicsHandler::VKHelperCreateAndAllocateBuffer(VkBuffer*buffer,
 	vkBindBufferMemory(vulkaninfo.logicaldevice, *buffer, *buffermemory, 0);
 }
 
-void GraphicsHandler::VKHelperCpyBufferToBuffer(VkBuffer*src,
-												VkBuffer*dst,
-												VkDeviceSize size){
+void GraphicsHandler::VKHelperCpyBufferToBuffer(
+		VkBuffer*src,
+		VkBuffer*dst,
+		VkDeviceSize size){
 	VkBufferCopy region{
 			0,
 			0,
@@ -1382,20 +1568,22 @@ void GraphicsHandler::VKHelperCpyBufferToBuffer(VkBuffer*src,
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
 
-void GraphicsHandler::VKHelperCpyBufferToImage(VkBuffer*src,
-											   VkImage*dst,
-											   uint32_t rowpitch,
-											   uint32_t horires,
-											   uint32_t vertres){
+void GraphicsHandler::VKHelperCpyBufferToImage(
+		VkBuffer*src,
+		VkImage*dst,
+		VkFormat format,
+		uint32_t numlayers,
+		uint32_t rowpitch,
+		uint32_t horires, uint32_t vertres){
 	VkBufferImageCopy imgcopy{
 			0,
 			rowpitch,
 			vertres,
 			{
-					VK_IMAGE_ASPECT_COLOR_BIT,
+					format==VK_FORMAT_D32_SFLOAT?VK_IMAGE_ASPECT_DEPTH_BIT:VK_IMAGE_ASPECT_COLOR_BIT,
 					0,
 					0,
-					1
+					numlayers
 			}, {
 					0,
 					0,
@@ -1430,10 +1618,12 @@ void GraphicsHandler::VKHelperCpyBufferToImage(VkBuffer*src,
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
 
-void GraphicsHandler::VKHelperTransitionImageLayout(VkImage image,
-											VkFormat format,
-											VkImageLayout oldlayout,
-											VkImageLayout newlayout){
+void GraphicsHandler::VKHelperTransitionImageLayout(
+		VkImage image,
+		uint32_t numlayers,
+		VkFormat format,
+		VkImageLayout oldlayout,
+		VkImageLayout newlayout){
 	VkCommandBufferBeginInfo cmdbuffbegininfo{
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
@@ -1451,32 +1641,46 @@ void GraphicsHandler::VKHelperTransitionImageLayout(VkImage image,
 			VK_QUEUE_FAMILY_IGNORED,
 			image,
 			{
-//					VK_IMAGE_ASPECT_COLOR_BIT,
 					format==VK_FORMAT_D32_SFLOAT?VK_IMAGE_ASPECT_DEPTH_BIT:VK_IMAGE_ASPECT_COLOR_BIT,
 					0,
 					1,
 					0,
-					1
+					numlayers
 			}
 	};
+	//maybe swap out for a case/switch
 	VkPipelineStageFlags srcmask, dstmask;
-	if(oldlayout==VK_IMAGE_LAYOUT_UNDEFINED&&newlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+	if(oldlayout==VK_IMAGE_LAYOUT_UNDEFINED){
 		imgmembarrier.srcAccessMask=0;
-		imgmembarrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	}
+	else if(oldlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+		imgmembarrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+		srcmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+	else if(oldlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
+		imgmembarrier.srcAccessMask=VK_ACCESS_SHADER_READ_BIT;
+		srcmask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if(oldlayout==VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL){
+		imgmembarrier.srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		srcmask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	}
+	if(newlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+		imgmembarrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
 		dstmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
 	}
-	else if(oldlayout==VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL&&newlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
-		imgmembarrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+	else if(newlayout==VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
 		imgmembarrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
-		srcmask=VK_PIPELINE_STAGE_TRANSFER_BIT;
 		dstmask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
-	else if(oldlayout==VK_IMAGE_LAYOUT_UNDEFINED&&newlayout==VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL){
-		imgmembarrier.srcAccessMask=0;
+	else if(newlayout==VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL){
 		imgmembarrier.dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT|VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		srcmask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		dstmask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	}
+	else if(newlayout==VK_IMAGE_LAYOUT_GENERAL){
+		imgmembarrier.dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT;
+		dstmask=VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	}
 	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &cmdbuffbegininfo);
 	vkCmdPipelineBarrier(vulkaninfo.interimcommandbuffer, srcmask, dstmask, 0, 0, nullptr, 0, nullptr, 1, &imgmembarrier);
@@ -1496,158 +1700,240 @@ void GraphicsHandler::VKHelperTransitionImageLayout(VkImage image,
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
 
-void GraphicsHandler::VKHelperInitTexture(TextureInfo*texturedst,           //may want to actually break this function up into sub-functions with more diverse usage
-					                      uint32_t horires,
-					                      uint32_t vertres,
-					                      void*data,
-					                      VkFormat format,
-					                      bool overwrite){
-	if(overwrite){
-		vkDestroyImage(vulkaninfo.logicaldevice, texturedst->image, nullptr);
-		vkFreeMemory(vulkaninfo.logicaldevice, texturedst->memory, nullptr);
-		vkDestroyImageView(vulkaninfo.logicaldevice, texturedst->imageview, nullptr);
-		vkDestroySampler(vulkaninfo.logicaldevice, texturedst->sampler, nullptr);
-	}
-	VkDeviceSize pixelsize=VKHelperGetPixelSize(format);
-	VkImageCreateInfo imgcreateinfo{
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			nullptr,
-			0,
-			VK_IMAGE_TYPE_2D,
-			format,
-			{horires, vertres, 1},
-			1,
-			1,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_LINEAR,     //perhaps add more tiling control later (e.g. if square po2 tex)
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
-			VK_SHARING_MODE_EXCLUSIVE,
-			0,
-			nullptr,
-			VK_IMAGE_LAYOUT_UNDEFINED
-	};
-	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &(texturedst->image));
-	VkSubresourceLayout subresourcelayout;
-	VkImageSubresource imgsubresource{
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			0,
-			0
-	};
-	vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
-	VkDeviceSize size=subresourcelayout.size;
+void GraphicsHandler::VKHelperInitImage(
+		TextureInfo*imgdst,
+		uint32_t horires, uint32_t vertres,
+		VkFormat format,
+		VkMemoryPropertyFlags memprops,
+		VkImageUsageFlags usage,
+		VkImageLayout finallayout,
+		VkImageViewType imgviewtype){
+	imgdst->resolution={horires, vertres};
+	if(horires==0) imgdst->resolution.width=imgdst->resolution.height;
+	else if(vertres==0) imgdst->resolution.height=imgdst->resolution.width;
+	imgdst->format=format;
+	imgdst->memoryprops=memprops;
+	bool tilingoptimal=imgviewtype==VK_IMAGE_VIEW_TYPE_CUBE|format==VK_FORMAT_D32_SFLOAT|format==VK_FORMAT_B8G8R8A8_SRGB;
 
-	GraphicsHandler::VKHelperCreateAndAllocateBuffer(&(vulkaninfo.stagingbuffer),
-	                                                 size,
-	                                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-	                                                 &(vulkaninfo.stagingbuffermemory),
-	                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	//okay this was the root of the problem: i had to make a temp void* instead of just using the function
-	//arguement data i pass in; ig vkMapMemory only detects change, not initial value
-	void*datatemp=nullptr;
-	vkMapMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, 0, size, 0, &datatemp);
-	char*dstscanptr=reinterpret_cast<char*>(datatemp), *srcscanptr=reinterpret_cast<char*>(data);
-	for(uint32_t x=0;x<vertres;x++){
-		memcpy(reinterpret_cast<void*>(dstscanptr), reinterpret_cast<void*>(srcscanptr), horires*pixelsize);
-		dstscanptr+=subresourcelayout.rowPitch;
-		srcscanptr+=horires*pixelsize;
-	}
-	vkUnmapMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory);
+	VkImageCreateInfo imgcreateinfo{
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		nullptr,
+		VkImageCreateFlags(imgviewtype==VK_IMAGE_VIEW_TYPE_CUBE?VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT:0),
+		VK_IMAGE_TYPE_2D,
+		imgdst->format,
+		{imgdst->resolution.width, imgdst->resolution.height, 1},
+		1,
+		uint32_t(imgviewtype==VK_IMAGE_VIEW_TYPE_CUBE?6:1),
+		VK_SAMPLE_COUNT_1_BIT,
+		VkImageTiling(tilingoptimal?VK_IMAGE_TILING_OPTIMAL:VK_IMAGE_TILING_LINEAR),
+//		VK_IMAGE_TILING_LINEAR,
+		usage,
+		VK_SHARING_MODE_EXCLUSIVE,
+		0,
+		nullptr,
+		VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &imgdst->image);
 
 	VkMemoryRequirements memrequirements{};
-	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, texturedst->image, &memrequirements);
+	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, imgdst->image, &memrequirements);
 	VkPhysicalDeviceMemoryProperties physicaldevicememprops{};
 	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
 	uint32_t memindex=-1u;
 	for(uint32_t x=0;x<physicaldevicememprops.memoryTypeCount;x++){
 		if(memrequirements.memoryTypeBits&(1<<x)
-		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)==VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)){
+		   &&((physicaldevicememprops.memoryTypes[x].propertyFlags&imgdst->memoryprops)==imgdst->memoryprops)){
 			memindex=x;
 			break;
 		}
 	}
-	VkMemoryAllocateInfo memallocateinfo{
-			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			nullptr,
-			memrequirements.size,
-			memindex
+	VkMemoryAllocateInfo memallocinfo{
+		VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		nullptr,
+		memrequirements.size,
+		memindex
 	};
-	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &(texturedst->memory));
-	vkBindImageMemory(vulkaninfo.logicaldevice, texturedst->image, texturedst->memory, 0);
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocinfo, nullptr, &imgdst->memory);
+	vkBindImageMemory(vulkaninfo.logicaldevice, imgdst->image, imgdst->memory, 0);
 
-	VKHelperTransitionImageLayout(texturedst->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	VKHelperCpyBufferToImage(&(vulkaninfo.stagingbuffer), &texturedst->image, subresourcelayout.rowPitch/pixelsize, horires, vertres);
-	vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
-	vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
-	VKHelperTransitionImageLayout(texturedst->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	VKHelperTransitionImageLayout(
+			imgdst->image,
+			imgdst->type==TEXTURE_TYPE_CUBEMAP?6:1,
+			imgdst->format,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			finallayout);
+	imgdst->layout=finallayout;
 
 	VkImageViewCreateInfo imgviewcreateinfo{
-			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			nullptr,
-			0,
-			texturedst->image,
-			VK_IMAGE_VIEW_TYPE_2D,
-			format,
-			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
-			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-	};
-	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &(texturedst->imageview));
-
-	VkSamplerCreateInfo samplercreateinfo{
-			VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			nullptr,
-			0,
-			VK_FILTER_NEAREST,
-			VK_FILTER_NEAREST,
-			VK_SAMPLER_MIPMAP_MODE_NEAREST,
-			VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			0.0f,
-			VK_FALSE,
-			1.0f,
-			VK_FALSE,
-			VK_COMPARE_OP_ALWAYS,
-			0.0f,
-			1.0f,
-			VK_BORDER_COLOR_INT_OPAQUE_WHITE,
-			VK_FALSE
-	};
-	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &(texturedst->sampler));
-}
-
-void GraphicsHandler::VKHelperUpdateTexture(TextureInfo*texturedst,
-                                  uint32_t miplevel,
-                                  VkExtent2D offset,
-                                  VkExtent2D range,
-                                  void*src,
-                                  VkFormat format){
-	VkImageSubresource imgsubresource{
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		miplevel,
+		VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		nullptr,
 		0,
+		imgdst->image,
+		imgviewtype,
+		imgdst->format,
+		{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+		{format==VK_FORMAT_D32_SFLOAT?VK_IMAGE_ASPECT_DEPTH_BIT:VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, uint32_t(imgviewtype==VK_IMAGE_VIEW_TYPE_CUBE?6:1)}
 	};
-	VkSubresourceLayout subresourcelayout;
-	vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
+	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &imgdst->imageview);
 
-	uint32_t pixelsize=VKHelperGetPixelSize(format);
-	VkDeviceSize size=(range.width-offset.width)*(range.height-offset.height)*pixelsize;
-	VKHelperCreateAndAllocateBuffer(&vulkaninfo.stagingbuffer,
-								    size,
-								    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-								    &vulkaninfo.stagingbuffermemory,
-								    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
+	imgdst->sampler=VK_NULL_HANDLE;
 }
 
-void GraphicsHandler::VKHelperUpdateUniformBuffer(uint32_t elementcount,
-		                                          VkDeviceSize elementsize,
-		                                          VkDeviceMemory buffermemory,
-		                                          void*data){
+void GraphicsHandler::VKHelperInitTexture(
+		TextureInfo*texturedst,
+		uint32_t horires, uint32_t vertres,
+		VkFormat format,
+		VkMemoryPropertyFlags memprops,
+		TextureType textype,
+		VkImageViewType imgviewtype,
+		VkSampler sampler){
+	texturedst->type=textype;
+	VkImageUsageFlags usage=memprops&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT?
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT:
+			VK_IMAGE_USAGE_SAMPLED_BIT;
+	if(textype==TEXTURE_TYPE_SHADOWMAP) usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT; //a little bodgey
+	VkImageLayout layout=memprops&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT?
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	if(textype==TEXTURE_TYPE_SHADOWMAP) layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	VKHelperInitImage(
+			texturedst,
+			horires,
+			vertres,
+			format,
+			memprops,
+			usage,
+			layout,
+			imgviewtype);
+
+	VkDeviceSize size=texturedst->resolution.width*texturedst->resolution.height*VKHelperGetPixelSize(format)*(imgviewtype==VK_IMAGE_VIEW_TYPE_CUBE?6:1);
+	//below stuff has redundant code in updatewholeimages...is it necessary?
+	if(imgviewtype!=VK_IMAGE_VIEW_TYPE_CUBE&&format!=VK_FORMAT_D32_SFLOAT){
+		VkSubresourceLayout subresourcelayout;
+		VkImageSubresource imgsubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
+		size=subresourcelayout.size;
+	}
+
+	if(textype!=TEXTURE_TYPE_SHADOWMAP){
+		char*emptydata=new char[size];
+		memset(emptydata, 0, size);
+		VKHelperUpdateWholeTexture(texturedst, reinterpret_cast<void*>(emptydata));
+		delete[] emptydata;
+	}
+	texturedst->layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	texturedst->sampler=sampler;
+	texturedst->setUVPosition(glm::vec2(0., 0.));
+	texturedst->setUVScale(glm::vec2(1., 1.));
+	texturedst->setUVRotation(0.);
+}
+
+void GraphicsHandler::VKHelperUpdateWholeVisibleTexture(
+		TextureInfo*texdst,
+		void*src){
+	VkSubresourceLayout subresourcelayout;
+	VkImageSubresource imgsubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+	vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texdst->image, &imgsubresource, &subresourcelayout);
+	VkDeviceSize size=subresourcelayout.size;
+	uint32_t pixelsize=VKHelperGetPixelSize(texdst->format);
+
+	void*datatemp;
+	vkMapMemory(
+			GraphicsHandler::vulkaninfo.logicaldevice,
+			texdst->memory,
+			0,
+			size,
+			0,
+			&datatemp);
+	char*dstscanptr=reinterpret_cast<char*>(datatemp), *srcscanptr=reinterpret_cast<char*>(src);
+	for(uint32_t x=0;x<texdst->resolution.height;x++){
+		memcpy(reinterpret_cast<void*>(dstscanptr), reinterpret_cast<void*>(srcscanptr), texdst->resolution.width*pixelsize);
+		dstscanptr+=subresourcelayout.rowPitch;
+		srcscanptr+=texdst->resolution.width*pixelsize;
+	}
+	vkUnmapMemory(vulkaninfo.logicaldevice, texdst->memory);
+}
+
+void GraphicsHandler::VKHelperUpdateWholeTexture(
+		TextureInfo*texdst,
+		void*src){
+	//having the cubemap ternary exp for layers everywhere feels wrong...maybe polish up later
+	//do we have any other uses for layers other than 6 for cubemap, 1 for everything else?
+	bool querysubresource=texdst->type!=TEXTURE_TYPE_CUBEMAP&&texdst->format!=VK_FORMAT_D32_SFLOAT;
+	uint32_t pixelsize=VKHelperGetPixelSize(texdst->format);
+	VkSubresourceLayout subresourcelayout;
+	VkImageSubresource imgsubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+	VkDeviceSize size=texdst->resolution.width*texdst->resolution.height*pixelsize*(texdst->type==TEXTURE_TYPE_CUBEMAP?6:1);
+	if(querysubresource){
+		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texdst->image, &imgsubresource, &subresourcelayout);
+		size=subresourcelayout.size;
+	}
+	bool devloc=texdst->memoryprops&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	if(devloc){
+		GraphicsHandler::VKHelperCreateAndAllocateBuffer(
+				&(vulkaninfo.stagingbuffer),
+				size,
+				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+				&(vulkaninfo.stagingbuffermemory),
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	}
+	void*dst;
+	vkMapMemory(
+			vulkaninfo.logicaldevice,
+			devloc?vulkaninfo.stagingbuffermemory:texdst->memory,
+			0,
+			VK_WHOLE_SIZE,
+			0,
+			&dst);
+	VkDeviceSize pitch;
+	if(querysubresource) pitch=subresourcelayout.rowPitch;
+	else pitch=texdst->resolution.width*pixelsize;
+	char*dstscan=reinterpret_cast<char*>(dst), *srcscan=reinterpret_cast<char*>(src);
+	for(uint32_t x=0;x<texdst->resolution.height*(texdst->type==TEXTURE_TYPE_CUBEMAP?6:1);x++){
+		memcpy(reinterpret_cast<void*>(dstscan), reinterpret_cast<void*>(srcscan), texdst->resolution.width*pixelsize);
+		dstscan+=pitch;
+		srcscan+=texdst->resolution.width*pixelsize;
+	}
+	vkUnmapMemory(vulkaninfo.logicaldevice, devloc?vulkaninfo.stagingbuffermemory:texdst->memory);
+	if(devloc){
+		if(texdst->layout!=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+			VKHelperTransitionImageLayout(
+					texdst->image,
+					texdst->type==TEXTURE_TYPE_CUBEMAP?6:1,
+					texdst->format,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		}
+		VKHelperCpyBufferToImage(       //may have to factor layers into this mess
+				&vulkaninfo.stagingbuffer,
+				&texdst->image,
+				texdst->format,
+				texdst->type==TEXTURE_TYPE_CUBEMAP?6:1,
+				pitch/pixelsize,
+				texdst->resolution.width, texdst->resolution.height);
+		vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
+		vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
+		VKHelperTransitionImageLayout(
+				texdst->image,
+				texdst->type==TEXTURE_TYPE_CUBEMAP?6:1,
+				texdst->format,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+}
+
+
+void GraphicsHandler::VKHelperUpdateUniformBuffer(
+		uint32_t elementcount,
+		VkDeviceSize elementsize,
+		VkDeviceMemory buffermemory,
+		void*data){
 	VkPhysicalDeviceProperties physdevprops;
 	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &physdevprops);
 	VkDeviceSize roundedupelementsize=elementsize;
 	if(elementsize%physdevprops.limits.minUniformBufferOffsetAlignment!=0){
-		roundedupelementsize=(1+floor((float)sizeof(LightUniformBuffer)/(float)physdevprops.limits.minUniformBufferOffsetAlignment))
+		roundedupelementsize=(1+floor((float)elementsize/(float)physdevprops.limits.minUniformBufferOffsetAlignment))
 							 *physdevprops.limits.minUniformBufferOffsetAlignment;
 	}
 	void*datatemp;
@@ -1657,21 +1943,96 @@ void GraphicsHandler::VKHelperUpdateUniformBuffer(uint32_t elementcount,
 			    roundedupelementsize*elementcount,
 			    0,
 			    &datatemp);
+//	std::cout<<"update unibuf called on unibufmem "<<buffermemory<<" for "<<elementcount<<" elements, each of size "<<
+//		elementsize<<" bytes. rounded up to "<<roundedupelementsize<<" bytes for physical device. memory mapped and"
+//																	   "being written to "<<datatemp<<std::endl;
+//	std::cout<<"byte scan:"<<std::endl;
 	char*datadst=(char*)datatemp, *datasrc=(char*)data;
 	for(uint32_t x=0;x<elementcount;x++){
 		memcpy((void*)datadst, (void*)datasrc, elementsize);
+//		for(uint32_t x=0;x<elementsize;x++){
+//			std::cout<<std::hex<<(int)(unsigned char)(*datasrc)<<' ';
+//			if(x%4==3) std::cout<<"| ";
+//			datasrc++;
+//		}
+//		std::cout<<"\n";
 		datadst+=roundedupelementsize;
 		datasrc+=elementsize;
 	}
 	vkUnmapMemory(vulkaninfo.logicaldevice, buffermemory);
 }
 
-inline uint32_t GraphicsHandler::VKHelperGetPixelSize(VkFormat format){
+void GraphicsHandler::VKHelperUpdateStorageBuffer(
+		uint32_t elementcount,
+		VkDeviceSize elementsize,
+		VkBuffer*buffer,
+		VkDeviceMemory buffermemory,
+		void*data){
+	VkPhysicalDeviceProperties physdevprops;
+	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &physdevprops);
+	VkDeviceSize roundedupelementsize=elementsize;
+	if(elementsize%physdevprops.limits.minUniformBufferOffsetAlignment!=0){
+		roundedupelementsize=(1+floor((float)elementsize/(float)physdevprops.limits.minUniformBufferOffsetAlignment))
+		                     *physdevprops.limits.minUniformBufferOffsetAlignment;
+	}
+	VKHelperCreateAndAllocateBuffer(
+			&GraphicsHandler::vulkaninfo.stagingbuffer,
+			roundedupelementsize*elementcount,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			&GraphicsHandler::vulkaninfo.stagingbuffermemory,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	void*datatemp;
+	vkMapMemory(vulkaninfo.logicaldevice,
+	            GraphicsHandler::vulkaninfo.stagingbuffermemory,
+	            0,
+	            roundedupelementsize*elementcount,
+	            0,
+	            &datatemp);
+	char*datadst=(char*)datatemp, *datasrc=(char*)data;
+	for(uint32_t x=0;x<elementcount;x++){
+		memcpy((void*)datadst, (void*)datasrc, elementsize);
+		datadst+=roundedupelementsize;
+		datasrc+=elementsize;
+	}
+	vkUnmapMemory(vulkaninfo.logicaldevice, GraphicsHandler::vulkaninfo.stagingbuffermemory);
+	std::cout<<"before we cpy, heres some data: \n\troundedupelementsize: "
+			<<roundedupelementsize<<"\n\telementcount: "<<elementcount
+			<<"\n\tsrc val: "<<GraphicsHandler::vulkaninfo.stagingbuffer
+			<<"\n\tdst val: "<<*buffer<<std::endl;
+	VKHelperCpyBufferToBuffer(
+			&GraphicsHandler::vulkaninfo.stagingbuffer,
+			buffer,
+			roundedupelementsize*elementcount);
+	vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
+	vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
+}
+
+glm::vec3 GraphicsHandler::mat4TransformVec3(glm::mat4 M, glm::vec3 v){
+	glm::vec4 w=glm::vec4(v.x, v.y, v.z, 1.);
+	w=M*w;
+	w/=w.w;
+	return glm::vec3(w.x, w.y, w.z);
+}
+
+void GraphicsHandler::makeRectPrism(glm::vec3**dst, glm::vec3 min, glm::vec3 max){
+	(*dst)[0]=max;
+	(*dst)[1]=glm::vec3(max.x, max.y, min.z);
+	(*dst)[2]=glm::vec3(max.x, min.y, min.z);
+	(*dst)[3]=glm::vec3(min.x, max.y, max.z);
+	(*dst)[4]=glm::vec3(min.x, min.y, max.z);
+	(*dst)[5]=glm::vec3(min.x, max.y, min.z);
+	(*dst)[6]=glm::vec3(max.x, min.y, max.z);
+	(*dst)[7]=min;
+}
+
+inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize(VkFormat format){
 	switch(format){
 		case VK_FORMAT_R32G32B32A32_SFLOAT:
 			return 16u;
 		case VK_FORMAT_R32G32B32_SFLOAT:
 			return 12u;
+		case VK_FORMAT_R8G8B8A8_UNORM:
+			return 4u;
 		case VK_FORMAT_R8G8B8A8_SRGB:
 			return 4u;
 		case VK_FORMAT_B8G8R8A8_SRGB:
@@ -1685,39 +2046,49 @@ inline uint32_t GraphicsHandler::VKHelperGetPixelSize(VkFormat format){
 	}
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                                    VkDebugUtilsMessageTypeFlagsEXT type,
-                                                    const VkDebugUtilsMessengerCallbackDataEXT*callbackdata,
-                                                    void*userdata){
+VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+		VkDebugUtilsMessageTypeFlagsEXT type,
+		const VkDebugUtilsMessengerCallbackDataEXT*callbackdata,
+		void*userdata){
 	if(severity<VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return VK_FALSE;
-	if(severity==VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) std::cout<<callbackdata->pMessage<<std::endl;
+//	if(severity==VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) std::cout<<callbackdata->pMessage<<std::endl;
 	uint32_t newlinecounter=0u, charcounter=0u;
-	while(callbackdata->pMessage[charcounter]!='\0'){
-		troubleshootingsstrm<<callbackdata->pMessage[charcounter];
-		if(newlinecounter>50u){
-			troubleshootingsstrm<<'\n';
-			newlinecounter=0u;
+	if(callbackdata->messageIdNumber!=-1539028524){
+		while(callbackdata->pMessage[charcounter]!='\0'){
+	//		troubleshootingsstrm<<callbackdata->pMessage[charcounter];
+			if(newlinecounter>50u){
+				//			troubleshootingsstrm<<'\n';
+				newlinecounter=0u;
+			}
+			newlinecounter++;
+			charcounter++;
 		}
-		newlinecounter++;
-		charcounter++;
+		std::cout<<callbackdata->pMessage<<std::endl;
 	}
-	std::cout<<callbackdata->pMessage<<std::endl;
 	return VK_FALSE;
 }
 
-VkResult GraphicsHandler::CreateDebugUtilsMessengerEXT(VkInstance instance,
-                                             const VkDebugUtilsMessengerCreateInfoEXT*createinfo,
-                                             const VkAllocationCallbacks*allocator,
-                                             VkDebugUtilsMessengerEXT*debugutilsmessenger){
+VkResult GraphicsHandler::CreateDebugUtilsMessengerEXT(
+		VkInstance instance,
+		const VkDebugUtilsMessengerCreateInfoEXT*createinfo,
+		const VkAllocationCallbacks*allocator,
+		VkDebugUtilsMessengerEXT*debugutilsmessenger){
 	auto function=(PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
 	return function(instance, createinfo, allocator, debugutilsmessenger);
 }
 
-void GraphicsHandler::DestroyDebugUtilsMessengerEXT(VkInstance instance,
-											  VkDebugUtilsMessengerEXT debugutilsmessenger,
-											  const VkAllocationCallbacks*allocator){
+void GraphicsHandler::DestroyDebugUtilsMessengerEXT(
+		VkInstance instance,
+		VkDebugUtilsMessengerEXT debugutilsmessenger,
+		const VkAllocationCallbacks*allocator){
 	auto function=(PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
 	function(instance, debugutilsmessenger, allocator);
+}
+
+void GraphicsHandler::glfwErrorCallback(int error, const char*description){
+	std::cout<<"oopsie, glfw error (how'd you even do that? we do almost nothing with that lib lol...)"<<std::endl;
+	std::cout<<description<<std::endl;
 }
 
 void GraphicsHandler::keystrokeCallback(GLFWwindow*window, int key, int scancode, int action, int mods){

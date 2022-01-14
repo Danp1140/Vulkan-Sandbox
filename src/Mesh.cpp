@@ -9,49 +9,75 @@ VulkanInfo*Mesh::vulkaninfo{};
 Mesh::Mesh(VulkanInfo*vki){
 	vulkaninfo=vki;
 	position=glm::vec3(0, 0, 0);
+	scale=glm::vec3(1., 1., 1.);
+	rotation=glm::quat(1., 0., 0., 0.);
 	vertices=std::vector<Vertex>();
 	tris=std::vector<Tri>();
 	recalculateModelMatrix();
-	shadowtype=RADIUS;
 	updateBuffers();
-	diffusetexture={};
-	normaltexture={};
+	initCommandBuffers();
+	texInit(256, 256, 256);
 }
 
-Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki){
+Mesh::Mesh(const char*filepath, glm::vec3 p, VulkanInfo*vki, uint32_t dir, uint32_t nir, uint32_t hir){
 	vulkaninfo=vki;
 	position=p;
+	scale=glm::vec3(1., 1., 1.);
+	rotation=glm::quat(1., 0., 0., 0.);
 	loadOBJ(filepath);
 	recalculateModelMatrix();
-	shadowtype=RADIUS;
 	updateBuffers();
-	diffusetexture={};
-	normaltexture={};
-	initDescriptorSets();
+	initCommandBuffers();
+	GraphicsHandler::VKSubInitUniformBuffer(
+			&descriptorsets,
+			0,
+			sizeof(MeshUniformBuffer),
+			1,
+			&uniformbuffers,
+			&uniformbuffermemories,
+			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
+	texInit(dir, nir, hir);
 }
 
-Mesh:: Mesh(glm::vec3 p){
+Mesh::Mesh(glm::vec3 p){
 	vulkaninfo=&GraphicsHandler::vulkaninfo;
 	position=p;
+	scale=glm::vec3(1., 1., 1.);
+	rotation=glm::quat(1., 0., 0. , 0.);
 	recalculateModelMatrix();
-	shadowtype=RADIUS;
 	diffusetexture={};
 	normaltexture={};
+	initCommandBuffers();
 	initDescriptorSets();
+	texInit(256, 256, 256);
 }
 
 Mesh::~Mesh(){
-	TextureInfo*texturestemp[2]={&diffusetexture, &normaltexture};
-	for(auto&t:texturestemp){
-		vkDestroyImage(vulkaninfo->logicaldevice, t->image, nullptr);
-		vkFreeMemory(vulkaninfo->logicaldevice, t->memory, nullptr);
-		vkDestroyImageView(vulkaninfo->logicaldevice, t->imageview, nullptr);
-		vkDestroySampler(vulkaninfo->logicaldevice, t->sampler, nullptr);
+	//TODO: actually fucking write destructors
+}
+
+void Mesh::initCommandBuffers(){
+	commandbuffers=new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
+	VkCommandBufferAllocateInfo cmdbufallocinfo{
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.commandpool,
+		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+		MAX_FRAMES_IN_FLIGHT
+	};
+	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
+	shadowcommandbuffers=new VkCommandBuffer*[VULKAN_MAX_LIGHTS];
+	for(uint8_t i=0;i<VULKAN_MAX_LIGHTS;i++){
+		shadowcommandbuffers[i]=new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
+		VkCommandBufferAllocateInfo shadowcmdbufallocinfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.commandpool,
+			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+			MAX_FRAMES_IN_FLIGHT
+		};
+		vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &shadowcmdbufallocinfo, &shadowcommandbuffers[i][0]);
 	}
-	vkFreeMemory(vulkaninfo->logicaldevice, indexbuffermemory, nullptr);
-	vkDestroyBuffer(vulkaninfo->logicaldevice, indexbuffer, nullptr);
-	vkFreeMemory(vulkaninfo->logicaldevice, vertexbuffermemory, nullptr);
-	vkDestroyBuffer(vulkaninfo->logicaldevice, vertexbuffer, nullptr);
 }
 
 void Mesh::updateBuffers(){
@@ -66,6 +92,7 @@ void Mesh::updateBuffers(){
 	memcpy(datatemp, (void*)vertices.data(), vertexbuffersize);
 	vkUnmapMemory(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffermemory);
 
+	//hey i know we dont use this funcion outside of init, but if we did should we be recreating the vbuf?
 	GraphicsHandler::VKHelperCreateAndAllocateBuffer(&vertexbuffer,
 												     vertexbuffersize,
 												     VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -107,6 +134,35 @@ void Mesh::updateBuffers(){
 	vkDestroyBuffer(vulkaninfo->logicaldevice, vulkaninfo->stagingbuffer, nullptr);
 }
 
+void Mesh::texInit(uint32_t dir, uint32_t nir, uint32_t hir){
+	GraphicsHandler::VKHelperInitTexture(
+			&diffusetexture,
+			dir, 0,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			TEXTURE_TYPE_DIFFUSE,
+			VK_IMAGE_VIEW_TYPE_2D,
+			GraphicsHandler::genericsampler);
+	GraphicsHandler::VKHelperInitTexture(
+			&normaltexture,
+			nir, 0,
+			VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			TEXTURE_TYPE_NORMAL,
+			VK_IMAGE_VIEW_TYPE_2D,
+			GraphicsHandler::linearminmagsampler);
+	GraphicsHandler::VKHelperInitTexture(
+			&heighttexture,
+			hir, 0,
+			VK_FORMAT_R32_SFLOAT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			TEXTURE_TYPE_HEIGHT,
+			VK_IMAGE_VIEW_TYPE_2D,
+			GraphicsHandler::linearminmagsampler);
+}
+
+void triangulatePolygon(std::vector<glm::vec2>v, std::vector<glm::vec2>&dst);
+
 void Mesh::initDescriptorSets(){
 	VkDescriptorSetLayout layoutstemp[vulkaninfo->numswapchainimages];
 	for(uint32_t x=0;x<vulkaninfo->numswapchainimages;x++) layoutstemp[x]=vulkaninfo->primarygraphicspipeline.objectdsl;
@@ -121,14 +177,14 @@ void Mesh::initDescriptorSets(){
 	vkAllocateDescriptorSets(vulkaninfo->logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
 }
 
-void Mesh::rewriteAllDescriptorSets(){
+void Mesh::rewriteTextureDescriptorSets(){
 	VkDescriptorImageInfo imginfo=diffusetexture.getDescriptorImageInfo();
 	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
 		VkWriteDescriptorSet write{
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
-				0,
+				1,
 				0,
 				1,
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -148,7 +204,7 @@ void Mesh::rewriteAllDescriptorSets(){
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
-				1,
+				2,
 				0,
 				1,
 				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -162,10 +218,163 @@ void Mesh::rewriteAllDescriptorSets(){
 		                       0,
 		                       nullptr);
 	}
+	imginfo=heighttexture.getDescriptorImageInfo();
+	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
+		VkWriteDescriptorSet write{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			descriptorsets[x],
+			3,
+			0,
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			&imginfo,
+			nullptr,
+			nullptr
+		};
+		vkUpdateDescriptorSets(
+				GraphicsHandler::vulkaninfo.logicaldevice,
+				1,
+				&write,
+				0, nullptr);
+	}
+}
+
+void Mesh::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds)const{
+	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.primaryrenderpass,
+		0,
+		GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+		VK_FALSE,
+		0,
+		0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo{
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+		&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+	vkCmdBindPipeline(      //would like to only do this bind once, but unlikely to work out...
+			commandbuffers[fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipeline);
+	vkCmdPushConstants(
+			commandbuffers[fifindex],
+			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT|VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
+			0,
+			sizeof(PrimaryGraphicsPushConstants),
+			&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
+	vkCmdBindDescriptorSets(
+			commandbuffers[fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			0,
+			1,
+			&sceneds[sciindex],
+			0, nullptr);
+	//same down to here
+	vkCmdBindDescriptorSets(
+			commandbuffers[fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			1,
+			1,
+			&descriptorsets[sciindex],
+			0, nullptr);
+	VkDeviceSize offsettemp=0u;
+	vkCmdBindVertexBuffers(
+			commandbuffers[fifindex],
+			0,
+			1,
+			&vertexbuffer,
+			&offsettemp);
+	vkCmdBindIndexBuffer(
+			commandbuffers[fifindex],
+			indexbuffer,
+			0,
+			VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(
+			commandbuffers[fifindex],
+			tris.size()*3,
+			1,
+			0,
+			0,
+			0);
+	vkEndCommandBuffer(commandbuffers[fifindex]);
+}
+
+void Mesh::recordShadowDraw(uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx, ShadowmapPushConstants*pc)const{
+	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			renderpass,
+			0,
+			framebuffer,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+			&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(shadowcommandbuffers[lightidx][fifindex], &cmdbufbegininfo);
+	vkCmdBindPipeline(
+			shadowcommandbuffers[lightidx][fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipeline);
+	vkCmdPushConstants(
+			shadowcommandbuffers[lightidx][fifindex],
+			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			0,
+			sizeof(ShadowmapPushConstants),
+			pc);
+	vkCmdBindDescriptorSets(
+			shadowcommandbuffers[lightidx][fifindex],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+			1,
+			1,
+			&descriptorsets[sciindex],
+			0, nullptr);
+	VkDeviceSize offsettemp=0u;
+	vkCmdBindVertexBuffers(
+			shadowcommandbuffers[lightidx][fifindex],
+			0,
+			1,
+			&vertexbuffer,
+			&offsettemp);
+	vkCmdBindIndexBuffer(
+			shadowcommandbuffers[lightidx][fifindex],
+			indexbuffer,
+			0,
+			VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(
+			shadowcommandbuffers[lightidx][fifindex],
+			tris.size()*3,
+			1,
+			0,
+			0,
+			0);
+	vkEndCommandBuffer(shadowcommandbuffers[lightidx][fifindex]);
+}
+
+void Mesh::generateSteppeMesh(std::vector<glm::vec3>area, std::vector<std::vector<glm::vec3>>waters, double seed){
+	vertices=std::vector<Vertex>();
+	tris=std::vector<Tri>();
 }
 
 void Mesh::recalculateModelMatrix(){
-	modelmatrix=glm::translate(position);
+	modelmatrix=glm::translate(position)*glm::toMat4(rotation)*glm::scale(scale);
+	uniformbufferdata.modelmatrix=modelmatrix;
 }
 
 void Mesh::setPosition(glm::vec3 p){
@@ -173,8 +382,28 @@ void Mesh::setPosition(glm::vec3 p){
 	recalculateModelMatrix();
 }
 
+void Mesh::setRotation(glm::quat r){
+	rotation=r;
+	recalculateModelMatrix();
+}
+
+void Mesh::setScale(glm::vec3 s){
+	scale=s;
+	recalculateModelMatrix();
+}
+
+MeshUniformBuffer Mesh::getUniformBufferData(){
+	uniformbufferdata.diffuseuvmatrix=diffusetexture.uvmatrix;
+	uniformbufferdata.normaluvmatrix=normaltexture.uvmatrix;
+	uniformbufferdata.heightuvmatrix=heighttexture.uvmatrix;
+	return uniformbufferdata;
+}
+
 void Mesh::cleanUpVertsAndTris(){
+//	std::cout<<"cleaning up vertices of mesh @"<<this
+//	<<"\n\tremoving duplicates: "<<std::endl;
 	uint16_t dupecounter=0;
+	uint32_t precleanvertexcount=vertices.size();
 	for(int x=0;x<vertices.size();x++){
 		for(int y=0;y<x;y++){
 			if(y!=x&&vertices[x]==vertices[y]){
@@ -186,11 +415,16 @@ void Mesh::cleanUpVertsAndTris(){
 				}
 				vertices.erase(vertices.begin()+x);
 				dupecounter++;
-				std::cout<<'\r'<<dupecounter<<" duplicates removed!";
+//				std::cout<<"\r\t";
+				for(float_t perdec=0;perdec<10;perdec++){
+					if((float)x/(float)precleanvertexcount*10>perdec) std::cout<<"\u2588";
+					else std::cout<<" ";
+				}
+//				std::cout<<dupecounter<<" duplicates removed ("<<((float)dupecounter/(float)precleanvertexcount*100.0)<<"% size decrease)\n";
 			}
 		}
 	}
-	std::cout<<std::endl;
+//	std::cout<<std::endl;
 
 	bool adjacencyfound;
 	for(int x=0;x<tris.size();x++){
@@ -226,7 +460,7 @@ void Mesh::cleanUpVertsAndTris(){
 		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertexindices[1]].position-vertices[t.vertexindices[0]].position,
 		                                            vertices[t.vertexindices[2]].position-vertices[t.vertexindices[0]].position));
 	}
-}
+}       //add polished print statements here later to show process/times
 
 void Mesh::loadOBJ(const char*filepath){
 	tris=std::vector<Tri>(); vertices=std::vector<Vertex>();
@@ -283,6 +517,7 @@ void Mesh::loadOBJ(const char*filepath){
 	std::cout<<std::endl;
 
 	//any efficiency possible with breaks and stuff??
+	std::cout<<"removing duplicates: "<<ANSI_GREEN_FORE<<std::endl;
 	uint16_t dupecounter=0;
 	for(int x=0;x<vertices.size();x++){
 		for(int y=0;y<x;y++){
@@ -293,14 +528,20 @@ void Mesh::loadOBJ(const char*filepath){
 						else if(tris[z].vertexindices[w]>x) tris[z].vertexindices[w]--;
 					}
 				}
-				vertices.erase(vertices.begin()+x);
+				if(x<vertices.size()) vertices.erase(vertices.begin()+x);
 				dupecounter++;
-				std::cout<<'\r'<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(vertexindices.size())*100.0f)<<" percent size decrease!!!)";
+				std::cout<<'\r';
+				for(uint8_t bars=0;bars<50;bars++){
+					if(float(x+1)/float(vertices.size())*100.>=float(bars)*2.) std::cout<<"\u2588";
+					else std::cout<<' ';
+				}
 			}
 		}
 	}
-	std::cout<<std::endl;
+	std::cout<<ANSI_RESET_FORE<<std::endl;
+	std::cout<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(vertexindices.size())*100.0f)<<" percent size decrease!!!)"<<std::endl;
 
+	std::cout<<"finding tri adjacencies: "<<ANSI_GREEN_FORE<<std::endl;
 	bool adjacencyfound;
 	for(int x=0;x<tris.size();x++){
 		for(int y=0;y<tris.size();y++){
@@ -310,7 +551,6 @@ void Mesh::loadOBJ(const char*filepath){
 					for(int w=0;w<3;w++){
 						if(vertices[tris[x].vertexindices[z]].position==vertices[tris[y].vertexindices[w]].position){
 							tris[x].adjacencies.push_back(&tris[y]);
-//							std::cout<<"adjacency found between tri "<<x<<" and tri "<<y<<std::endl;
 							adjacencyfound=true;
 							break;
 						}
@@ -319,9 +559,14 @@ void Mesh::loadOBJ(const char*filepath){
 				}
 			}
 		}
-		std::cout<<"\rfinding adjacencies (tri "<<(x+1)<<" of "<<tris.size()<<')';
+		std::cout<<'\r';
+		for(uint8_t bars=0;bars<50;bars++){
+			if(float(x+1)/float(tris.size())*100.>=float(bars*2.)) std::cout<<"\u2588";
+			else std::cout<<' ';
+		}
+//		std::cout<<"\rfinding adjacencies (tri "<<(x+1)<<" of "<<tris.size()<<')';
 	}
-	std::cout<<std::endl;
+	std::cout<<ANSI_RESET_FORE<<std::endl;
 
 	for(uint32_t x=0;x<tris.size();x++){
 		for(uint16_t y=0;y<3;y++){
@@ -334,5 +579,12 @@ void Mesh::loadOBJ(const char*filepath){
 	for(auto&t:tris){
 		t.algebraicnormal=glm::normalize(glm::cross(vertices[t.vertexindices[1]].position-vertices[t.vertexindices[0]].position,
 		                                            vertices[t.vertexindices[2]].position-vertices[t.vertexindices[0]].position));
+	}
+
+	for(auto&v:vertices){
+		for(uint8_t x=0;x<3;x++){
+			if(v.position[x]<min[x]) min[x]=v.position[x];
+			if(v.position[x]>max[x]) max[x]=v.position[x];
+		}
 	}
 }
