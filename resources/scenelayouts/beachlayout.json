@@ -1,0 +1,43 @@
+{
+  "lights": [
+    {
+      "position": "50 50 0",
+      "forward": "-1 -1 0",
+      "intensity": 1,
+      "color": "1 1 1",
+      "shadowmapresolution": 4096,
+      "type": "sun"
+    }
+  ],
+  "meshes":[
+    {
+      "filepath": "../resources/objs/plane.obj",
+      "position": "0 0 0",
+      "scale": "1 1 1",
+      "rotation": "0 0 0 1",
+      "textures":[
+        {"type": "diffuse", "resolution": 1024, "position": "0 0", "scale": "100 100", "rotation": 0},
+        {"type": "normal", "resolution": 1024, "position": "0 0", "scale": "1 1", "rotation": 0},
+        {"type": "height", "resolution": 1024, "position": "0 0", "scale":  "1 1", "rotation": 0}
+      ]
+    },
+    {
+      "filepath": "../resources/objs/smoothhipolysuzanne.obj",
+      "position": "0 0.2 0",
+      "scale": "0.75 0.75 0.75",
+      "rotation": "-0.342898 0 0 0.939373",
+      "textures": [
+        {"type": "diffuse", "resolution": 1024, "position": "0 0", "scale": "1 1", "rotation": 0},
+        {"type": "normal", "resolution": 16, "position": "0 0", "scale": "1 1", "rotation": 0},
+        {"type": "height", "resolution": 16, "position": "0 0", "scale": "1 1", "rotation": 0}
+      ]
+    }
+  ],
+  "oceans": [
+    {
+      "position": "-5 -1 5",
+      "scale": "25 25",
+      "landscapemeshidx": 0
+    }
+  ]
+}

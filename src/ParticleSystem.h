@@ -26,31 +26,37 @@ class Particle{
 public:
 	glm::vec3 position;
 	glm::mat4 modelmatrix;
-	Particle(glm::vec3 p){
-		position=p;
+
+	Particle (glm::vec3 p){
+		position = p;
 //		modelmatrix=glm::mat4(
 //				1., 0., 0., position.x,
 //				0., 1., 0., position.y,
 //				0., 0., 1., position.z,
 //				0., 0., 0., 1.);
-		modelmatrix=glm::translate(position);
+		modelmatrix = glm::translate(position);
 	}
-	virtual void generateUniqueData(){}
-	virtual void generateTris(float seed, std::vector<Vertex>*v, std::vector<Tri>*t){
-		*v=std::vector<Vertex>();
-		*t=std::vector<Tri>();
+
+	virtual void generateUniqueData (){}
+
+	virtual void generateTris (float seed, std::vector<Vertex>*v, std::vector<Tri>*t){
+		*v = std::vector<Vertex>();
+		*t = std::vector<Tri>();
 	}
 };
+
 class GrassParticle:public Particle{
 public:
 	float length, thickness, rigidity;  //add orientation later
-	GrassParticle(glm::vec3 p):Particle(p){}
-	void generateUniqueData()override{  //move up to init?
-		length=0.5;
-		thickness=0.01;
-		rigidity=0.5;
+	GrassParticle (glm::vec3 p):Particle(p){}
+
+	void generateUniqueData () override{  //move up to init?
+		length = 0.5;
+		thickness = 0.01;
+		rigidity = 0.5;
 	}
-	void generateTris(float seed, std::vector<Vertex>*v, std::vector<Tri>*t)override{
+
+	void generateTris (float seed, std::vector<Vertex>*v, std::vector<Tri>*t) override{
 //		float templen=
 //		(*v).push_back({
 //			position+glm::vec3(thickness, 0.0, 0.0),
@@ -87,11 +93,14 @@ private:
 	VkBuffer*particleuniformbuffers;
 	VkDeviceMemory*particleuniformbuffermemories;
 
-	void distributeParticles();
-	void initDescriptorSets()override;
+	void distributeParticles ();
+
+	void initDescriptorSets () override;
+
 public:
-	ParticleSystem(ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
-	void recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds)const override;
+	ParticleSystem (ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
+
+	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds) const override;
 };
 
 #include "ParticleSystem.inl"

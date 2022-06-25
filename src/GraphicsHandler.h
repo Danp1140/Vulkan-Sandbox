@@ -1,6 +1,11 @@
-//
-// Created by Daniel Paavola on 5/30/21.
-//
+/* File: GraphicsHandler.h
+ * Author: Daniel Paavola
+ *
+ * GraphicsHandler.h is intended to handle nearly all of the direct interaction with the Vulkan API, containing numerous
+ * initialization functions and helper functions. It is designed to be referenced solely statically, as there is no
+ * reason to have more than one of any of its members. It is at the very bottom of the include tree, soas to have its
+ * member variables and classes available to nearly all other classes at any time.
+ */
 
 #ifndef SANDBOX_VIEWPORT_H
 #define SANDBOX_VIEWPORT_H
@@ -26,6 +31,8 @@
 #include <GLFW/glfw3.h>
 
 #define GLFW_INCLUDE_VULKAN
+
+#define PHI 1.618033988749
 
 #define ANSI_BLACK_FORE "\033[30m"
 #define ANSI_RED_FORE "\033[31m"
@@ -68,6 +75,8 @@ typedef enum TextureType{
 	TEXTURE_TYPE_HEIGHT,
 	TEXTURE_TYPE_CUBEMAP,
 	TEXTURE_TYPE_SHADOWMAP,
+	TEXTURE_TYPE_SUBPASS,
+	TEXTURE_TYPE_SSRR_BUFFER,
 	TEXTURE_TYPE_MAX
 }TextureType;
 
@@ -181,15 +190,16 @@ typedef struct VulkanInfo{
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
 	VkRenderPass primaryrenderpass, templateshadowrenderpass, waterrenderpass;
 	PipelineInfo primarygraphicspipeline,
-				 textgraphicspipeline,
-				 skyboxgraphicspipeline,
-				 oceangraphicspipeline,
-				 oceancomputepipeline,
-				 grassgraphicspipeline,
-				 shadowmapgraphicspipeline,
-				 texmongraphicspipeline;
+			textgraphicspipeline,
+			skyboxgraphicspipeline,
+			oceangraphicspipeline,
+			oceancomputepipeline,
+			grassgraphicspipeline,
+			shadowmapgraphicspipeline,
+			texmongraphicspipeline,
+			linegraphicspipeline;
 	VkFramebuffer*primaryframebuffers, *waterframebuffers;
-	VkClearValue clears[2];
+	VkClearValue primaryclears[2];
 	VkCommandPool commandpool;
 	VkCommandBuffer*commandbuffers, interimcommandbuffer;
 	VkSemaphore imageavailablesemaphores[MAX_FRAMES_IN_FLIGHT], renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
@@ -198,12 +208,12 @@ typedef struct VulkanInfo{
 	VkBuffer stagingbuffer;
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
-	VkDescriptorSetLayout textdescriptorsetlayout;
-	TextureInfo depthbuffer;
+	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
+	TextureInfo depthbuffer, *ssrrbuffers;
 	VkBuffer*lightuniformbuffers;
 	VkDeviceMemory*lightuniformbuffermemories;
-	//perhaps move push constants to wangling engine???
-	//figure a better way to handle these tbh
+	// perhaps move push constants to wangling engine???
+	// figure a better way to handle these tbh
 	PrimaryGraphicsPushConstants primarygraphicspushconstants;
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
@@ -218,7 +228,7 @@ typedef struct Vertex{
 	}
 }Vertex;
 
-typedef struct Tri{     //could also store an average vertex position
+typedef struct Tri{     // could also store an average vertex position
 	uint16_t vertexindices[3];
 	Vertex*vertices[3];
 	std::vector<Tri*> adjacencies;
@@ -232,7 +242,7 @@ const VkCommandBufferBeginInfo cmdbufferbegininfo{
 	nullptr
 };
 
-//ig we only really need those for that one method, we can probably put them in there...
+// ig we only really need those for that one method, we can probably put them in there...
 const VkDescriptorSetLayoutBinding scenedslbindings[2]{{
 	     0,
 	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -256,17 +266,35 @@ const VkDescriptorSetLayoutCreateInfo scenedslcreateinfo{
 
 class GraphicsHandler{
 private:
+	/* Chain of initialization functions that set up the gritty inner workings of Vulkan and GLFW, including instance,
+	 * device, queue, swapchain, descriptor pool, command pool, and pipeline initialization. Public VKInit below calls
+	 * these in sequence.
+	 */
 	static void VKSubInitWindow();
+
 	static void VKSubInitInstance();
+
 	static void VKSubInitDebug();
+
 	static void VKSubInitDevices();
+
 	static void VKSubInitQueues();
+
 	static void VKSubInitSwapchain();
+
 	static void VKSubInitRenderpasses();
-	static void VKSubInitDescriptorPool(uint32_t nummeshes);
+
+	static void VKSubInitDescriptorLayoutsAndPool(uint32_t nummeshes);
+
 	static void VKSubInitFramebuffers();
+
 	static void VKSubInitCommandPool();
+
 	static void VKSubInitSemaphoresAndFences();
+
+	/*
+	 * TODO: add params/fix this function to remove janky ternaries
+	 */
 	static void VKSubInitPipeline(
 			PipelineInfo*pipelineinfo,
 			VkShaderStageFlags shaderstages,
@@ -275,39 +303,59 @@ private:
 			VkPushConstantRange pushconstantrange,
 			VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo,
 			bool depthtest);
+
 	static void VKSubInitShaders(
 			VkShaderStageFlags stages,
 			const char**filepaths,
 			VkShaderModule**modules,
 			VkPipelineShaderStageCreateInfo**createinfos,
 			VkSpecializationInfo*specializationinfos);
+
 	static void VKSubInitDepthBuffer();
+
 public:
+	// TODO: investigate best practices for handling of these vars. must be easily accesible, but could make read-only
 	static VulkanInfo vulkaninfo;
 	static ChangeFlag*changeflags;
 	static std::stringstream troubleshootingsstrm;
-	static std::map<int, KeyInfo>keyvalues;
+	static std::map<int, KeyInfo> keyvalues;
 	static uint32_t swapchainimageindex;
-	//default/generic sampler props:
-		//min/mag filters are nearest
-		//repeat at all edges
-		//white border
-	static VkSampler genericsampler, linearminsampler, linearminmagsampler, clamptobordersampler, depthsampler;
+	/* A set of samplers to be used across descriptor set creations. Default values are nearest for min/mag filters,
+	 * repeat for all overmapping, and white border.
+	 * TODO: make new VKSubInitSamplers for these, as they are currently hiding in VKInitPipelines
+	 */
+	static VkSampler genericsampler,
+			linearminsampler,
+			linearminmagsampler,
+			clamptobordersampler,
+			depthsampler;
 
 	GraphicsHandler();
+
 	~GraphicsHandler();
+
+	/* The following two public init functions, VKInit and VKInitPipelines, call the above private init functions to
+	 * set up Vulkan's innards.
+	 * TODO: make VKInitPipelines a private VKSubInitPipelines called by public VKInit
+	 */
 	static void VKInit(uint32_t nummeshes);
+
 	static void VKInitPipelines();
-	static void VKInitShadowsFramebuffer(VkImageView*shadowmaps);
-	static VulkanInfo*getVulkanInfoPtr(){return &vulkaninfo;}
+
+	/* Below are several helper functions that serve to make processes dealing with ugly Vulkan stuff easier and
+	 * prettier.
+	 * TODO: make sure function naming and arguement types are consistent and best
+	 * TODO: add VKHelperUpdateVertexBuffer and VKHelperUpdateVertexAndIndexBuffers functions
+	 */
 	static void VKSubInitUniformBuffer(
 			VkDescriptorSet**descsets,
 			uint32_t binding,
-			VkDeviceSize elementsize,   //should p make a helper instead of subinit
+			VkDeviceSize elementsize,
 			uint32_t elementcount,
 			VkBuffer**buffers,
 			VkDeviceMemory**memories,
 			VkDescriptorSetLayout descsetlayout);
+
 	static void VKSubInitStorageBuffer(
 			VkDescriptorSet**descriptorsets,
 			uint32_t binding,
@@ -332,12 +380,27 @@ public:
 			uint32_t numlayers,
 			uint32_t rowpitch,
 			uint32_t horires, uint32_t vertres);
+
 	static void VKHelperTransitionImageLayout(
 			VkImage image,
 			uint32_t numlayers,
 			VkFormat format,
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
+
+	static void VKHelperInitVertexAndIndexBuffers(
+			const std::vector<Vertex>&vertices,
+			const std::vector<Tri>&tris,
+			VkBuffer*vertexbufferdst,
+			VkDeviceMemory*vertexbuffermemorydst,
+			VkBuffer*indexbufferdst,
+			VkDeviceMemory*indexbuffermemorydst);
+
+	static void VKHelperInitVertexBuffer(
+			const std::vector<Vertex>&vertices,
+			VkBuffer*vertexbufferdst,
+			VkDeviceMemory*vertexbuffermemorydst);
+
 	static void VKHelperInitImage(
 			TextureInfo*imgdst,
 			uint32_t horires, uint32_t vertres,
@@ -346,6 +409,7 @@ public:
 			VkImageUsageFlags usage,
 			VkImageLayout finallayout,
 			VkImageViewType imgviewtype);
+
 	static void VKHelperInitTexture(
 			TextureInfo*texturedst,
 			uint32_t horires, uint32_t vertres,
@@ -354,9 +418,6 @@ public:
 			TextureType textype,
 			VkImageViewType imgviewtype,
 			VkSampler sampler);
-	static void VKHelperUpdateWholeVisibleTexture(      //because so much information is embedded in TextureInfo, we can consolidate these and all other UpdateWholeTexture helpers (e.g. for cubemaps) (some of the code will be redundant anyways lol)
-			TextureInfo*texdst,
-			void*src);
 	static void VKHelperUpdateWholeTexture(
 			TextureInfo*texdst,
 			void*src);
@@ -365,29 +426,51 @@ public:
 			VkDeviceSize elementsize,
 			VkDeviceMemory buffermemory,
 			void*data);
+
 	static void VKHelperUpdateStorageBuffer(
 			uint32_t elementcount,
 			VkDeviceSize elementsize,
 			VkBuffer*buffer,
 			VkDeviceMemory buffermemory,
 			void*data);
+
+	static void VKHelperRecordImageTransition(
+			VkCommandBuffer cmdbuffer,
+			VkImage image,
+			VkImageLayout oldlayout,
+			VkImageLayout newlayout);
+
+	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3(glm::mat4 M, glm::vec3 v);
+
 	static void makeRectPrism(glm::vec3**dst, glm::vec3 min, glm::vec3 max);
+
 	static VkDeviceSize VKHelperGetPixelSize(VkFormat format);
+
+	/* Functions to handle Vulkan validation layers debugger creation, destruction, and behavior
+	 * TODO: reorder functions to reflect above comment's implied order
+	 */
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 			VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 			VkDebugUtilsMessageTypeFlagsEXT type,
 			const VkDebugUtilsMessengerCallbackDataEXT*callbackdata,
 			void*userdata);
+
 	static VkResult CreateDebugUtilsMessengerEXT(
 			VkInstance instance,
 			const VkDebugUtilsMessengerCreateInfoEXT*createinfo,
 			const VkAllocationCallbacks*allocator,
 			VkDebugUtilsMessengerEXT*debugutilsmessenger);
+
 	static void DestroyDebugUtilsMessengerEXT(
 			VkInstance instance,
 			VkDebugUtilsMessengerEXT debugutilsmessenger,
 			const VkAllocationCallbacks*allocator);
+
+	/* Functions dealing with GLFW.
+	 * TODO: Phase out GLFW in favor of another input handler, as GLFW causes frequent, seemingly uncontrollable crashes
+	 * The best looking alternative is SDL. May want to make this a priority, i.e. next thing to implement
+	 */
 	static void glfwErrorCallback(int error, const char*description);
 
 	static void keystrokeCallback(GLFWwindow*window, int key, int scancode, int action, int mods);

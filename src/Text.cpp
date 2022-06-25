@@ -47,10 +47,10 @@ Text::~Text(){
 	FT_Done_Face(face);
 	FT_Done_FreeType(ftlib);
 	for(uint32_t x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
-		vkDestroySampler(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].sampler, nullptr);
-		vkDestroyImageView(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].imageview, nullptr);
-		vkDestroyImage(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].image, nullptr);
-		vkFreeMemory(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, textures[x].memory, nullptr);
+		vkDestroySampler(GraphicsHandler::vulkaninfo.logicaldevice, textures[x].sampler, nullptr);
+		vkDestroyImageView(GraphicsHandler::vulkaninfo.logicaldevice, textures[x].imageview, nullptr);
+		vkDestroyImage(GraphicsHandler::vulkaninfo.logicaldevice, textures[x].image, nullptr);
+		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, textures[x].memory, nullptr);
 	}
 	delete[] descriptorsets;
 	delete[] textures;
@@ -77,7 +77,7 @@ void Text::setMessage(std::string m, uint32_t index){
 			nullptr,
 			nullptr
 	};
-	vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
+	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 }
 
 void Text::regenFaces(bool init){
@@ -90,25 +90,28 @@ void Text::regenFaces(bool init){
 			continue;
 		}
 		FT_Load_Char(face, c, FT_LOAD_DEFAULT);
-		linelengthcounter+=face->glyph->metrics.horiAdvance;
+		linelengthcounter += face->glyph->metrics.horiAdvance;
 	}
-	if(linelengthcounter>maxlinelength) maxlinelength=linelengthcounter;
+	if (linelengthcounter > maxlinelength) maxlinelength = linelengthcounter;
 //	const uint32_t hres=maxlinelength/64u, vres=numlines*face->size->metrics.height/64u;
-	const uint32_t hres=MAX_TEXTURE_WIDTH, vres=MAX_TEXTURE_HEIGHT;
-	float*texturedata=(float*)malloc(hres*vres*sizeof(float));
-	memset(&texturedata[0], 0.0f, hres*vres*sizeof(float));
-	pushconstants.scale*=glm::vec2(hres, vres);
-	glm::vec2 penposition=glm::ivec2(0, vres-face->size->metrics.ascender/64);
-	for(char c:message){
-		if(c=='\n'){
-			penposition.y-=face->size->metrics.height/64;
-			penposition.x=0;
+	const uint32_t hres = MAX_TEXTURE_WIDTH, vres = MAX_TEXTURE_HEIGHT;
+	float*texturedata = (float*)malloc(hres * vres * sizeof(float));
+	memset(&texturedata[0], 0.0f, hres * vres * sizeof(float));
+	pushconstants.scale *= glm::vec2(hres, vres);
+	glm::vec2 penposition = glm::ivec2(0, vres - face->size->metrics.ascender / 64);
+	// i legitimately do not understand how this is working so well in real time, updating every frame. it may be taking
+	// a hidden tax on performance, so still consider optimizations, as there could be some, especially if we can update
+	// only part of the texture or stream the data straight from the freetype bitmap to the gpu memory
+	for (char c:message){
+		if (c == '\n'){
+			penposition.y -= face->size->metrics.height / 64;
+			penposition.x = 0;
 			continue;
 		}
 		FT_Load_Char(face, c, FT_LOAD_RENDER);
-		if(face->glyph!=nullptr) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
-		penposition+=glm::vec2(face->glyph->metrics.horiBearingX/64, face->glyph->metrics.horiBearingY/64);
-		unsigned char*bitmapbuffer=face->glyph->bitmap.buffer;
+		if (face->glyph != nullptr) FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+		penposition += glm::vec2(face->glyph->metrics.horiBearingX / 64, face->glyph->metrics.horiBearingY / 64);
+		unsigned char*bitmapbuffer = face->glyph->bitmap.buffer;
 		uint32_t xtex=0, ytex=0;
 		for(uint32_t y=0;y<face->glyph->bitmap.rows;y++){
 			for(uint32_t x=0;x<face->glyph->bitmap.width;x++){
@@ -134,7 +137,10 @@ void Text::regenFaces(bool init){
 	}
 	else{
 		//could we just use VK_FORMAT_R8_UNORM? probably would need reformatting cause UNORM
-		GraphicsHandler::VKHelperUpdateWholeVisibleTexture(
+//		GraphicsHandler::VKHelperUpdateWholeVisibleTexture(
+//				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
+//				reinterpret_cast<void*>(texturedata));
+		GraphicsHandler::VKHelperUpdateWholeTexture(
 				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
 				reinterpret_cast<void*>(texturedata));
 	}
@@ -143,16 +149,17 @@ void Text::regenFaces(bool init){
 
 void Text::initDescriptorSet(){
 	VkDescriptorSetLayout layoutstemp[MAX_FRAMES_IN_FLIGHT];
-	for(uint32_t x=0;x<MAX_FRAMES_IN_FLIGHT;x++) layoutstemp[x]=GraphicsHandler::getVulkanInfoPtr()->textgraphicspipeline.objectdsl;
+	for (uint32_t x = 0;x < MAX_FRAMES_IN_FLIGHT;x ++)
+		layoutstemp[x] = GraphicsHandler::vulkaninfo.textgraphicspipeline.objectdsl;
 	descriptorsets=new VkDescriptorSet[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSetAllocateInfo allocinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		GraphicsHandler::getVulkanInfoPtr()->descriptorpool,
-		MAX_FRAMES_IN_FLIGHT,
-		&layoutstemp[0]
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.descriptorpool,
+			MAX_FRAMES_IN_FLIGHT,
+			&layoutstemp[0]
 	};
-	vkAllocateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, &allocinfo, &descriptorsets[0]);
+	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &allocinfo, &descriptorsets[0]);
 	for(uint32_t x=0;x<MAX_FRAMES_IN_FLIGHT;x++){
 		VkDescriptorImageInfo imginfo=textures[x].getDescriptorImageInfo();
 		VkWriteDescriptorSet write{
@@ -167,7 +174,7 @@ void Text::initDescriptorSet(){
 			nullptr,
 			nullptr
 		};
-		vkUpdateDescriptorSets(GraphicsHandler::getVulkanInfoPtr()->logicaldevice, 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 	}
 }           //perhaps make a more general version of this as a VKHelper, cause we're doing this in a couple places
 

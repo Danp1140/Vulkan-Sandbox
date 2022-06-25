@@ -40,6 +40,10 @@ void main(){
         gl_TessLevelOuter[1]=max(int(B/PIXELS_PER_EDGE), 1);
         gl_TessLevelOuter[2]=max(int(C/PIXELS_PER_EDGE), 1);
         gl_TessLevelInner[0]=max(int(R/PIXELS_PER_FACE), 1);
+//        gl_TessLevelOuter[0]=1;
+//        gl_TessLevelOuter[1]=1;
+//        gl_TessLevelOuter[2]=1;
+//        gl_TessLevelInner[0]=1;
     }
 ////    if(gl_InvocationID==0){
 ////        gl_TessLevelOuter[2]=max(int(10.0/length(constants.camerapos-(gl_in[0].gl_Position.xyz+gl_in[1].gl_Position.xyz)/2)), 1);

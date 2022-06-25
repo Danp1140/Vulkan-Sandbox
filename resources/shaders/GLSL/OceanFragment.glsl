@@ -27,7 +27,6 @@ layout(set=0, binding=0) uniform LightUniformBuffer{
 }lightuniformbuffer[MAX_LIGHTS];
 layout(set=0, binding=1) uniform samplerCube environmentsampler;
 layout(set=1, binding=1) uniform sampler2D normalsampler;
-layout(set=1, binding=2) uniform sampler2D screensampler;
 
 layout(location=0) out vec4 color;
 
@@ -58,5 +57,4 @@ void main() {
 
     color=fresnel*texture(environmentsampler, ref);
     color.a=1./fresnel;
-    color=texture(screensampler, gl_FragCoord.xy);
 }

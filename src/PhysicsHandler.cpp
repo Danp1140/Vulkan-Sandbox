@@ -5,7 +5,6 @@
 #include "PhysicsHandler.h"
 
 PhysicsHandler::PhysicsHandler(){
-	currentland=nullptr;
 	standingtri=nullptr;
 	standinguv=glm::vec2(0.0f, 0.0f);
 	camera=nullptr;
@@ -19,17 +18,16 @@ PhysicsHandler::PhysicsHandler(){
 	lasttime=std::chrono::high_resolution_clock::now();
 }
 
-PhysicsHandler::PhysicsHandler(Mesh*cl, Camera*c){
-	currentland=cl;
-	standingtri=nullptr;
-	standinguv=glm::vec2(0.0f, 0.0f);
-	camera=c;
-	cameraPO={
-		camera->getPosition(),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		0.0f
+PhysicsHandler::PhysicsHandler (Camera*c){
+	standingtri = nullptr;
+	standinguv = glm::vec2(0.0f, 0.0f);
+	camera = c;
+	cameraPO = {
+			camera->getPosition(),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			0.0f
 	};
 	lasttime=std::chrono::high_resolution_clock::now();
 }
@@ -84,47 +82,66 @@ bool PhysicsHandler::cylinderTriIntersection(Tri tri, glm::vec3 cylinderorigin, 
 	return false;
 }
 
-void PhysicsHandler::updateStandingTri(){
+glm::vec3 PhysicsHandler::catmullRomSplineAtMatrified (
+		const std::vector<glm::vec3>&controlpoints,
+		size_t p1index,
+		float_t tau,
+		float_t u){
+	glm::vec4 uT = glm::vec4(1., u, pow(u, 2.), pow(u, 3.));
+	glm::mat4 M = glm::transpose(glm::mat4(0., 1., 0., 0.,
+	                                       - tau, 0., tau, 0.,
+	                                       2. * tau, tau - 3., 3. - 2. * tau, - tau,
+	                                       - tau, 2. - tau, tau - 2., tau));
+	glm::mat3x4 p = glm::transpose(glm::mat4x3(controlpoints[p1index - 1],
+	                                           controlpoints[p1index],
+	                                           controlpoints[p1index + 1],
+	                                           controlpoints[p1index + 2]));
+	return uT * M * p;
+}
+
+void PhysicsHandler::updateStandingTri (const std::vector<Tri>&land){
 	//this method doesn't factor in triangles stacked upon each other, but thats a bit more expensive, and not a likely problem
 	//if it becomes a problem we'll just add a dollar-store depth buffer in here and check more tris
-	const std::vector<Vertex> vertices=currentland->getVertices();
-	if(standingtri==nullptr){
-		for(auto&t:*currentland->getTrisPtr()){
+	if (standingtri == nullptr){
+		for (const Tri&t:land){
 			//is allocation expensive? we could place it outside the for loop, or even outside the if checks
-			glm::vec3 temparray[3]={vertices[t.vertexindices[0]].position, vertices[t.vertexindices[1]].position, vertices[t.vertexindices[2]].position};
-			if(triIntersectionNoY(temparray, cameraPO.position)){
-				standingtri=&t;
+			glm::vec3 temparray[3] = {t.vertices[0]->position, t.vertices[1]->position, t.vertices[2]->position};
+			if (triIntersectionNoY(temparray, cameraPO.position)){
+				standingtri = &t;
 				return;
 			}
 		}
 		return;
 	}
-	glm::vec3 temparray[3]={vertices[standingtri->vertexindices[0]].position, vertices[standingtri->vertexindices[1]].position, vertices[standingtri->vertexindices[2]].position};
+	glm::vec3 temparray[3] = {standingtri->vertices[0]->position, standingtri->vertices[1]->position,
+	                          standingtri->vertices[2]->position};
 	//is there a more efficient calculation method that involves detecting edge cross via difference in camera position?
 	if(triIntersectionNoY(temparray, cameraPO.position)) return;
 	for(auto&t:standingtri->adjacencies){
-		temparray[0]=vertices[t->vertexindices[0]].position; temparray[1]=vertices[t->vertexindices[1]].position; temparray[2]=vertices[t->vertexindices[2]].position;
-		if(triIntersectionNoY(temparray, cameraPO.position)){
-			standingtri=t;
+		temparray[0] = t->vertices[0]->position;
+		temparray[1] = t->vertices[1]->position;
+		temparray[2] = t->vertices[2]->position;
+		if (triIntersectionNoY(temparray, cameraPO.position)){
+			standingtri = t;
 			return;
 		}
 	}
 	standingtri=nullptr;
 }
 
-void PhysicsHandler::updateCameraPos(){
+void PhysicsHandler::updateCameraPos (const std::vector<Tri>&land){
 	//need to take a step back and clean this up sometime
 	//probably some early escapes we could use
-	if(standingtri!=nullptr){
+	if (standingtri != nullptr){
 		//do we /really/ need to calculate this again???
 		//could probably store this in physicshander or physicsobject
-		float triintersectiony=
-				(-standingtri->algebraicnormal.x*
-				 (cameraPO.position.x-currentland->getVertices()[standingtri->vertexindices[0]].position.x)
-				 -standingtri->algebraicnormal.z*
-				  (cameraPO.position.z-currentland->getVertices()[standingtri->vertexindices[0]].position.z))
-				/standingtri->algebraicnormal.y+currentland->getVertices()[standingtri->vertexindices[0]].position.y;
-		glm::vec3 collision=glm::vec3(camera->getPosition().x, triintersectiony, camera->getPosition().z);
+		float triintersectiony =
+				(- standingtri->algebraicnormal.x *
+				 (cameraPO.position.x - standingtri->vertices[0]->position.x)
+				 - standingtri->algebraicnormal.z *
+				   (cameraPO.position.z - standingtri->vertices[0]->position.z))
+				/ standingtri->algebraicnormal.y + standingtri->vertices[0]->position.y;
+		glm::vec3 collision = glm::vec3(camera->getPosition().x, triintersectiony, camera->getPosition().z);
 		//notably, this method disallows the preservation of walking momentum in air
 		//to remedy i think we gotta store the value outside of the function's scope (up in PhysicsHandler somewhere...)
 		glm::vec3 walkingvelocity=glm::vec3(0.0f), gravityacceleration=glm::vec3(0.0f);
@@ -158,15 +175,15 @@ void PhysicsHandler::updateCameraPos(){
 		cameraPO.position+=(cameraPO.velocity*dt+walkingvelocity*dt*5.0f)+(0.5f*(cameraPO.acceleration+gravityacceleration)*pow(dt, 2));
 		cameraPO.velocity+=(cameraPO.acceleration+gravityacceleration)*dt;
 
-		updateStandingTri();
+		updateStandingTri(land);
 		//redundant computation???
 		if(standingtri!=nullptr){
-			triintersectiony=
-					(-standingtri->algebraicnormal.x*
-					 (cameraPO.position.x-currentland->getVertices()[standingtri->vertexindices[0]].position.x)
-					 -standingtri->algebraicnormal.z*
-					  (cameraPO.position.z-currentland->getVertices()[standingtri->vertexindices[0]].position.z))
-					/standingtri->algebraicnormal.y+currentland->getVertices()[standingtri->vertexindices[0]].position.y;
+			triintersectiony =
+					(- standingtri->algebraicnormal.x *
+					 (cameraPO.position.x - standingtri->vertices[0]->position.x)
+					 - standingtri->algebraicnormal.z *
+					   (cameraPO.position.z - standingtri->vertices[0]->position.z))
+					/ standingtri->algebraicnormal.y + standingtri->vertices[0]->position.y;
 			//maybe use cameraPO for this one instead of camera->getPosition()
 			collision=glm::vec3(cameraPO.position.x, triintersectiony, cameraPO.position.z);
 			if(cameraPO.position.y<triintersectiony){
@@ -180,15 +197,15 @@ void PhysicsHandler::updateCameraPos(){
 				//very likely a more efficient, but more manual way to do this
 				//would still like to figure out why passing collision here didn't work, but cameraPO did
 				//and furthermore why they aren't actually equal, despite their y components seeming to be
-				barycentricvalues[x]=glm::length(
-						glm::cross(cameraPO.position-currentland->getVertices()[standingtri->vertexindices[(x+1)%3]].position,
-						           currentland->getVertices()[standingtri->vertexindices[(x+2)%3]].position-
-						           currentland->getVertices()[standingtri->vertexindices[(x+1)%3]].position));
+				barycentricvalues[x] = glm::length(
+						glm::cross(cameraPO.position - standingtri->vertices[(x + 1) % 3]->position,
+						           standingtri->vertices[(x + 2) % 3]->position -
+						           standingtri->vertices[(x + 1) % 3]->position));
 			}
 			barycentricvalues/=(barycentricvalues[0]+barycentricvalues[1]+barycentricvalues[2]);
 			standinguv=glm::vec2(0, 0);
 			for(uint32_t x=0;x<3;x++){
-				standinguv+=currentland->getVertices()[standingtri->vertexindices[x]].uv*barycentricvalues[x];
+				standinguv += standingtri->vertices[x]->uv * barycentricvalues[x];
 			}
 		}
 
@@ -206,15 +223,14 @@ void PhysicsHandler::updateCameraPos(){
 //		GraphicsHandler::troubleshootingsstrm<<"camera PO position: "<<SHIFT_TRIPLE(cameraPO.position)<<'\n';
 //		GraphicsHandler::troubleshootingsstrm<<"velocity: "<<SHIFT_TRIPLE(cameraPO.velocity)<<'\n';
 //		GraphicsHandler::troubleshootingsstrm<<"acceleration: "<<SHIFT_TRIPLE(cameraPO.acceleration)<<'\n';
-	}
-	else updateStandingTri();
+	}else updateStandingTri(land);
 }
 
-void PhysicsHandler::update(){
-	dt=std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-lasttime).count();
-	lasttime=std::chrono::high_resolution_clock::now();
+void PhysicsHandler::update (const std::vector<Tri>&land){
+	dt = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - lasttime).count();
+	lasttime = std::chrono::high_resolution_clock::now();
 	//should the lasttime reset go here???
-	updateCameraPos();
+	updateCameraPos(land);
 }
 
 glm::vec3 PhysicsHandler::getWindVelocity(glm::vec3 p){

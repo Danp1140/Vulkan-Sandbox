@@ -44,17 +44,23 @@ Ocean::Ocean(glm::vec3 pos, glm::vec2 b, Mesh*s): Mesh(pos){
 	                                   VK_IMAGE_LAYOUT_GENERAL,
 									   VK_IMAGE_VIEW_TYPE_2D);
 
-	glm::vec4*datatemp=(glm::vec4*)malloc(512*512*sizeof(glm::vec4));
-	memset((void*)datatemp, 0, 512*512*sizeof(glm::vec4));
+	glm::vec4*datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
+	memset((void*)datatemp, 0, 512 * 512 * sizeof(glm::vec4));
 	GraphicsHandler::VKHelperInitTexture(&normalmap,
 	                                     2048, 0,
 	                                     VK_FORMAT_R32G32B32A32_SFLOAT,
 	                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 	                                     TEXTURE_TYPE_NORMAL,
 	                                     VK_IMAGE_VIEW_TYPE_2D,
-										 GraphicsHandler::genericsampler);
+	                                     GraphicsHandler::genericsampler);
 	free(datatemp);
-	updateBuffers();
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
+			vertices,
+			tris,
+			&vertexbuffer,
+			&vertexbuffermemory,
+			&indexbuffer,
+			&indexbuffermemory);
 	initComputeCommandBuffers();
 	initDescriptorSets();
 }
@@ -140,15 +146,17 @@ void Ocean::renderDepthMap(Mesh*seabed){
 }
 
 void Ocean::initDescriptorSets(){
-	//note that the top part of this init is gonna be redundant with the mesh-side init
+	// note that the top part of this init is gonna be redundant with the mesh-side init
+	// so this looks like a double-init with the Mesh constructor, which could be causing the issues we're seeing
 	VkDescriptorSetLayout dsltemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for(unsigned char x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) dsltemp[x]=GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl;
+	for (unsigned char x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++)
+		dsltemp[x] = GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl;
 	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		GraphicsHandler::vulkaninfo.descriptorpool,
-		GraphicsHandler::vulkaninfo.numswapchainimages,
-		&dsltemp[0]
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.descriptorpool,
+			GraphicsHandler::vulkaninfo.numswapchainimages,
+			&dsltemp[0]
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
 	computedescriptorsets=new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
@@ -216,9 +224,9 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 	VkCommandBufferInheritanceInfo cmdbufinherinfo{
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			GraphicsHandler::vulkaninfo.waterrenderpass,
+			GraphicsHandler::vulkaninfo.primaryrenderpass,
 			0,
-			GraphicsHandler::vulkaninfo.waterframebuffers[sciindex],
+			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
 			VK_FALSE,
 			0,
 			0
@@ -230,6 +238,7 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 			&cmdbufinherinfo
 	};
 	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+
 	vkCmdBindPipeline(
 			commandbuffers[fifindex],
 			VK_PIPELINE_BIND_POINT_GRAPHICS,

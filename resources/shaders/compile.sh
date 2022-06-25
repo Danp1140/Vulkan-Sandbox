@@ -23,9 +23,15 @@ echo "compiling grass shaders"
 echo "compiling shadowmap shaders"
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/ShadowmapVertex.glsl -o SPIRV/shadowmapvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/ShadowmapFragment.glsl -o SPIRV/shadowmapfrag.spv
-echo "compiiling texmon shaders"
+echo "compiling texmon shaders"
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/TexMonVertex.glsl -o SPIRV/texmonvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/TexMonFragment.glsl -o SPIRV/texmonfrag.spv
+echo "compiling line shaders"
+/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/LineVertex.glsl -o SPIRV/linevert.spv
+/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/LineFragment.glsl -o SPIRV/linefrag.spv
+echo "compiling compositing shaders"
+/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/CompositingVertex.glsl -o SPIRV/compositingvert.spv
+/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/CompositingFragment.glsl -o SPIRV/compositingfrag.spv
 
 #od -x SPIRV/shadowmapfrag.spv
 

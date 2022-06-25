@@ -166,10 +166,8 @@ void Light::recalculateViewMatrix(){
 	}
 	shadowpushconstants={projectionmatrix*viewmatrix, shadowpushconstants.lspmatrix};
 }
+
 void Light::recalculateLSPSMMatrix(glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3*b, uint8_t numb){
-	//----------------------------
-	//----------------------------
-	// this area has gotten *very* bloated, so i'm gonna rewrite it cleaner up here.
 	glm::mat4 lspsmmatrix;
 	if(shadowtype==SHADOW_TYPE_UNIFORM){lspsmmatrix=glm::mat4(1.);}
 	else{
@@ -201,8 +199,6 @@ void Light::recalculateLSPSMMatrix(glm::vec3 cameraforward, glm::vec3 camerapos,
 			}
 		}
 		glm::vec3 lsppos=P+v*t;
-		GraphicsHandler::troubleshootingsstrm<<SHIFT_TRIPLE(lsppos)<<std::endl;
-		GraphicsHandler::troubleshootingsstrm<<"t: "<<t<<std::endl;
 		// initial definition of lsp matrices defining lsp frustum
 		lspprojection=glm::frustum<float>(-1., 1., -1., 1., t, t-0.5);
 		lspview=glm::lookAt(lsppos,
@@ -213,8 +209,6 @@ void Light::recalculateLSPSMMatrix(glm::vec3 cameraforward, glm::vec3 camerapos,
 	}
 	// final insertion of matrices into push constants for rendering
 	shadowpushconstants={projectionmatrix*viewmatrix, lspsmmatrix};
-	//----------------------------
-	//----------------------------
 }
 
 void Light::setPosition(glm::vec3 p){
