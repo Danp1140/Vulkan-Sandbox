@@ -26,13 +26,10 @@
 #include <png/png.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan/vk_enum_string_helper.h>
-//#include <vulkan/vulkan/vulkan_macos.h>
 #include <glm/ext.hpp>
 #include <GLFW/glfw3.h>
 
 #define GLFW_INCLUDE_VULKAN
-
-#define PHI 1.618033988749
 
 #define ANSI_BLACK_FORE "\033[30m"
 #define ANSI_RED_FORE "\033[31m"
@@ -49,10 +46,11 @@
 #define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
 
 #define MAX_FRAMES_IN_FLIGHT 6
-#define VULKAN_SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
-#define VULKAN_MAX_LIGHTS 2
-#define VULKAN_NUM_SHADER_STAGES_SUPPORTED 5
-const VkShaderStageFlagBits supportedshaderstages[VULKAN_NUM_SHADER_STAGES_SUPPORTED]={
+// TODO: get rid of VULKAN_ on these names
+#define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
+#define MAX_LIGHTS 2
+#define NUM_SHADER_STAGES_SUPPORTED 5
+const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED]={
 		VK_SHADER_STAGE_COMPUTE_BIT,
 		VK_SHADER_STAGE_VERTEX_BIT,
 		VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -60,12 +58,10 @@ const VkShaderStageFlagBits supportedshaderstages[VULKAN_NUM_SHADER_STAGES_SUPPO
 		VK_SHADER_STAGE_FRAGMENT_BIT};
 
 typedef enum ChangeFlagBits{
-	NO_CHANGE_FLAG_BIT                =0x00000000,
-	CAMERA_LOOK_CHANGE_FLAG_BIT       =0x00000001,
-	CAMERA_POSITION_CHANGE_FLAG_BIT   =0x00000002,
-	LIGHT_CHANGE_FLAG_BIT             =0x00000004,
-	MESH_CHANGE_FLAG_BIT              =0x00000008,
-	TEXT_CHANGE_FLAG_BIT              =0x00000010
+	NO_CHANGE_FLAG_BIT=0x00000000,
+	CAMERA_LOOK_CHANGE_FLAG_BIT=0x00000001,
+	CAMERA_POSITION_CHANGE_FLAG_BIT=0x00000002,
+	LIGHT_CHANGE_FLAG_BIT=0x00000004,
 }ChangeFlagBits;
 typedef int ChangeFlag;
 
@@ -95,13 +91,15 @@ typedef struct TextureInfo{
 private:
 	glm::vec2 scale, position;
 	float rotation;
+
 	void updateUVMatrix(){
 		uvmatrix=glm::mat4(
-				 scale.x*cos(rotation), scale.y*sin(rotation), position.x, 0,
+				scale.x*cos(rotation), scale.y*sin(rotation), position.x, 0,
 				-scale.x*sin(rotation), scale.y*cos(rotation), position.y, 0,
-				         0            ,        0             ,     1     , 0,
-				         0            ,        0             ,     0     , 0);
+				0, 0, 1, 0,
+				0, 0, 0, 0);
 	}
+
 public:
 	VkImage image;
 	VkDeviceMemory memory;
@@ -113,17 +111,21 @@ public:
 	VkMemoryPropertyFlags memoryprops;
 	TextureType type;
 	glm::mat3 uvmatrix;
-	VkDescriptorImageInfo getDescriptorImageInfo()const{ //consider making function inline???
+
+	VkDescriptorImageInfo getDescriptorImageInfo() const{
 		return {sampler, imageview, layout};
 	}
+
 	void setUVScale(glm::vec2 s){
 		scale=s;
 		updateUVMatrix();
 	}
+
 	void setUVRotation(float r){
 		rotation=r;
 		updateUVMatrix();
 	}
+
 	void setUVPosition(glm::vec2 p){
 		position=p;
 		updateUVMatrix();
@@ -143,7 +145,7 @@ typedef struct TextPushConstants{
 }TextPushConstants;
 
 typedef struct SkyboxPushConstants{
-	glm::mat4 cameravpmatrices;     //technically may be able to represent data simply via projection matrix and forward vector, but that's an optimization for later
+	glm::mat4 cameravpmatrices;
 	alignas(16) glm::vec3 sunposition;
 }SkyboxPushConstants;
 
@@ -168,9 +170,9 @@ typedef struct LightUniformBuffer{
 
 typedef struct MeshUniformBuffer{
 	glm::mat4 modelmatrix,
-		diffuseuvmatrix,
-		normaluvmatrix,
-		heightuvmatrix;
+			diffuseuvmatrix,
+			normaluvmatrix,
+			heightuvmatrix;
 }MeshUniformBuffer;
 
 typedef struct VulkanInfo{
@@ -218,17 +220,18 @@ typedef struct VulkanInfo{
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;
-} VulkanInfo;
+}VulkanInfo;
 
 typedef struct Vertex{
 	glm::vec3 position, normal;
 	glm::vec2 uv;
-	inline bool operator==(const Vertex&rhs){
+
+	inline bool operator==(const Vertex&rhs) const{
 		return (this->position==rhs.position&&this->normal==rhs.normal&&this->uv==rhs.uv);
 	}
 }Vertex;
 
-typedef struct Tri{     // could also store an average vertex position
+typedef struct Tri{
 	uint16_t vertexindices[3];
 	Vertex*vertices[3];
 	std::vector<Tri*> adjacencies;
@@ -236,25 +239,26 @@ typedef struct Tri{     // could also store an average vertex position
 }Tri;
 
 const VkCommandBufferBeginInfo cmdbufferbegininfo{
-	VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-	nullptr,
-	0,
-	nullptr
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		0,
+		nullptr
 };
 
-// ig we only really need those for that one method, we can probably put them in there...
 const VkDescriptorSetLayoutBinding scenedslbindings[2]{{
-	     0,
-	     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-	     VULKAN_MAX_LIGHTS,
-	     VK_SHADER_STAGE_FRAGMENT_BIT|VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-	     nullptr
-	 }, {
-		 1,
-	     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	     1,
-	     VK_SHADER_STAGE_FRAGMENT_BIT,
-	     nullptr}};
+		                                                       0,
+		                                                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		                                                       MAX_LIGHTS,
+		                                                       VK_SHADER_STAGE_FRAGMENT_BIT|
+		                                                       VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+		                                                       nullptr
+                                                       },
+                                                       {
+		                                                       1,
+		                                                       VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		                                                       1,
+		                                                       VK_SHADER_STAGE_FRAGMENT_BIT,
+		                                                       nullptr}};
 
 const VkDescriptorSetLayoutCreateInfo scenedslcreateinfo{
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -291,6 +295,8 @@ private:
 	static void VKSubInitCommandPool();
 
 	static void VKSubInitSemaphoresAndFences();
+
+	static void VKSubInitSamplers();
 
 	/*
 	 * TODO: add params/fix this function to remove janky ternaries
@@ -363,16 +369,19 @@ public:
 			uint32_t elementcount,
 			VkBuffer**buffers,
 			VkDeviceMemory**memories);
+
 	static void VKHelperCreateAndAllocateBuffer(
 			VkBuffer*buffer,
 			VkDeviceSize buffersize,
 			VkBufferUsageFlags bufferusage,
 			VkDeviceMemory*buffermemory,
 			VkMemoryPropertyFlags reqprops);
+
 	static void VKHelperCpyBufferToBuffer(
 			VkBuffer*src,
 			VkBuffer*dst,
 			VkDeviceSize size);
+
 	static void VKHelperCpyBufferToImage(
 			VkBuffer*src,
 			VkImage*dst,
@@ -418,9 +427,11 @@ public:
 			TextureType textype,
 			VkImageViewType imgviewtype,
 			VkSampler sampler);
+
 	static void VKHelperUpdateWholeTexture(
 			TextureInfo*texdst,
 			void*src);
+
 	static void VKHelperUpdateUniformBuffer(
 			uint32_t elementcount,
 			VkDeviceSize elementsize,

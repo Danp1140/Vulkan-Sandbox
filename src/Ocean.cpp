@@ -4,44 +4,45 @@
 
 #include "Ocean.h"
 
-Ocean::Ocean(glm::vec3 pos, glm::vec2 b, Mesh*s): Mesh(pos){
-	bounds=b;
-	shore=s;
-	float subdivwidth=1.0/(float)OCEAN_PRE_TESS_SUBDIV;
-	glm::vec2 dbounds=bounds/(float)OCEAN_PRE_TESS_SUBDIV;
-	for(uint16_t y=0;y<OCEAN_PRE_TESS_SUBDIV+1;y++){
-		for(uint16_t x=0;x<OCEAN_PRE_TESS_SUBDIV+1;x++){
-			vertices.push_back({pos+glm::vec3(dbounds.x*x, 0.0, dbounds.y*y), glm::vec3(0.0, 1.0, 0.0), glm::vec2(x*subdivwidth, y*subdivwidth)});
+Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos) {
+	bounds = b;
+	shore = s;
+	float subdivwidth = 1.0 / (float)OCEAN_PRE_TESS_SUBDIV;
+	glm::vec2 dbounds = bounds / (float)OCEAN_PRE_TESS_SUBDIV;
+	for (uint16_t y = 0; y < OCEAN_PRE_TESS_SUBDIV + 1; y++) {
+		for (uint16_t x = 0; x < OCEAN_PRE_TESS_SUBDIV + 1; x++) {
+			vertices.push_back({pos + glm::vec3(dbounds.x * x, 0.0, dbounds.y * y), glm::vec3(0.0, 1.0, 0.0),
+									   glm::vec2(x * subdivwidth, y * subdivwidth)});
 		}
 	}
-	for(uint16_t y=0;y<OCEAN_PRE_TESS_SUBDIV;y++){
-		for(uint16_t x=0;x<OCEAN_PRE_TESS_SUBDIV;x++){
+	for (uint16_t y = 0; y < OCEAN_PRE_TESS_SUBDIV; y++) {
+		for (uint16_t x = 0; x < OCEAN_PRE_TESS_SUBDIV; x++) {
 			tris.push_back({});
-			tris.back().vertexindices[0]=(OCEAN_PRE_TESS_SUBDIV+1)*y+x;
-			tris.back().vertexindices[1]=(OCEAN_PRE_TESS_SUBDIV+1)*(y+1)+x;
-			tris.back().vertexindices[2]=(OCEAN_PRE_TESS_SUBDIV+1)*(y+1)+x+1;
+			tris.back().vertexindices[0] = (OCEAN_PRE_TESS_SUBDIV + 1) * y + x;
+			tris.back().vertexindices[1] = (OCEAN_PRE_TESS_SUBDIV + 1) * (y + 1) + x;
+			tris.back().vertexindices[2] = (OCEAN_PRE_TESS_SUBDIV + 1) * (y + 1) + x + 1;
 			tris.push_back({});
-			tris.back().vertexindices[0]=(OCEAN_PRE_TESS_SUBDIV+1)*(y+1)+x+1;
-			tris.back().vertexindices[1]=(OCEAN_PRE_TESS_SUBDIV+1)*y+x+1;
-			tris.back().vertexindices[2]=(OCEAN_PRE_TESS_SUBDIV+1)*y+x;
+			tris.back().vertexindices[0] = (OCEAN_PRE_TESS_SUBDIV + 1) * (y + 1) + x + 1;
+			tris.back().vertexindices[1] = (OCEAN_PRE_TESS_SUBDIV + 1) * y + x + 1;
+			tris.back().vertexindices[2] = (OCEAN_PRE_TESS_SUBDIV + 1) * y + x;
 		}
 	}
 	cleanUpVertsAndTris();
 	//consider using smaller formats
 	GraphicsHandler::VKHelperInitImage(&heightmap,
-	                                   512, 512,
-	                                   VK_FORMAT_R32_SFLOAT,
-	                                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	                                   VK_IMAGE_USAGE_STORAGE_BIT|VK_IMAGE_USAGE_SAMPLED_BIT,
-	                                   VK_IMAGE_LAYOUT_GENERAL,
+									   512, 512,
+									   VK_FORMAT_R32_SFLOAT,
+									   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+									   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+									   VK_IMAGE_LAYOUT_GENERAL,
 									   VK_IMAGE_VIEW_TYPE_2D);
 	GraphicsHandler::VKHelperInitImage(&velocitymap,
-	                                   512,
-	                                   512,
-	                                   VK_FORMAT_R32G32B32A32_SFLOAT,
-	                                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	                                   VK_IMAGE_USAGE_STORAGE_BIT,
-	                                   VK_IMAGE_LAYOUT_GENERAL,
+									   512,
+									   512,
+									   VK_FORMAT_R32G32B32A32_SFLOAT,
+									   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+									   VK_IMAGE_USAGE_STORAGE_BIT,
+									   VK_IMAGE_LAYOUT_GENERAL,
 									   VK_IMAGE_VIEW_TYPE_2D);
 
 	glm::vec4*datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
@@ -65,7 +66,7 @@ Ocean::Ocean(glm::vec3 pos, glm::vec2 b, Mesh*s): Mesh(pos){
 	initDescriptorSets();
 }
 
-void Ocean::renderDepthMap(Mesh*seabed){
+void Ocean::renderDepthMap (Mesh* seabed) {
 	vkQueueWaitIdle(GraphicsHandler::vulkaninfo.graphicsqueue);
 
 	GraphicsHandler::VKHelperInitTexture(
@@ -78,14 +79,14 @@ void Ocean::renderDepthMap(Mesh*seabed){
 			GraphicsHandler::depthsampler);
 
 	VkFramebuffer framebuffertemp;
-	VkFramebufferCreateInfo fbci{
-		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-		nullptr,
-		0,
-		GraphicsHandler::vulkaninfo.templateshadowrenderpass,
-		1,
-		&seabeddepthmap.imageview,
-		256, 256, 1 //can crank this, but dont need to, sampling is limited accuracy
+	VkFramebufferCreateInfo fbci {
+			VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			nullptr,
+			0,
+			GraphicsHandler::vulkaninfo.templateshadowrenderpass,
+			1,
+			&seabeddepthmap.imageview,
+			256, 256, 1 //can crank this, but dont need to, sampling is limited accuracy
 	};
 	vkCreateFramebuffer(
 			GraphicsHandler::vulkaninfo.logicaldevice,
@@ -93,10 +94,10 @@ void Ocean::renderDepthMap(Mesh*seabed){
 			nullptr,
 			&framebuffertemp);
 
-	glm::mat4 projtemp=glm::ortho<float>(-10., 10., -10., 10., 0., 10.);
-	projtemp[1][1]*=-1;
-	ShadowmapPushConstants temppcs{
-		projtemp*glm::lookAt(glm::vec3(0., 5., 0.), glm::vec3(0., -1., 0.), glm::vec3(0., 0., 1.))
+	glm::mat4 projtemp = glm::ortho<float>(-10., 10., -10., 10., 0., 10.);
+	projtemp[1][1] *= -1;
+	ShadowmapPushConstants temppcs {
+			projtemp * glm::lookAt(glm::vec3(0., 5., 0.), glm::vec3(0., -1., 0.), glm::vec3(0., 0., 1.))
 	};
 	seabed->recordShadowDraw(0, 0,
 							 GraphicsHandler::vulkaninfo.templateshadowrenderpass,
@@ -104,29 +105,30 @@ void Ocean::renderDepthMap(Mesh*seabed){
 							 0,
 							 &temppcs);
 
-	VkCommandBufferBeginInfo cmdbuffbi{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		nullptr,
-		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-		nullptr
+	VkCommandBufferBeginInfo cmdbuffbi {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			nullptr
 	};
 	vkBeginCommandBuffer(GraphicsHandler::vulkaninfo.interimcommandbuffer, &cmdbuffbi);
-	VkClearValue cleartemp={0.};
-	VkRenderPassBeginInfo renderpassbi{
-		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		nullptr,
-		GraphicsHandler::vulkaninfo.templateshadowrenderpass,
-		framebuffertemp,
-		{{0, 0}, {256, 256}},
-		1,
-		&cleartemp
+	VkClearValue cleartemp = {0.};
+	VkRenderPassBeginInfo renderpassbi {
+			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.templateshadowrenderpass,
+			framebuffertemp,
+			{{0, 0}, {256, 256}},
+			1,
+			&cleartemp
 	};
-	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.interimcommandbuffer, &renderpassbi, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.interimcommandbuffer, &renderpassbi,
+						 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.interimcommandbuffer, 1, &seabed->getShadowCommandBuffers()[0][0]);
 	vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.interimcommandbuffer);
 	vkEndCommandBuffer(GraphicsHandler::vulkaninfo.interimcommandbuffer);
 
-	VkSubmitInfo subinfo{
+	VkSubmitInfo subinfo {
 			VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			nullptr,
 			0,
@@ -142,16 +144,18 @@ void Ocean::renderDepthMap(Mesh*seabed){
 
 //	vkDestroyFramebuffer(GraphicsHandler::vulkaninfo.logicaldevice, framebuffertemp, nullptr);
 
-	GraphicsHandler::VKHelperTransitionImageLayout(seabeddepthmap.image, 1, VK_FORMAT_D32_SFLOAT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	GraphicsHandler::VKHelperTransitionImageLayout(seabeddepthmap.image, 1, VK_FORMAT_D32_SFLOAT,
+												   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+												   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
-void Ocean::initDescriptorSets(){
+void Ocean::initDescriptorSets () {
 	// note that the top part of this init is gonna be redundant with the mesh-side init
 	// so this looks like a double-init with the Mesh constructor, which could be causing the issues we're seeing
 	VkDescriptorSetLayout dsltemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (unsigned char x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++)
+	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
 		dsltemp[x] = GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl;
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.descriptorpool,
@@ -159,27 +163,29 @@ void Ocean::initDescriptorSets(){
 			&dsltemp[0]
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
-	computedescriptorsets=new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for(unsigned char x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++) dsltemp[x]=GraphicsHandler::vulkaninfo.oceancomputepipeline.objectdsl;
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo, &computedescriptorsets[0]);
+	computedescriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
+	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
+		dsltemp[x] = GraphicsHandler::vulkaninfo.oceancomputepipeline.objectdsl;
+	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo,
+							 &computedescriptorsets[0]);
 }
 
-void Ocean::initComputeCommandBuffers(){
-	computecommandbuffers=new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		nullptr,
-		GraphicsHandler::vulkaninfo.commandpool,
-		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-		MAX_FRAMES_IN_FLIGHT
+void Ocean::initComputeCommandBuffers () {
+	computecommandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
+	VkCommandBufferAllocateInfo cmdbufallocinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.commandpool,
+			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+			MAX_FRAMES_IN_FLIGHT
 	};
 	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, computecommandbuffers);
 }
 
-void Ocean::rewriteTextureDescriptorSets(){
-	for(unsigned char x=0;x<GraphicsHandler::vulkaninfo.numswapchainimages;x++){
-		VkDescriptorImageInfo imginfo={GraphicsHandler::genericsampler, heightmap.imageview, VK_IMAGE_LAYOUT_GENERAL};
-		VkWriteDescriptorSet writedescset{
+void Ocean::rewriteTextureDescriptorSets () {
+	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+		VkDescriptorImageInfo imginfo = {GraphicsHandler::genericsampler, heightmap.imageview, VK_IMAGE_LAYOUT_GENERAL};
+		VkWriteDescriptorSet writedescset {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
@@ -193,20 +199,20 @@ void Ocean::rewriteTextureDescriptorSets(){
 		};
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
-		imginfo.sampler=VK_NULL_HANDLE;
-		writedescset.dstSet=computedescriptorsets[x];
-		writedescset.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		imginfo.sampler = VK_NULL_HANDLE;
+		writedescset.dstSet = computedescriptorsets[x];
+		writedescset.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
 //		imginfo=velocitymap.getDescriptorImageInfo();
-		imginfo={VK_NULL_HANDLE, velocitymap.imageview, VK_IMAGE_LAYOUT_GENERAL};
-		writedescset.dstBinding=1;
+		imginfo = {VK_NULL_HANDLE, velocitymap.imageview, VK_IMAGE_LAYOUT_GENERAL};
+		writedescset.dstBinding = 1;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
-		imginfo=normalmap.getDescriptorImageInfo();
-		writedescset.dstSet=descriptorsets[x];
-		writedescset.dstBinding=1;
-		writedescset.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		imginfo = normalmap.getDescriptorImageInfo();
+		writedescset.dstSet = descriptorsets[x];
+		writedescset.dstBinding = 1;
+		writedescset.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 //		writedescset.pImageInfo=&imginfo;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
@@ -220,8 +226,8 @@ void Ocean::rewriteTextureDescriptorSets(){
 	}
 }
 
-void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds){
-	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+void Ocean::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.primaryrenderpass,
@@ -247,8 +253,8 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 			commandbuffers[fifindex],
 			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
 			VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-			|VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-			|VK_SHADER_STAGE_FRAGMENT_BIT,
+			| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+			| VK_SHADER_STAGE_FRAGMENT_BIT,
 			0,
 			sizeof(OceanPushConstants),
 			&GraphicsHandler::vulkaninfo.oceanpushconstants);
@@ -268,7 +274,7 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 			1,
 			&descriptorsets[0],
 			0, nullptr);
-	VkDeviceSize offsettemp=0u;
+	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
 			commandbuffers[fifindex],
 			0,
@@ -282,7 +288,7 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 			VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(
 			commandbuffers[fifindex],
-			tris.size()*3,
+			tris.size() * 3,
 			1,
 			0,
 			0,
@@ -290,8 +296,8 @@ void Ocean::recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 	vkEndCommandBuffer(commandbuffers[fifindex]);
 }
 
-void Ocean::recordCompute(uint8_t fifindex){
-	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+void Ocean::recordCompute (uint8_t fifindex) {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
 			VK_NULL_HANDLE,
@@ -301,7 +307,7 @@ void Ocean::recordCompute(uint8_t fifindex){
 			0,
 			0
 	};
-	VkCommandBufferBeginInfo cmdbufbegininfo{
+	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
 			0,
@@ -311,9 +317,9 @@ void Ocean::recordCompute(uint8_t fifindex){
 	//should probably have some barriers around here
 	vkCmdBindPipeline(
 			computecommandbuffers[fifindex],
-            VK_PIPELINE_BIND_POINT_COMPUTE,
-            GraphicsHandler::vulkaninfo.oceancomputepipeline.pipeline);
-	float timetemp=(float)glfwGetTime();
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			GraphicsHandler::vulkaninfo.oceancomputepipeline.pipeline);
+	float timetemp = (float)glfwGetTime();
 	vkCmdPushConstants(
 			computecommandbuffers[fifindex],
 			GraphicsHandler::vulkaninfo.oceancomputepipeline.pipelinelayout,
@@ -353,25 +359,25 @@ void Ocean::recordCompute(uint8_t fifindex){
 	vkEndCommandBuffer(computecommandbuffers[fifindex]);
 }
 
-void Ocean::rewriteDescriptorSet(uint32_t index){
-	VkDescriptorImageInfo imginfo=heightmap.getDescriptorImageInfo();
-	VkWriteDescriptorSet write{
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		nullptr,
-		descriptorsets[index],
-		0,
-		0,
-		1,
-		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		&imginfo,
-		nullptr,
-		nullptr,
+void Ocean::rewriteDescriptorSet (uint32_t index) {
+	VkDescriptorImageInfo imginfo = heightmap.getDescriptorImageInfo();
+	VkWriteDescriptorSet write {
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			descriptorsets[index],
+			0,
+			0,
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			&imginfo,
+			nullptr,
+			nullptr,
 	};
 	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 
-	imginfo=normalmap.getDescriptorImageInfo();
-	write.dstBinding=1;
-	write.pImageInfo=&imginfo;
+	imginfo = normalmap.getDescriptorImageInfo();
+	write.dstBinding = 1;
+	write.pImageInfo = &imginfo;
 	//could p write both at once
 	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 }

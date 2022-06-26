@@ -10,7 +10,7 @@ Mesh::Mesh (
 		glm::quat r,
 		uint32_t dir,
 		uint32_t nir,
-		uint32_t hir):position(p), scale(s), rotation(r){
+		uint32_t hir) : position(p), scale(s), rotation(r) {
 	recalculateModelMatrix();
 	initDescriptorSets();
 	initCommandBuffers();
@@ -23,21 +23,21 @@ Mesh::Mesh (
 			&uniformbuffermemories,
 			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
 	texInit(dir, nir, hir);
-	TextureInfo*texinfostemp[3] = {&diffusetexture,
-	                               &normaltexture,
-	                               &heighttexture};
+	TextureInfo* texinfostemp[3] = {&diffusetexture,
+			&normaltexture,
+			&heighttexture};
 	TextureHandler::generateBlankTextures(&texinfostemp[0], 3);
 	rewriteTextureDescriptorSets();
 }
 
 Mesh::Mesh (
-		const char*filepath,
+		const char* filepath,
 		glm::vec3 p,
 		glm::vec3 s,
 		glm::quat r,
 		uint32_t dir,
 		uint32_t nir,
-		uint32_t hir):Mesh(p, s, r, dir, nir, hir){
+		uint32_t hir) : Mesh(p, s, r, dir, nir, hir) {
 	loadOBJ(filepath);
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
 			vertices,
@@ -48,79 +48,42 @@ Mesh::Mesh (
 			&indexbuffermemory);
 }
 
-//Mesh::Mesh (){
-//	position = glm::vec3(0, 0, 0);
-//	scale = glm::vec3(1., 1., 1.);
-//	rotation = glm::quat(1., 0., 0., 0.);
-//	vertices = std::vector<Vertex>();
-//	tris = std::vector<Tri>();
-//	recalculateModelMatrix();
-//	initCommandBuffers();
-//}
-//
-//Mesh::Mesh (VulkanInfo*vki){
-//	position = glm::vec3(0, 0, 0);
-//	scale = glm::vec3(1., 1., 1.);
-//	rotation = glm::quat(1., 0., 0., 0.);
-//	vertices = std::vector<Vertex>();
-//	tris = std::vector<Tri>();
-//	recalculateModelMatrix();
-//	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
-//			vertices,
-//			tris,
-//			&vertexbuffer,
-//			&vertexbuffermemory,
-//			&indexbuffer,
-//			&indexbuffermemory);
-//	initCommandBuffers();
-//	texInit(256, 256, 256);
-//}
-//
-//Mesh::Mesh (const char*filepath, glm::vec3 p, VulkanInfo*vki, uint32_t dir, uint32_t nir, uint32_t hir){
-//	position = p;
-//	scale = glm::vec3(1., 1., 1.);
-//	rotation = glm::quat(1., 0., 0., 0.);
-//	loadOBJ(filepath);
-//	recalculateModelMatrix();
-//	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
-//			vertices,
-//			tris,
-//			&vertexbuffer,
-//			&vertexbuffermemory,
-//			&indexbuffer,
-//			&indexbuffermemory);
-//	initCommandBuffers();
-//	GraphicsHandler::VKSubInitUniformBuffer(
-//			&descriptorsets,
-//			0,
-//			sizeof(MeshUniformBuffer),
-//			1,
-//			&uniformbuffers,
-//			&uniformbuffermemories,
-//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
-//	texInit(dir, nir, hir);
-//}
-//
-//Mesh::Mesh (glm::vec3 p){
-//	position = p;
-//	scale = glm::vec3(1., 1., 1.);
-//	rotation = glm::quat(1., 0., 0., 0.);
-//	recalculateModelMatrix();
-//	diffusetexture = {};
-//	normaltexture = {};
-//	initCommandBuffers();
-//	// watch out for sub-classes double-initing here
-//	initDescriptorSets();
-//	texInit(256, 256, 256);
-//}
-
-Mesh::~Mesh (){
-	//TODO: actually fucking write destructors
+Mesh::~Mesh () {
+	if (vertexbuffer != VK_NULL_HANDLE) {
+		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffer, nullptr);
+		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffermemory, nullptr);
+		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, indexbuffer, nullptr);
+		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, indexbuffermemory, nullptr);
+	}
+	vkFreeDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+						 GraphicsHandler::vulkaninfo.descriptorpool,
+						 GraphicsHandler::vulkaninfo.numswapchainimages,
+						 descriptorsets);
+	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
+		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffers[scii], nullptr);
+		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffermemories[scii], nullptr);
+	}
+	for (uint8_t lightidx = 0; lightidx < MAX_LIGHTS; lightidx++) {
+		vkFreeCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice,
+							 GraphicsHandler::vulkaninfo.commandpool,
+							 MAX_FRAMES_IN_FLIGHT,
+							 shadowcommandbuffers[lightidx]);
+		delete[] shadowcommandbuffers[lightidx];
+	}
+	vkFreeCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice,
+						 GraphicsHandler::vulkaninfo.commandpool,
+						 MAX_FRAMES_IN_FLIGHT,
+						 commandbuffers);
+	delete[] shadowcommandbuffers;
+	delete[] commandbuffers;
+	delete[] descriptorsets;
+	delete[] uniformbuffers;
+	delete[] uniformbuffermemories;
 }
 
-void Mesh::initCommandBuffers (){
+void Mesh::initCommandBuffers () {
 	commandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo{
+	VkCommandBufferAllocateInfo cmdbufallocinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.commandpool,
@@ -128,10 +91,10 @@ void Mesh::initCommandBuffers (){
 			MAX_FRAMES_IN_FLIGHT
 	};
 	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
-	shadowcommandbuffers = new VkCommandBuffer*[VULKAN_MAX_LIGHTS];
-	for (uint8_t i = 0;i < VULKAN_MAX_LIGHTS;i ++){
+	shadowcommandbuffers = new VkCommandBuffer* [MAX_LIGHTS];
+	for (uint8_t i = 0; i < MAX_LIGHTS; i++) {
 		shadowcommandbuffers[i] = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-		VkCommandBufferAllocateInfo shadowcmdbufallocinfo{
+		VkCommandBufferAllocateInfo shadowcmdbufallocinfo {
 				VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 				nullptr,
 				GraphicsHandler::vulkaninfo.commandpool,
@@ -139,11 +102,11 @@ void Mesh::initCommandBuffers (){
 				MAX_FRAMES_IN_FLIGHT
 		};
 		vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &shadowcmdbufallocinfo,
-		                         &shadowcommandbuffers[i][0]);
+								 &shadowcommandbuffers[i][0]);
 	}
 }
 
-void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir){
+void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
 	GraphicsHandler::VKHelperInitTexture(
 			&diffusetexture,
 			dir, 0,
@@ -173,47 +136,47 @@ void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir){
 /*
  * This method only works for convex polygons
  */
-void Mesh::triangulatePolygon (std::vector<glm::vec3> v, std::vector<glm::vec3>&dst){
-	if (v.size() > 3){
-		for (uint8_t x = 0;x < 3;x ++) dst.push_back(v[x]);
+void Mesh::triangulatePolygon (std::vector<glm::vec3> v, std::vector<glm::vec3>& dst) {
+	if (v.size() > 3) {
+		for (uint8_t x = 0; x < 3; x++) dst.push_back(v[x]);
 		std::vector<glm::vec3> temp = v;
 		temp.erase(temp.begin() + 1);
 		triangulatePolygon(temp, dst);
-	}else{
+	} else {
 		if (v.size() != 3) std::cout << "triangulation alg messed up\n";
-		for (uint8_t x = 0;x < 3;x ++) dst.push_back(v[x]);
+		for (uint8_t x = 0; x < 3; x++) dst.push_back(v[x]);
 	}
 }
 
-void Mesh::subdivide (uint8_t levels){
+void Mesh::subdivide (uint8_t levels) {
 	size_t trisizeinit;
-	for (uint8_t l = 0;l < levels;l ++){
+	for (uint8_t l = 0; l < levels; l++) {
 		trisizeinit = tris.size();
-		for (size_t i = 0;i < trisizeinit;i ++){
+		for (size_t i = 0; i < trisizeinit; i++) {
 			vertices.push_back({
-					                   (vertices[tris[0].vertexindices[1]].position +
-					                    vertices[tris[0].vertexindices[0]].position) * 0.5,
-					                   (vertices[tris[0].vertexindices[1]].normal +
-					                    vertices[tris[0].vertexindices[0]].normal) * 0.5,
-					                   (vertices[tris[0].vertexindices[1]].uv +
-					                    vertices[tris[0].vertexindices[0]].uv) * 0.5
-			                   });
+									   (vertices[tris[0].vertexindices[1]].position +
+										vertices[tris[0].vertexindices[0]].position) * 0.5,
+									   (vertices[tris[0].vertexindices[1]].normal +
+										vertices[tris[0].vertexindices[0]].normal) * 0.5,
+									   (vertices[tris[0].vertexindices[1]].uv +
+										vertices[tris[0].vertexindices[0]].uv) * 0.5
+							   });
 			vertices.push_back({
-					                   (vertices[tris[0].vertexindices[2]].position +
-					                    vertices[tris[0].vertexindices[1]].position) * 0.5,
-					                   (vertices[tris[0].vertexindices[2]].normal +
-					                    vertices[tris[0].vertexindices[1]].normal) * 0.5,
-					                   (vertices[tris[0].vertexindices[2]].uv +
-					                    vertices[tris[0].vertexindices[1]].uv) * 0.5
-			                   });
+									   (vertices[tris[0].vertexindices[2]].position +
+										vertices[tris[0].vertexindices[1]].position) * 0.5,
+									   (vertices[tris[0].vertexindices[2]].normal +
+										vertices[tris[0].vertexindices[1]].normal) * 0.5,
+									   (vertices[tris[0].vertexindices[2]].uv +
+										vertices[tris[0].vertexindices[1]].uv) * 0.5
+							   });
 			vertices.push_back({
-					                   (vertices[tris[0].vertexindices[0]].position +
-					                    vertices[tris[0].vertexindices[2]].position) * 0.5,
-					                   (vertices[tris[0].vertexindices[0]].normal +
-					                    vertices[tris[0].vertexindices[2]].normal) * 0.5,
-					                   (vertices[tris[0].vertexindices[0]].uv +
-					                    vertices[tris[0].vertexindices[2]].uv) * 0.5
-			                   });
+									   (vertices[tris[0].vertexindices[0]].position +
+										vertices[tris[0].vertexindices[2]].position) * 0.5,
+									   (vertices[tris[0].vertexindices[0]].normal +
+										vertices[tris[0].vertexindices[2]].normal) * 0.5,
+									   (vertices[tris[0].vertexindices[0]].uv +
+										vertices[tris[0].vertexindices[2]].uv) * 0.5
+							   });
 			tris.push_back({});
 			tris.back().vertexindices[0] = tris[0].vertexindices[0];
 			tris.back().vertexindices[1] = vertices.size() - 3;
@@ -236,17 +199,17 @@ void Mesh::subdivide (uint8_t levels){
 	}
 }
 
-void Mesh::generateSmoothVertexNormals (){
+void Mesh::generateSmoothVertexNormals () {
 	glm::vec3 total;
 	size_t numtris;
-	for (Vertex&v1:vertices){
+	for (Vertex& v1: vertices) {
 		total = glm::vec3(0.);
 		numtris = 0u;
-		for (const Tri&t:tris){
-			for (const Vertex*v2:t.vertices){
-				if (&v1 == v2){
+		for (const Tri& t: tris) {
+			for (const Vertex* v2: t.vertices) {
+				if (&v1 == v2) {
 					total += t.algebraicnormal;
-					numtris ++;
+					numtris++;
 				}
 			}
 		}
@@ -254,12 +217,12 @@ void Mesh::generateSmoothVertexNormals (){
 	}
 }
 
-void Mesh::initDescriptorSets (){
+void Mesh::initDescriptorSets () {
 	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint32_t x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++)
+	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
 		layoutstemp[x] = GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl;
 	descriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo{
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.descriptorpool,
@@ -267,13 +230,13 @@ void Mesh::initDescriptorSets (){
 			&layoutstemp[0]
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo,
-	                         &descriptorsets[0]);
+							 &descriptorsets[0]);
 }
 
-void Mesh::rewriteTextureDescriptorSets (){
+void Mesh::rewriteTextureDescriptorSets () {
 	VkDescriptorImageInfo imginfo = diffusetexture.getDescriptorImageInfo();
-	for (uint32_t x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++){
-		VkWriteDescriptorSet write{
+	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
@@ -286,14 +249,14 @@ void Mesh::rewriteTextureDescriptorSets (){
 				nullptr
 		};
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-		                       1,
-		                       &write,
-		                       0,
-		                       nullptr);
+							   1,
+							   &write,
+							   0,
+							   nullptr);
 	}
 	imginfo = normaltexture.getDescriptorImageInfo();
-	for (uint32_t x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++){
-		VkWriteDescriptorSet write{
+	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
@@ -306,14 +269,14 @@ void Mesh::rewriteTextureDescriptorSets (){
 				nullptr
 		};
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-		                       1,
-		                       &write,
-		                       0,
-		                       nullptr);
+							   1,
+							   &write,
+							   0,
+							   nullptr);
 	}
 	imginfo = heighttexture.getDescriptorImageInfo();
-	for (uint32_t x = 0;x < GraphicsHandler::vulkaninfo.numswapchainimages;x ++){
-		VkWriteDescriptorSet write{
+	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
 				descriptorsets[x],
@@ -333,8 +296,8 @@ void Mesh::rewriteTextureDescriptorSets (){
 	}
 }
 
-void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds) const{
-	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.primaryrenderpass,
@@ -344,7 +307,7 @@ void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 			0,
 			0
 	};
-	VkCommandBufferBeginInfo cmdbufbegininfo{
+	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
@@ -404,8 +367,8 @@ void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*scene
 
 void Mesh::recordShadowDraw (
 		uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
-		ShadowmapPushConstants*pc) const{
-	VkCommandBufferInheritanceInfo cmdbufinherinfo{
+		ShadowmapPushConstants* pc) const {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
 			renderpass,
@@ -415,7 +378,7 @@ void Mesh::recordShadowDraw (
 			0,
 			0
 	};
-	VkCommandBufferBeginInfo cmdbufbegininfo{
+	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
@@ -464,15 +427,15 @@ void Mesh::recordShadowDraw (
 }
 
 void
-Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed){
+Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed) {
 	vertices = std::vector<Vertex>();
 	tris = std::vector<Tri>();
 	std::vector<glm::vec3> vertpostemp;
 	triangulatePolygon(area, vertpostemp);
-	for (uint32_t i = 0;i < vertpostemp.size();i ++){
+	for (uint32_t i = 0; i < vertpostemp.size(); i++) {
 		vertices.push_back(
 				{vertpostemp[i], glm::vec3(0., 1., 0.), glm::vec2(vertpostemp[i].x, vertpostemp[i].z)});
-		if (i % 3 == 0){
+		if (i % 3 == 0) {
 			tris.push_back({});
 			tris.back().vertexindices[0] = i;
 			tris.back().vertexindices[1] = i + 1;
@@ -481,18 +444,18 @@ Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<g
 	}
 	subdivide(4);
 	cleanUpVertsAndTris();
-	float depthtemp = - 3.f, mindist, disttemp;
-	for (std::vector<glm::vec3>&w:waters){
-		for (Vertex&v:vertices){
+	float depthtemp = -3.f, mindist, disttemp;
+	for (std::vector<glm::vec3>& w: waters) {
+		for (Vertex& v: vertices) {
 			mindist = 99999999.9f;
-			for (size_t i = 1;i + 2 < w.size();i ++){
-				for (float_t u = 0.f;u <= 1.f;u += 0.01f){
+			for (size_t i = 1; i + 2 < w.size(); i++) {
+				for (float_t u = 0.f; u <= 1.f; u += 0.01f) {
 					disttemp = glm::distance(PhysicsHandler::catmullRomSplineAtMatrified(w, i, 0.5f, u),
-					                         v.position);
+											 v.position);
 					if (disttemp < mindist) mindist = disttemp;
 				}
 			}
-			v.position.y = ((mindist > - depthtemp) ? 0. : (mindist + depthtemp));
+			v.position.y = ((mindist > -depthtemp) ? 0. : (mindist + depthtemp));
 		}
 	}
 	cleanUpVertsAndTris();
@@ -507,47 +470,46 @@ Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<g
 			&indexbuffermemory);
 }
 
-void Mesh::recalculateModelMatrix (){
-	modelmatrix = glm::translate(position) * glm::toMat4(rotation) * glm::scale(scale);
-	uniformbufferdata.modelmatrix = modelmatrix;
+void Mesh::recalculateModelMatrix () {
+	uniformbufferdata.modelmatrix = glm::translate(position) * glm::toMat4(rotation) * glm::scale(scale);
 }
 
-void Mesh::setPosition (glm::vec3 p){
+void Mesh::setPosition (glm::vec3 p) {
 	position = p;
 	recalculateModelMatrix();
 }
 
-void Mesh::setRotation (glm::quat r){
+void Mesh::setRotation (glm::quat r) {
 	rotation = r;
 	recalculateModelMatrix();
 }
 
-void Mesh::setScale (glm::vec3 s){
+void Mesh::setScale (glm::vec3 s) {
 	scale = s;
 	recalculateModelMatrix();
 }
 
-MeshUniformBuffer Mesh::getUniformBufferData (){
+MeshUniformBuffer Mesh::getUniformBufferData () {
 	uniformbufferdata.diffuseuvmatrix = diffusetexture.uvmatrix;
 	uniformbufferdata.normaluvmatrix = normaltexture.uvmatrix;
 	uniformbufferdata.heightuvmatrix = heighttexture.uvmatrix;
 	return uniformbufferdata;
 }
 
-void Mesh::cleanUpVertsAndTris (){
+void Mesh::cleanUpVertsAndTris () {
 	uint32_t initverttotal = vertices.size();
 	//any efficiency possible with breaks and stuff??
 #ifndef NO_LOADING_BARS
 	std::cout<<"removing duplicates: "<<ANSI_GREEN_FORE<<std::endl;
 	uint16_t dupecounter=0;
 #endif
-	for (int x = 0;x < vertices.size();x ++){
-		for (int y = 0;y < x;y ++){
-			if (y != x && vertices[x] == vertices[y]){
-				for (int z = 0;z < tris.size();z ++){
-					for (int w = 0;w < 3;w ++){
+	for (int x = 0; x < vertices.size(); x++) {
+		for (int y = 0; y < x; y++) {
+			if (y != x && vertices[x] == vertices[y]) {
+				for (int z = 0; z < tris.size(); z++) {
+					for (int w = 0; w < 3; w++) {
 						if (tris[z].vertexindices[w] == x) tris[z].vertexindices[w] = y;
-						else if (tris[z].vertexindices[w] > x) tris[z].vertexindices[w] --;
+						else if (tris[z].vertexindices[w] > x) tris[z].vertexindices[w]--;
 					}
 				}
 				if (x < vertices.size()) vertices.erase(vertices.begin() + x);
@@ -570,14 +532,14 @@ void Mesh::cleanUpVertsAndTris (){
 	std::cout<<"finding tri adjacencies: "<<ANSI_GREEN_FORE<<std::endl;
 #endif
 	bool adjacencyfound;
-	for (int x = 0;x < tris.size();x ++){
-		for (int y = 0;y < tris.size();y ++){
-			if (x != y){
+	for (int x = 0; x < tris.size(); x++) {
+		for (int y = 0; y < tris.size(); y++) {
+			if (x != y) {
 				adjacencyfound = false;
-				for (int z = 0;z < 3;z ++){
-					for (int w = 0;w < 3;w ++){
+				for (int z = 0; z < 3; z++) {
+					for (int w = 0; w < 3; w++) {
 						if (vertices[tris[x].vertexindices[z]].position ==
-						    vertices[tris[y].vertexindices[w]].position){
+							vertices[tris[y].vertexindices[w]].position) {
 							tris[x].adjacencies.push_back(&tris[y]);
 							adjacencyfound = true;
 							break;
@@ -599,8 +561,8 @@ void Mesh::cleanUpVertsAndTris (){
 	std::cout<<ANSI_RESET_FORE<<std::endl;
 #endif
 
-	for (uint32_t x = 0;x < tris.size();x ++){
-		for (uint16_t y = 0;y < 3;y ++){
+	for (uint32_t x = 0; x < tris.size(); x++) {
+		for (uint16_t y = 0; y < 3; y++) {
 			tris[x].vertices[y] = &vertices[tris[x].vertexindices[y]];
 #ifndef NO_LOADING_BARS
 			std::cout<<"\rgiving tris vertex addresses (tri "<<(x+1)<<" of "<<tris.size()<<')';
@@ -611,69 +573,69 @@ void Mesh::cleanUpVertsAndTris (){
 	std::cout<<std::endl;
 #endif
 
-	for (auto&t:tris){
+	for (auto& t: tris) {
 		t.algebraicnormal = glm::normalize(
 				glm::cross(vertices[t.vertexindices[1]].position - vertices[t.vertexindices[0]].position,
-				           vertices[t.vertexindices[2]].position - vertices[t.vertexindices[0]].position));
+						   vertices[t.vertexindices[2]].position - vertices[t.vertexindices[0]].position));
 	}
 
-	for (auto&v:vertices){
-		for (uint8_t x = 0;x < 3;x ++){
+	for (auto& v: vertices) {
+		for (uint8_t x = 0; x < 3; x++) {
 			if (v.position[x] < min[x]) min[x] = v.position[x];
 			if (v.position[x] > max[x]) max[x] = v.position[x];
 		}
 	}
 }
 
-void Mesh::loadOBJ (const char*filepath){
+void Mesh::loadOBJ (const char* filepath) {
 	tris = std::vector<Tri>();
 	vertices = std::vector<Vertex>();
 	std::vector<unsigned int> vertexindices, uvindices, normalindices;
 	std::vector<glm::vec3> vertextemps, normaltemps;
 	std::vector<glm::vec2> uvtemps;
-	FILE*obj = fopen(filepath, "r");
-	if (obj == nullptr){
+	FILE* obj = fopen(filepath, "r");
+	if (obj == nullptr) {
 		std::cout << "Loading OBJ Failure (" << filepath << ")\n";
 		return;
 	}
-	while (true){
+	while (true) {
 		char lineheader[128];//128?
 		int res = fscanf(obj, "%s", lineheader);
-		if (res == EOF){break;}
-		if (strcmp(lineheader, "v") == 0){
+		if (res == EOF) {break;}
+		if (strcmp(lineheader, "v") == 0) {
 			glm::vec3 vertex;
 			fscanf(obj, "%f %f %f\n", &vertex.x, &vertex.y, &vertex.z);
 			vertextemps.push_back(vertex);
-		}else if (strcmp(lineheader, "vt") == 0){
+		} else if (strcmp(lineheader, "vt") == 0) {
 			glm::vec2 uv;
 			fscanf(obj, "%f %f\n", &uv.x, &uv.y);
 			uvtemps.push_back(uv);
-		}else if (strcmp(lineheader, "vn") == 0){
+		} else if (strcmp(lineheader, "vn") == 0) {
 			glm::vec3 normal;
 			fscanf(obj, "%f %f %f\n", &normal.x, &normal.y, &normal.z);
 			normaltemps.push_back(normal);
-		}else if (strcmp(lineheader, "f") == 0){
+		} else if (strcmp(lineheader, "f") == 0) {
 			unsigned int vertidx[3], uvidx[3], normidx[3];
 			int matches = fscanf(obj, "%d/%d/%d %d/%d/%d %d/%d/%d", &vertidx[0], &uvidx[0], &normidx[0],
-			                     &vertidx[1], &uvidx[1], &normidx[1],
-			                     &vertidx[2], &uvidx[2], &normidx[2]);
-			if (matches != 9){
+								 &vertidx[1], &uvidx[1], &normidx[1],
+								 &vertidx[2], &uvidx[2], &normidx[2]);
+			if (matches != 9) {
 				std::cout << "OBJ Format Failure (" << filepath << ")\n";
 				return;
 			}
-			for (auto&v:vertidx) vertexindices.push_back(v - 1);
-			for (auto&n:normidx) normalindices.push_back(n - 1);
-			for (auto&u:uvidx) uvindices.push_back(u - 1);
+			for (auto& v: vertidx) vertexindices.push_back(v - 1);
+			for (auto& n: normidx) normalindices.push_back(n - 1);
+			for (auto& u: uvidx) uvindices.push_back(u - 1);
 		}
 	}
 
-	for (uint16_t x = 0;x < vertexindices.size() / 3;x ++){
+	for (uint16_t x = 0; x < vertexindices.size() / 3; x++) {
 		tris.push_back({});
-		for (uint16_t y = 0;y < 3;y ++){
+		for (uint16_t y = 0; y < 3; y++) {
 			std::cout << "\rassembling all vertexindices and triangles (" << (x * 3 + y + 1) << '/'
-			          << vertexindices.size() << ')';
+					  << vertexindices.size() << ')';
 			vertices.push_back({vertextemps[vertexindices[3 * x + y]], normaltemps[normalindices[3 * x + y]],
-			                    uvtemps[uvindices[3 * x + y]]});
+									   uvtemps[uvindices[3 * x + y]]});
 			tris[tris.size() - 1].vertexindices[y] = 3 * x + y;
 		}
 	}
@@ -682,22 +644,22 @@ void Mesh::loadOBJ (const char*filepath){
 	cleanUpVertsAndTris();
 }
 
-void Mesh::makeIntoIcosphere (){
+void Mesh::makeIntoIcosphere () {
 	loadOBJ("../resources/objs/icosphere.obj");
 }
 
-void Mesh::makeIntoCube (){
+void Mesh::makeIntoCube () {
 	loadOBJ("../resources/objs/fuckingcube.obj");
 }
 
-Mesh*Mesh::generateBoulder (RockType type, float_t scale, uint seed){
-	Mesh*result = new Mesh();
+Mesh* Mesh::generateBoulder (RockType type, float_t scale, uint seed) {
+	Mesh* result = new Mesh();
 	std::default_random_engine randeng(seed);
 	std::uniform_real_distribution<float_t> unidist (); //being misinterpreted
-	if (type == ROCK_TYPE_GRANITE){
+	if (type == ROCK_TYPE_GRANITE) {
 		glm::mat4 transform;
 		result->makeIntoCube();
-		for (uint8_t i = 0;i < 1;i ++){
+		for (uint8_t i = 0; i < 1; i++) {
 			result->subdivide(5);
 			transform = glm::mat4(1.);
 //			transform *= glm::rotate(3.14f / 4.f, glm::vec3(1., 5., 4.));
@@ -710,9 +672,9 @@ Mesh*Mesh::generateBoulder (RockType type, float_t scale, uint seed){
 	return result;
 }
 
-void Mesh::proportionalTransform (glm::mat4 m, glm::vec3 o, float_t r){
+void Mesh::proportionalTransform (glm::mat4 m, glm::vec3 o, float_t r) {
 	glm::vec4 temp;
-	for (auto&v:vertices){
+	for (auto& v: vertices) {
 //		v.position = (m * std::max(1. - glm::distance(o, v.position) / r, 0.)) * glm::vec4(v.position.x, v.position.y, v.position.z, 1.);
 		temp = m * glm::vec4(v.position.x, v.position.y, v.position.z, 1.);
 		v.position = temp / temp.w;

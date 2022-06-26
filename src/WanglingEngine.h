@@ -36,33 +36,31 @@
         <<std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-start).count(); \
 }
 
-class WanglingEngine{
+class WanglingEngine {
 private:
-	Camera*primarycamera;
-	std::vector<Mesh*>meshes;
-	std::vector<Light*>lights;
-	Ocean*ocean;
-	ParticleSystem<GrassParticle>*grass;
-	Text*troubleshootingtext;
+	Camera* primarycamera;
+	std::vector<Mesh*> meshes;
+	std::vector<Light*> lights;
+	Ocean* ocean;
+	ParticleSystem<GrassParticle>* grass;
+	Text* troubleshootingtext;
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
-	VkCommandBuffer*skyboxcommandbuffers, *texmoncommandbuffers, *troubleshootinglinescommandbuffers, *ssrrcpycommandbuffers;
+	VkCommandBuffer* skyboxcommandbuffers, * texmoncommandbuffers, * troubleshootinglinescommandbuffers, * ssrrcpycommandbuffers;
 	std::thread recordingthreads[NUM_RECORDING_THREADS];
 	static std::condition_variable conditionvariable;
 	static std::mutex submitfencemutex;
 	static bool submitfenceavailable;
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet*skyboxdescriptorsets, *scenedescriptorsets, *texmondescriptorsets, *compositingdescriptorsets;
-	VkBuffer*lightuniformbuffers, troubleshootinglinesvertexbuffer;
-	VkDeviceMemory*lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
+	VkDescriptorSet* skyboxdescriptorsets, * scenedescriptorsets, * texmondescriptorsets, * compositingdescriptorsets;
+	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer;
+	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
 	uint64_t multiverseseed;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
-	 * TODO: ensure this is the best place and implementation for these, it feels unclean
-	 * TODO: reorder all of below functions here and in .cpp to reflect usage and commonality
 	 */
 	void initSceneData ();
 
@@ -76,21 +74,18 @@ private:
 
 	void recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex);
 
-	void recordTroubleshootingLinesCommandBuffers (uint8_t fifindex, uint8_t sciindex, WanglingEngine*self);
-
-	void recordSSRRBufferCopy (uint8_t fifindex, uint8_t sciindex);
+	void recordTroubleshootingLinesCommandBuffers (uint8_t fifindex, uint8_t sciindex, WanglingEngine* self);
 
 	void updateTexMonDescriptorSets (TextureInfo tex);
 
-	static void recordCommandBuffer (WanglingEngine*self, uint32_t fifindex, bool resetfence);
+	static void recordCommandBuffer (WanglingEngine* self, uint32_t fifindex);
 
 	/* countSceneObjects and loadScene help with loading and pre-loading scenes from a json file. Pre-loading is done so
 	 * that GraphicsHandler can know how many meshes and lights to make space for before they are actually created.
-	 * TODO: change countSceneObjects's nummeshes and numlights arg to use & symbol
 	 */
-	void countSceneObjects (const char*scenefilepath, uint8_t*nummeshes, uint8_t*numlights);
+	void countSceneObjects (const char* scenefilepath, uint8_t* nummeshes, uint8_t* numlights);
 
-	void loadScene (const char*scenefilepath);
+	void loadScene (const char* scenefilepath);
 
 	void genScene ();
 
@@ -110,7 +105,7 @@ private:
 	 *      4) > 1 recording thread is going to require > 1 command pool (one per thread) which will be passed to the
 	 *         cmd buf begin info.
 	 */
-	[[noreturn]] static void threadedCmdBufRecord (WanglingEngine*self);
+	[[noreturn]] static void threadedCmdBufRecord (WanglingEngine* self);
 
 public:
 	WanglingEngine ();

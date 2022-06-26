@@ -84,21 +84,27 @@ public:
 
 	glm::mat4 getViewMatrix (){return viewmatrix;}
 
-	void recalculateLSOrthoBasis (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3*b, uint8_t numb);
+	void recalculateLSOrthoBasis (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
 
-	int getShadowmapResolution (){return shadowmapresolution;}
+	int getShadowmapResolution () {return shadowmapresolution;}
 
-	glm::vec3 getPosition (){return position;}
+	glm::vec3 getPosition () {return position;}
 
-	glm::vec4 getColor (){return color;}
+	glm::vec4 getColor () {return color;}
 
-	float getIntensity (){return intensity;}
-	LightType getType(){return type;}
-	ShadowType getShadowType(){return shadowtype;}
-	VkRenderPass getShadowRenderPass(){return shadowrenderpass;}
-	VkFramebuffer getShadowFramebuffer(){return shadowframebuffer;}
-	ShadowmapPushConstants*getShadowPushConstantsPtr(){return &shadowpushconstants;}
-	TextureInfo*getShadowmapPtr(){return &shadowmap;}
+	float getIntensity () {return intensity;}
+
+	LightType getType () {return type;}
+
+	ShadowType getShadowType () {return shadowtype;}
+
+	VkRenderPass getShadowRenderPass () {return shadowrenderpass;}
+
+	VkFramebuffer getShadowFramebuffer () {return shadowframebuffer;}
+
+	ShadowmapPushConstants* getShadowPushConstantsPtr () {return &shadowpushconstants;}
+
+	TextureInfo* getShadowmapPtr () {return &shadowmap;}
 };
 
 
