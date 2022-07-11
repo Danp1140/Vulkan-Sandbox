@@ -51,8 +51,10 @@ void main() {
     //what other people use is actually a single cam-space view vector, different from our varying world-space view vector
     for(uint x=0;x<MAX_LIGHTS;x++){
         if (x<constants.numlights){
+            // TODO: figure out biasing lol
             //perhaps just fiddle with bias here a bit more?
-            float shadow=texture(shadowsampler[x], shadowposition[x]+vec3(0., 0., clamp(0.005*tan(acos(dot(normaldir, vec3(1.)))), 0., 0.01)));
+//            float shadow=texture(shadowsampler[x], shadowposition[x]+vec3(0., 0., clamp(0.005*tan(acos(dot(normaldir, vec3(1.)))), 0., 0.01)));
+            float shadow=texture(shadowsampler[x], shadowposition[x]);
 //            if(shadow==0) continue;   //could we do an early escape just adding diffuse*ambient??? (ambient is kinda non-directional => no lambertian???)
             lub[x].lighttype==LIGHT_TYPE_SUN?lightdir=normalize(lub[x].position):lightdir=normalize(lub[x].position-position);
             halfwaydir=normalize(lightdir+normalize(constants.camerapos-position));

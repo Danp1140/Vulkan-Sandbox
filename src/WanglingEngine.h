@@ -55,7 +55,7 @@ private:
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
 	VkDescriptorSet* skyboxdescriptorsets, * scenedescriptorsets, * texmondescriptorsets, * compositingdescriptorsets;
-	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer;
+	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
 	uint64_t multiverseseed;
 

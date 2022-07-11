@@ -8,58 +8,62 @@
 #include "GraphicsHandler.h"
 #include "PhysicsHandler.h"
 
-class TextureHandler{
+class TextureHandler {
 private:
-	std::default_random_engine randomengine;
-	float**turbulence;
-	uint32_t turbulenceresolution;
+	static std::default_random_engine randomengine;
+	static float** turbulence;
+	static uint32_t turbulenceresolution;
 public:
 	TextureHandler ();
 
-	void generateGridTextures (
-			TextureInfo**texdsts,
+	static void init ();
+
+	static void generateGridTextures (
+			TextureInfo** texdsts,
 			uint8_t numtexes);
 
-	void generateSandTextures (
-			TextureInfo**texdsts,
+	static void generateSandTextures (
+			TextureInfo** texdsts,
 			uint8_t numtexes,
-			glm::vec4*sedimentdiffusegradient,
+			glm::vec4* sedimentdiffusegradient,
 			std::vector<Tri> tris,
-			glm::vec3(*windVVF) (glm::vec3));
+			glm::vec3(* windVVF) (glm::vec3));
 
-	void generateSteppeTextures (
-			TextureInfo**texdsts,
+	static void generateSteppeTextures (
+			TextureInfo** texdsts,
 			uint8_t numtexes);
 
-	void generateTestTextures (
-			TextureInfo**texdsts,
+	static void generateTestTextures (
+			TextureInfo** texdsts,
 			uint8_t numtexes);
 
-	void generateOceanTextures (
-			TextureInfo**texdsts,
+	static void generateOceanTextures (
+			TextureInfo** texdsts,
 			uint8_t numtexes);
 
 	static void generateBlankTextures (
-			TextureInfo**texdsts,
+			TextureInfo** texdsts,
 			uint8_t numtexes);
 
-	void generateSkyboxTexture (TextureInfo*texdst);
+	static void generateGraniteTextures (TextureInfo** texdsts, uint8_t numtexes);
 
-	void generateVec4MipmapData (
+	static void generateSkyboxTexture (TextureInfo* texdst);
+
+	static void generateVec4MipmapData (
 			uint32_t numlevels,
 			uint32_t res,
-			glm::vec4**data);
+			glm::vec4** data);
 
-	float linearInterpolatedNoise (glm::vec2 T, uint32_t N, float**noise);
+	static float linearInterpolatedNoise (glm::vec2 T, uint32_t N, float** noise);
 
-	float turbulentNoise (glm::ivec2 T, uint32_t N, uint32_t reslev, float**noise);
+	static float turbulentNoise (glm::ivec2 T, uint32_t N, uint32_t reslev, float** noise);
 
-	void
-	generateNormalFromHeight (float**src, glm::vec4**dst, uint32_t resh, uint32_t resn, float worldspacetotexspace);
+	static void
+	generateNormalFromHeight (float** src, glm::vec4** dst, uint32_t resh, uint32_t resn, float worldspacetotexspace);
 
-	glm::vec4 normalizedColorRamp (float x);
+	static glm::vec4 normalizedColorRamp (float x);
 
-	void normalizedColorMap (float**src, glm::vec4**dst, uint32_t dim, uint32_t numcols);
+	static void normalizedColorMap (float** src, glm::vec4** dst, uint32_t dim, uint32_t numcols);
 };
 
 
