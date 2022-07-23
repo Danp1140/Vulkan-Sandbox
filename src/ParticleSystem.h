@@ -7,27 +7,27 @@
 
 #include "Mesh.h"
 
-typedef enum ParticleType{
+typedef enum ParticleType {
 	POINTS,
 	GRASS
-}ParticleType;
+} ParticleType;
 
-typedef enum DistributionType{
+typedef enum DistributionType {
 	ENFORCED_UNIFORM_ON_MESH,
 	UNIFORM_IN_SPACE
-}DistributionType;
+} DistributionType;
 
-typedef union DistributionData{
-	Mesh*mesh;
+typedef union DistributionData {
+	Mesh* mesh;
 	glm::vec3 bounds[2];
-}DistributionData;
+} DistributionData;
 
-class Particle{
+class Particle {
 public:
 	glm::vec3 position;
 	glm::mat4 modelmatrix;
 
-	Particle (glm::vec3 p){
+	Particle (glm::vec3 p) {
 		position = p;
 //		modelmatrix=glm::mat4(
 //				1., 0., 0., position.x,
@@ -37,26 +37,26 @@ public:
 		modelmatrix = glm::translate(position);
 	}
 
-	virtual void generateUniqueData (){}
+	virtual void generateUniqueData () {}
 
-	virtual void generateTris (float seed, std::vector<Vertex>*v, std::vector<Tri>*t){
+	virtual void generateTris (float seed, std::vector<Vertex>* v, std::vector<Tri>* t) {
 		*v = std::vector<Vertex>();
 		*t = std::vector<Tri>();
 	}
 };
 
-class GrassParticle:public Particle{
+class GrassParticle : public Particle {
 public:
 	float length, thickness, rigidity;  //add orientation later
-	GrassParticle (glm::vec3 p):Particle(p){}
+	GrassParticle (glm::vec3 p) : Particle(p) {}
 
-	void generateUniqueData () override{  //move up to init?
+	void generateUniqueData () override {  //move up to init?
 		length = 0.5;
 		thickness = 0.01;
 		rigidity = 0.5;
 	}
 
-	void generateTris (float seed, std::vector<Vertex>*v, std::vector<Tri>*t) override{
+	void generateTris (float seed, std::vector<Vertex>* v, std::vector<Tri>* t) override {
 //		float templen=
 //		(*v).push_back({
 //			position+glm::vec3(thickness, 0.0, 0.0),
@@ -82,7 +82,7 @@ public:
 };
 
 template<class T>
-class ParticleSystem:public Mesh{
+class ParticleSystem : public Mesh {
 private:
 	std::vector<T> particles;
 	uint32_t numparticles;
@@ -90,8 +90,8 @@ private:
 	ParticleType type;
 	DistributionType distributiontype;
 	DistributionData distributiondata;
-	VkBuffer*particleuniformbuffers;
-	VkDeviceMemory*particleuniformbuffermemories;
+	VkBuffer* particleuniformbuffers;
+	VkDeviceMemory* particleuniformbuffermemories;
 
 	void distributeParticles ();
 
@@ -100,7 +100,7 @@ private:
 public:
 	ParticleSystem (ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
 
-	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds) const override;
+	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const override;
 };
 
 #include "ParticleSystem.inl"

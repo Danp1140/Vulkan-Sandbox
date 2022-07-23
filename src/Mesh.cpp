@@ -24,8 +24,8 @@ Mesh::Mesh (
 			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
 	texInit(dir, nir, hir);
 	TextureInfo* texinfostemp[3] = {&diffusetexture,
-			&normaltexture,
-			&heighttexture};
+									&normaltexture,
+									&heighttexture};
 	TextureHandler::generateBlankTextures(&texinfostemp[0], 3);
 	rewriteTextureDescriptorSets();
 }
@@ -635,7 +635,7 @@ void Mesh::loadOBJ (const char* filepath) {
 			std::cout << "\rassembling all vertexindices and triangles (" << (x * 3 + y + 1) << '/'
 					  << vertexindices.size() << ')';
 			vertices.push_back({vertextemps[vertexindices[3 * x + y]], normaltemps[normalindices[3 * x + y]],
-									   uvtemps[uvindices[3 * x + y]]});
+								uvtemps[uvindices[3 * x + y]]});
 			tris[tris.size() - 1].vertexindices[y] = 3 * x + y;
 		}
 	}
@@ -655,7 +655,7 @@ void Mesh::makeIntoCube () {
 Mesh* Mesh::generateBoulder (RockType type, float_t scale, uint seed) {
 	Mesh* result = new Mesh();
 	std::default_random_engine randeng(seed);
-	std::uniform_real_distribution<float_t> unidist (); //being misinterpreted
+	std::uniform_real_distribution<float_t> unidist {};
 	if (type == ROCK_TYPE_GRANITE) {
 		glm::mat4 transform;
 		result->makeIntoCube();
