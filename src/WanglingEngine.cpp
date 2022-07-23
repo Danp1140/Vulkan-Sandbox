@@ -9,14 +9,16 @@ std::mutex WanglingEngine::submitfencemutex = std::mutex();
 bool WanglingEngine::submitfenceavailable = true;
 
 WanglingEngine::WanglingEngine () {
-	texturehandler = TextureHandler();
+//	texturehandler = TextureHandler();
 
+	TextureHandler::init();
 	uint8_t nummeshes, numlights;
 	countSceneObjects("../resources/scenelayouts/rocktestlayout.json", &nummeshes, &numlights);
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(100);
 	GraphicsHandler::VKInitPipelines();
 	loadScene("../resources/scenelayouts/rocktestlayout.json");
+	genScene();
 
 	physicshandler = PhysicsHandler(primarycamera);
 
@@ -223,20 +225,6 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 
 	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
 			glm::vec3(10., 0., -10.)};
-//	std::vector<glm::vec3>steppearea={glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(0., 0., 15.), glm::vec3(10., 0., 10.), glm::vec3(10., 0., -10.), glm::vec3(0., 0., -15.)};
-//	meshes[0]->generateSteppeMesh(steppearea,
-//								  {{glm::vec3(20., 0., 20.),
-//									glm::vec3(10., 0., 10.),
-//									glm::vec3(-10., 0., -10.),
-//									glm::vec3(-20., 0., -20.)}},
-//								  0.f);
-//	meshes[0]->generateSteppeMesh(steppearea,
-//	                              {{glm::vec3(20., 0., 20.),
-//									glm::vec3(0., 0., 0.),
-//									glm::vec3(10., 0., 10.),
-//									glm::vec3(0., 0., 5.),
-//									glm::vec3(5., 0., 0.)}},
-//									0.f);
 	meshes[0]->generateSteppeMesh(steppearea,
 								  {{glm::vec3(11., 0., 11.),
 										  glm::vec3(10., 0., -8.),
@@ -247,15 +235,13 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 										  glm::vec3(-10., 0., -4),
 										  glm::vec3(-11., 0., 4.)}},
 								  0.f);
-	meshes.push_back(new Mesh("../resources/objs/fuckingcube.obj"));
-	meshes.back()->generateBoulder(ROCK_TYPE_GRANITE, 1.f, 0u);
 	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
 	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
 }
 
 void WanglingEngine::genScene () {
-
+	meshes.push_back(Mesh::generateBoulder(ROCK_TYPE_GRANITE, glm::vec3(1.f), 0u));
 }
 
 void WanglingEngine::initSceneData () {

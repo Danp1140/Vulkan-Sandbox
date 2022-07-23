@@ -127,7 +127,9 @@ public:
 
 	void makeIntoCube ();
 
-	static Mesh* generateBoulder (RockType type, float_t scale, uint seed);
+	static Mesh* generateBoulder (RockType type, glm::vec3 scale, uint seed);
+
+	void transform (glm::mat4 m);
 
 	void proportionalTransform (glm::mat4 m, glm::vec3 o, float_t r);
 };

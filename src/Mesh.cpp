@@ -39,13 +39,6 @@ Mesh::Mesh (
 		uint32_t nir,
 		uint32_t hir) : Mesh(p, s, r, dir, nir, hir) {
 	loadOBJ(filepath);
-	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
-			vertices,
-			tris,
-			&vertexbuffer,
-			&vertexbuffermemory,
-			&indexbuffer,
-			&indexbuffermemory);
 }
 
 Mesh::~Mesh () {
@@ -197,6 +190,12 @@ void Mesh::subdivide (uint8_t levels) {
 			tris.erase(tris.begin());
 		}
 	}
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(vertices,
+													   tris,
+													   &vertexbuffer,
+													   &vertexbuffermemory,
+													   &indexbuffer,
+													   &indexbuffermemory);
 }
 
 void Mesh::generateSmoothVertexNormals () {
@@ -585,6 +584,13 @@ void Mesh::cleanUpVertsAndTris () {
 			if (v.position[x] > max[x]) max[x] = v.position[x];
 		}
 	}
+
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(vertices,
+													   tris,
+													   &vertexbuffer,
+													   &vertexbuffermemory,
+													   &indexbuffer,
+													   &indexbuffermemory);
 }
 
 void Mesh::loadOBJ (const char* filepath) {
@@ -652,31 +658,57 @@ void Mesh::makeIntoCube () {
 	loadOBJ("../resources/objs/fuckingcube.obj");
 }
 
-Mesh* Mesh::generateBoulder (RockType type, float_t scale, uint seed) {
-	Mesh* result = new Mesh();
+Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {
+	Mesh* result = new Mesh(glm::vec3(0.f), glm::vec3(1.f), glm::quat(0.f, 0.f, 0.f, 1.f), 1024, 1024, 1024);
 	std::default_random_engine randeng(seed);
 	std::uniform_real_distribution<float_t> unidist {};
 	if (type == ROCK_TYPE_GRANITE) {
-		glm::mat4 transform;
+		glm::mat4 transform(1.f);
+		transform = glm::translate(glm::vec3(0.f, -1.f, 0.f));
+//		transform = glm::scale(glm::vec3(5.f));
 		result->makeIntoCube();
-		for (uint8_t i = 0; i < 1; i++) {
-			result->subdivide(5);
-			transform = glm::mat4(1.);
-//			transform *= glm::rotate(3.14f / 4.f, glm::vec3(1., 5., 4.));
-			transform *= 3.;
-			transform[3][3] = 1.;
-			result->proportionalTransform(transform, glm::vec3(0., 1., 0.), 0.25);
-			/* use proportional editing-esque transforms */
-		}
+//		result->subdivide(5);
+//		result->proportionalTransform(transform, glm::vec3(0.f, -1.f, 0.f), 0.5f);
+		result->transform(transform);
+
+		TextureInfo* texdsts[3] {result->getDiffuseTexturePtr(),
+								 result->getNormalTexturePtr(),
+								 result->getHeightTexturePtr()};
+		TextureHandler::generateGraniteTextures(&texdsts[0], 3);
+		result->getDiffuseTexturePtr()->setUVScale(glm::vec2(100.f, 100.f));
+		result->rewriteTextureDescriptorSets();
 	}
 	return result;
 }
 
-void Mesh::proportionalTransform (glm::mat4 m, glm::vec3 o, float_t r) {
+void Mesh::transform (glm::mat4 m) {
 	glm::vec4 temp;
 	for (auto& v: vertices) {
-//		v.position = (m * std::max(1. - glm::distance(o, v.position) / r, 0.)) * glm::vec4(v.position.x, v.position.y, v.position.z, 1.);
-		temp = m * glm::vec4(v.position.x, v.position.y, v.position.z, 1.);
+		temp = m * glm::vec4(v.position.x, v.position.y, v.position.z, 1.f);
 		v.position = temp / temp.w;
 	}
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(vertices,
+													   tris,
+													   &vertexbuffer,
+													   &vertexbuffermemory,
+													   &indexbuffer,
+													   &indexbuffermemory);
+}
+
+void Mesh::proportionalTransform (glm::mat4 m, glm::vec3 o, float_t r) {
+	glm::vec4 temp;
+	float coeff;
+	for (auto& v: vertices) {
+//		coeff = std::max(1.f - glm::distance(o, v.position) / r, 0.f);	// linear
+//		coeff = std::max(exp(-pow(glm::distance(o, v.position), 2.f)) / r, 0.f); // gaussian
+		coeff = std::max(1.f - pow(glm::distance(o, v.position) / r, 2.f), 0.f); // quadratic
+		temp = glm::mix(glm::mat4(1.f), m, coeff) * glm::vec4(v.position.x, v.position.y, v.position.z, 1.f);
+		v.position = temp / temp.w;
+	}
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(vertices,
+													   tris,
+													   &vertexbuffer,
+													   &vertexbuffermemory,
+													   &indexbuffer,
+													   &indexbuffermemory);
 }

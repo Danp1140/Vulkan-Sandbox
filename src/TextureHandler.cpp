@@ -2,9 +2,16 @@
 // Created by Daniel Paavola on 7/31/21.
 //
 
+#include <math.h>
 #include "TextureHandler.h"
 
-TextureHandler::TextureHandler () {
+std::default_random_engine TextureHandler::randomengine {};
+float** TextureHandler::turbulence = nullptr;
+uint32_t TextureHandler::turbulenceresolution = -1u;
+
+TextureHandler::TextureHandler () {}
+
+void TextureHandler::init () {
 	randomengine = std::default_random_engine();
 	std::uniform_real_distribution unidist(0., 1.);
 	const uint32_t randgridres = 16;
@@ -21,6 +28,7 @@ TextureHandler::TextureHandler () {
 		turbulence[y] = new float[turbulenceresolution];
 		memset(turbulence[y], 0, turbulenceresolution);
 	}
+	float max = 0.f, min = MAXFLOAT;
 	for (uint32_t y = 0; y < turbulenceresolution; y++) {
 		for (uint32_t x = 0; x < turbulenceresolution; x++) {
 			turbulence[x][y] = turbulentNoise(
@@ -28,6 +36,14 @@ TextureHandler::TextureHandler () {
 					randgridres,
 					turbulenceresolution,
 					randgrid);
+			if (turbulence[x][y] > max) max = turbulence[x][y];
+			if (turbulence[x][y] < min) min = turbulence[x][y];
+		}
+	}
+	for (uint32_t y = 0; y < turbulenceresolution; y++) {
+		for (uint32_t x = 0; x < turbulenceresolution; x++) {
+			turbulence[x][y] = turbulence[x][y] / max + min / max;
+//			std::cout << turbulence[x][y] << std::endl;
 		}
 	}
 	for (uint32_t x = 0; x < randgridres; x++) delete[] randgrid[x];
@@ -277,6 +293,50 @@ void TextureHandler::generateBlankTextures (
 	}
 }
 
+void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t numtexes) {
+	// granite may have several differnet colors
+	// granite may be spotty, splotchy, or veiny, depending on relationship between face and vein
+	// unpolished boulders tend towards spotty
+	// consider layering brownian cutoff textures
+	const uint32_t scale = 100; // i.e. num oscillations, TODO: add as function arg
+	// what if we offset the x and y waves???
+	float_t wavelength;
+	for (uint8_t texidx = 0; texidx < numtexes; texidx++) {
+		if (texdsts[texidx]->type == TEXTURE_TYPE_DIFFUSE) {
+			wavelength = texdsts[texidx]->resolution.width / (float_t)scale; // assumes square texture
+			std::uniform_real_distribution unidist(0., 1.);
+			glm::vec4* finaltex = (glm::vec4*)malloc(
+					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4));
+			float** turbulentsquare = new float* [texdsts[texidx]->resolution.width];
+			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) {
+				turbulentsquare[x] = new float[texdsts[texidx]->resolution.height];
+				for (uint32_t y = 0; y < texdsts[texidx]->resolution.height; y++) {
+					turbulentsquare[x][y] = 0.9f;
+				};
+			}
+			for (uint32_t y = 0; y < texdsts[texidx]->resolution.height; y++) {
+				for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) {
+					if (turbulence[x % turbulenceresolution][y % turbulenceresolution] < 0.5) {
+						finaltex[x + y * texdsts[texidx]->resolution.width] = glm::vec4(0., 0., 0., 1.);
+					} else {
+						finaltex[x + y * texdsts[texidx]->resolution.width] = glm::vec4(1.);
+					}
+				}
+			}
+			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(finaltex));
+			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) delete[] turbulentsquare[x];
+			delete[] turbulentsquare;
+			delete[] finaltex;
+		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL || texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
+			size_t size = texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
+			glm::vec4* data = (glm::vec4*)malloc(size);
+			memset(data, 0, size);
+			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
+			free(data);
+		}
+	}
+}
+
 void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 	//pass in sun for position info and color info diffusion
 	glm::vec4* data = new glm::vec4[texdst->resolution.width * texdst->resolution.height * sizeof(glm::vec4) * 6];
@@ -384,6 +444,7 @@ void TextureHandler::generateVec4MipmapData (
 
 float TextureHandler::linearInterpolatedNoise (glm::vec2 T, uint32_t N, float** noise) {
 	//consider 2D catmull-rom splines later
+	// ^^^ what does this mean lol???
 	glm::ivec2 TI = glm::vec2((int)T.x, (int)T.y);
 	glm::vec2 dT = T - (glm::vec2)TI;
 	TI = glm::ivec2(TI.x % N, TI.y % N);
