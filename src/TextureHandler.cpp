@@ -63,26 +63,27 @@ void TextureHandler::deallocTex (void* ptr) {
 	free(ptr);
 }
 
-void TextureHandler::generateSineTextures (
-		void* dst,
-		uint32_t x,
-		uint32_t y,
-		const TextureInfo& texinfo,
-		const BaseGenInfo& geninfo) {
-	if (texinfo.type == TEXTURE_TYPE_DIFFUSE) {
-		glm::vec4* dstWrt = reinterpret_cast<glm::vec4*>(dst);
-		// not 100% sure this is how this direction of transformation works...
-		glm::vec3 transformed = geninfo.vec4wave.transform * glm::vec3(x, y, 1.f);
-		transformed /= transformed.z;
-		*dstWrt = glm::mix(geninfo.vec4wave.modulatees[0], geninfo.vec4wave.modulatees[1], (sin(x) + 1.f) / 2.f);
-	}
+float TextureHandler::generateWave (uint32_t x, uint32_t y, const TextureInfo& texinfo, const BaseGenInfo& geninfo) {
+	WaveGenInfo gi = geninfo.wave;
+	if (gi.type == WAVE_TYPE_SINE) return sin((x + gi.offset) / gi.wavelength * 6.28);
+	else if (gi.type == WAVE_TYPE_TRI)
+		return -abs(fmod((x + gi.offset) / gi.wavelength, 1.f) * 2.f - 1.f) + 1.f;
+	else if (gi.type == WAVE_TYPE_SAW) return abs(fmod((x + gi.offset) / gi.wavelength, 1.f));
+	else if (gi.type == WAVE_TYPE_SQUARE) return (fmod((x + gi.offset) / gi.wavelength, 1.f) > 0.5f) ? 1.f : 0.f;
 }
 
-void TextureHandler::generateNewSystemTextures (std::vector<TextureInfo&> texdsts) {
+void TextureHandler::generateNewSystemTextures (std::vector<TextureInfo> texdsts) {
+	BaseGenInfo geninfo {};
 	for (auto& t: texdsts) {
 		if (t.type == TEXTURE_TYPE_DIFFUSE) {
+			BaseUseInfo<glm::vec4> useinfo {};
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
-
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
+			useinfo.interp = {{glm::vec4(0.f, 1.f, 0.f, 1.f), glm::vec4(0.f, 0.f, 1.f, 1.f)}};
+			geninfo.wave = {WAVE_TYPE_TRI,
+							float_t(t.resolution.width) / 25.f,
+							0.f};
+			add(t, data, generateWave, geninfo, interp, useinfo);
 			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}

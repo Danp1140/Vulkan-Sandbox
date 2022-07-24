@@ -671,11 +671,14 @@ Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {
 //		result->proportionalTransform(transform, glm::vec3(0.f, -1.f, 0.f), 0.5f);
 		result->transform(transform);
 
-		TextureInfo* texdsts[3] {result->getDiffuseTexturePtr(),
-								 result->getNormalTexturePtr(),
-								 result->getHeightTexturePtr()};
-		TextureHandler::generateGraniteTextures(&texdsts[0], 3);
-		result->getDiffuseTexturePtr()->setUVScale(glm::vec2(100.f, 100.f));
+//		TextureInfo* texdsts[3] {result->getDiffuseTexturePtr(),
+//								 result->getNormalTexturePtr(),
+//								 result->getHeightTexturePtr()};
+//		TextureHandler::generateGraniteTextures(&texdsts[0], 3);
+//		result->getDiffuseTexturePtr()->setUVScale(glm::vec2(100.f, 100.f));
+		TextureHandler::generateNewSystemTextures({result->diffusetexture,
+												   result->normaltexture,
+												   result->heighttexture});
 		result->rewriteTextureDescriptorSets();
 	}
 	return result;

@@ -11,18 +11,34 @@
 
 #define TEX_GEN_FUNC_DECL(funcname) static void funcname (TextureInfo** texdsts, uint8_t numtexes);
 
+#define USE_FUNC_T T(* useFunc)(float_t value, const BaseUseInfo<T>&)
+#define GEN_FUNC_T float (* genFunc)(uint32_t, uint32_t, const TextureInfo&, const BaseGenInfo&)
+
 template<class T>
-struct WaveGenInfo {
-	glm::mat3 transform;
-	T modulatees[2];
+struct InterpUseInfo {
+	T endpoints[2];
 };
 
-typedef union BaseGenInfo {
-	WaveGenInfo<float> floatwave;
-	WaveGenInfo<glm::vec4> vec4wave;
-} BaseGenInfo;
+template<class T>
+union BaseUseInfo {
+	InterpUseInfo<T> interp;
+};
 
-typedef void (* baseGenFunc) (void*, uint32_t, uint32_t, const TextureInfo&, const BaseGenInfo&);
+typedef enum WaveType {
+	WAVE_TYPE_SINE,
+	WAVE_TYPE_TRI,
+	WAVE_TYPE_SAW,
+	WAVE_TYPE_SQUARE
+} WaveType;
+
+typedef struct WaveGenInfo {
+	WaveType type;
+	float_t wavelength, offset;
+} WaveGenInfo;
+
+typedef union BaseGenInfo {
+	WaveGenInfo wave;
+} BaseGenInfo;
 
 class TextureHandler {
 private:
@@ -35,30 +51,35 @@ private:
 	static void deallocTex (void* ptr);
 
 	template<class T>
-	static void add (const TextureInfo& texinfo, T* dst, baseGenFunc genfunc, const BaseGenInfo& geninfo) {
-		T* temp = new T;
+	static void
+	add (
+			const TextureInfo& texinfo,
+			T* dst,
+			GEN_FUNC_T,
+			const BaseGenInfo& geninfo,
+			USE_FUNC_T,
+			const BaseUseInfo<T>& useinfo) {
 		for (uint32_t x = 0; x < texinfo.resolution.width; x++) {
 			for (uint32_t y = 0; y < texinfo.resolution.height; y++) {
-				genfunc(reinterpret_cast<void*>(temp), x, y, texinfo, geninfo);
-				dst[x * texinfo.resolution.height + y] += temp;
+				dst[x * texinfo.resolution.height + y] += useFunc(genFunc(x, y, texinfo, geninfo), useinfo);
 			}
 		}
-		delete temp;
 	}
 
-	static void generateSineTextures (
-			void* dst,
-			uint32_t x,
-			uint32_t y,
-			const TextureInfo& texinfo,
-			const BaseGenInfo& geninfo);
+	template<class T>
+	static T interp (float_t value, const BaseUseInfo<T>& useinfo) {
+		// TODO: add more interp options than just linear
+		return value * useinfo.interp.endpoints[0] + (1.f - value) * useinfo.interp.endpoints[1];
+	}
+
+	static float generateWave (uint32_t x, uint32_t y, const TextureInfo& texinfo, const BaseGenInfo& geninfo);
 
 public:
 	TextureHandler ();
 
 	static void init ();
 
-	static void generateNewSystemTextures (std::vector<TextureInfo&> texdsts);
+	static void generateNewSystemTextures (std::vector<TextureInfo> texdsts);
 
 	static void generateGridTextures (
 			TextureInfo** texdsts,
@@ -100,7 +121,8 @@ public:
 
 	static float turbulentNoise (glm::ivec2 T, uint32_t N, uint32_t reslev, float** noise);
 
-	static void generateNormalFromHeight (float** src, glm::vec4** dst, uint32_t resh, uint32_t resn, float worldspacetotexspace);
+	static void
+	generateNormalFromHeight (float** src, glm::vec4** dst, uint32_t resh, uint32_t resn, float worldspacetotexspace);
 
 	static glm::vec4 normalizedColorRamp (float x);
 

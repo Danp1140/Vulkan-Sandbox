@@ -63,7 +63,7 @@ WanglingEngine::WanglingEngine () {
 
 	initTroubleshootingLines();
 
-	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
+	updateTexMonDescriptorSets(*meshes[1]->getDiffuseTexturePtr());
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
@@ -223,18 +223,24 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 		}
 	}
 
-	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
-			glm::vec3(10., 0., -10.)};
-	meshes[0]->generateSteppeMesh(steppearea,
-								  {{glm::vec3(11., 0., 11.),
-										  glm::vec3(10., 0., -8.),
-										  glm::vec3(4., 0., -6.),
-										  glm::vec3(4., 0., 4.),
-										  glm::vec3(-4., 0., 6.),
-										  glm::vec3(-6., 0., 4.),
-										  glm::vec3(-10., 0., -4),
-										  glm::vec3(-11., 0., 4.)}},
-								  0.f);
+//	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
+//										 glm::vec3(10., 0., -10.)};
+//	meshes[0]->generateSteppeMesh(steppearea,
+//								  {{glm::vec3(11., 0., 11.),
+//									glm::vec3(10., 0., -8.),
+//									glm::vec3(4., 0., -6.),
+//									glm::vec3(4., 0., 4.),
+//									glm::vec3(-4., 0., 6.),
+//									glm::vec3(-6., 0., 4.),
+//									glm::vec3(-10., 0., -4),
+//									glm::vec3(-11., 0., 4.)}},
+//								  0.f);
+//	TextureHandler::generateNewSystemTextures({*(meshes[0]->getDiffuseTexturePtr()),
+//											   *(meshes[0]->getNormalTexturePtr()),
+//											   *(meshes[0]->getHeightTexturePtr())});
+//	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1.f, 1.f));
+//	meshes[0]->getDiffuseTexturePtr()->setUVPosition(glm::vec2(0.f, 0.f));
+//	meshes[0]->rewriteTextureDescriptorSets();
 	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
 	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
@@ -599,7 +605,7 @@ void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifinde
 					self->lights[i]->getShadowRenderPass(),
 					self->lights[i]->getShadowFramebuffer(),
 					{{0, 0}, {static_cast<uint32_t>(self->lights[i]->getShadowmapResolution()),
-							static_cast<uint32_t>(self->lights[i]->getShadowmapResolution())}},
+							  static_cast<uint32_t>(self->lights[i]->getShadowmapResolution())}},
 					1,
 					&clearval
 			};
