@@ -9,8 +9,6 @@ std::mutex WanglingEngine::submitfencemutex = std::mutex();
 bool WanglingEngine::submitfenceavailable = true;
 
 WanglingEngine::WanglingEngine () {
-//	texturehandler = TextureHandler();
-
 	TextureHandler::init();
 	uint8_t nummeshes, numlights;
 	countSceneObjects("../resources/scenelayouts/rocktestlayout.json", &nummeshes, &numlights);

@@ -63,14 +63,72 @@ void TextureHandler::deallocTex (void* ptr) {
 	free(ptr);
 }
 
-float TextureHandler::generateWave (uint32_t x, uint32_t y, const TextureInfo& texinfo, const BaseGenInfo& geninfo) {
+void TextureHandler::generateTextures (std::vector<TextureInfo> texdsts, const TexGenFuncSet funcset) {
+	for (auto& t: texdsts) {
+		if (t.type == TEXTURE_TYPE_DIFFUSE) {
+			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
+			funcset.diffuse(t, data);
+			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			deallocTex(reinterpret_cast<void*>(data));
+		} else if (t.type == TEXTURE_TYPE_NORMAL) {
+			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
+			funcset.normal(t, data);
+			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			deallocTex(reinterpret_cast<void*>(data));
+		} else if (t.type == TEXTURE_TYPE_HEIGHT) {
+			float* data = reinterpret_cast<float*>(allocTex(t));
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
+			funcset.height(t, data);
+			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			deallocTex(reinterpret_cast<void*>(data));
+		}
+	}
+}
+
+GEN_FUNC_IMPL(generateWave) {
 	WaveGenInfo gi = geninfo.wave;
 	if (gi.type == WAVE_TYPE_SINE) return sin((x + gi.offset) / gi.wavelength * 6.28);
 	else if (gi.type == WAVE_TYPE_TRI)
 		return -abs(fmod((x + gi.offset) / gi.wavelength, 1.f) * 2.f - 1.f) + 1.f;
 	else if (gi.type == WAVE_TYPE_SAW) return abs(fmod((x + gi.offset) / gi.wavelength, 1.f));
-	else if (gi.type == WAVE_TYPE_SQUARE) return (fmod((x + gi.offset) / gi.wavelength, 1.f) > 0.5f) ? 1.f : 0.f;
+	else if (gi.type == WAVE_TYPE_SQUARE)
+		return (fmod((x + gi.offset) / gi.wavelength, 1.f) > 0.5f) ? 1.f : 0.f;
+	return 0.f;
 }
+
+GEN_FUNC_IMPL(generateRandom) {
+	switch (geninfo.random.type) {
+		case RANDOM_TYPE_UNIFORM:
+		default:
+			return geninfo.random.distribution.uniform(randomengine);
+	}
+}
+
+GEN_FUNC_IMPL(generateTurbulence) {
+	return turbulence[x % turbulenceresolution][y % turbulenceresolution];
+}
+
+
+TEX_FUNC_IMPL_DIFFUSE(generateMacroTest) {
+	BaseGenInfo geninfo {.wave = {WAVE_TYPE_SINE, texdst.resolution.width / 25.f, 0.f}};
+	BaseUseInfo<glm::vec4> useinfo {.interp = {glm::vec4(0.f, 0.f, 0.f, 1.f), glm::vec4(1.f, 1.f, 1.f, 1.f)}};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+			geninfo.wave.offset = 100.f * generateTurbulence(x, y, texdst, geninfo);
+			addTexel(texdst,
+					 datadst[x * texdst.resolution.height + y],
+					 generateWave,
+					 geninfo,
+					 interp,
+					 useinfo,
+					 x, y);
+		}
+}
+
+TEX_FUNC_IMPL_NORMAL(generateMacroTest) {}
+
+TEX_FUNC_IMPL_HEIGHT(generateMacroTest) {}
 
 void TextureHandler::generateNewSystemTextures (std::vector<TextureInfo> texdsts) {
 	BaseGenInfo geninfo {};
@@ -78,12 +136,11 @@ void TextureHandler::generateNewSystemTextures (std::vector<TextureInfo> texdsts
 		if (t.type == TEXTURE_TYPE_DIFFUSE) {
 			BaseUseInfo<glm::vec4> useinfo {};
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
-			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
-			useinfo.interp = {{glm::vec4(0.f, 1.f, 0.f, 1.f), glm::vec4(0.f, 0.f, 1.f, 1.f)}};
-			geninfo.wave = {WAVE_TYPE_TRI,
-							float_t(t.resolution.width) / 25.f,
-							0.f};
-			add(t, data, generateWave, geninfo, interp, useinfo);
+			memset(reinterpret_cast<void*>(data),
+				   0,
+				   t.resolution.width * t.resolution.height * sizeof(glm::vec4));
+			useinfo.interp = {{glm::vec4(0.f, 0.f, 0.f, 1.f), glm::vec4(1.f, 1.f, 1.f, 1.f)}};
+//			add(t, data, generateTurbulence, geninfo, interp, useinfo);
 			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
@@ -107,8 +164,10 @@ void TextureHandler::generateGridTextures (
 			}
 			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(finaltex));
 			delete[] finaltex;
-		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL || texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
-			size_t size = texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
+		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL ||
+				   texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
+			size_t size =
+					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
 			glm::vec4* data = (glm::vec4*)malloc(size);
 			memset(data, 0, size);
 			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
@@ -164,7 +223,8 @@ void TextureHandler::generateSandTextures (
 							= 0.05 * sin((float)y / (float)texdsts[texidx]->resolution.height * 100. +
 										 turbulence[x % turbulenceresolution][y % turbulenceresolution] * 25.)
 							  + 0.05 * cos((float)x / (float)texdsts[texidx]->resolution.width * 100. +
-										   turbulence[x % turbulenceresolution][y % turbulenceresolution] * 25.);
+										   turbulence[x % turbulenceresolution][y % turbulenceresolution] *
+										   25.);
 				}
 			}
 			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
@@ -217,8 +277,9 @@ void TextureHandler::generateTestTextures (
 			}
 			for (uint32_t y = 0; y < texdsts[texidx]->resolution.height; y++) {
 				for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) {
-					turbulentsaw[x][y] = -10. * abs(sin((float)x / (float)texdsts[texidx]->resolution.width)) + 1
-										 + 0.5 * turbulence[x % turbulenceresolution][y % turbulenceresolution];
+					turbulentsaw[x][y] =
+							-10. * abs(sin((float)x / (float)texdsts[texidx]->resolution.width)) + 1
+							+ 0.5 * turbulence[x % turbulenceresolution][y % turbulenceresolution];
 
 				}
 			}
@@ -227,8 +288,10 @@ void TextureHandler::generateTestTextures (
 			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) delete[] turbulentsaw[x];
 			delete[] turbulentsaw;
 			delete[] finaltex;
-		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL || texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
-			size_t size = texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
+		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL ||
+				   texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
+			size_t size =
+					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
 			glm::vec4* data = (glm::vec4*)malloc(size);
 			memset(data, 0, size);
 			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
@@ -328,8 +391,10 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) delete[] turbulentsquare[x];
 			delete[] turbulentsquare;
 			delete[] finaltex;
-		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL || texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
-			size_t size = texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
+		} else if (texdsts[texidx]->type == TEXTURE_TYPE_NORMAL ||
+				   texdsts[texidx]->type == TEXTURE_TYPE_HEIGHT) {
+			size_t size =
+					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
 			glm::vec4* data = (glm::vec4*)malloc(size);
 			memset(data, 0, size);
 			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
@@ -340,7 +405,8 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 
 void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 	//pass in sun for position info and color info diffusion
-	glm::vec4* data = new glm::vec4[texdst->resolution.width * texdst->resolution.height * sizeof(glm::vec4) * 6];
+	glm::vec4* data = new glm::vec4[texdst->resolution.width * texdst->resolution.height * sizeof(glm::vec4) *
+									6];
 	glm::vec3 directionvectortemp;
 	glm::vec2 uv;
 	for (uint32_t layer = 0; layer < 6; layer++) {
@@ -355,11 +421,15 @@ void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 				else if (layer == 2) directionvectortemp = glm::vec3(uv.x * 2. - 1., 1., (1 - uv.y) * 2. - 1.);
 				else if (layer == 3) directionvectortemp = glm::vec3(uv.x * 2. - 1., -1., uv.y * 2. - 1.);
 				else if (layer == 4) directionvectortemp = glm::vec3(uv.x * 2. - 1., uv.y * 2. - 1., 1.);
-				else if (layer == 5) directionvectortemp = glm::vec3((1. - uv.x) * 2. - 1., uv.y * 2. - 1., -1.);
+				else if (layer == 5)
+					directionvectortemp = glm::vec3((1. - uv.x) * 2. - 1.,
+													uv.y * 2. - 1.,
+													-1.);
 				else directionvectortemp = glm::vec3(0.);
 				directionvectortemp = glm::normalize(directionvectortemp);
 				if (glm::length(directionvectortemp - glm::normalize(glm::vec3(0., 100., 500))) < 0.05) {
-					data[layer * texdst->resolution.height * texdst->resolution.width + y * texdst->resolution.width +
+					data[layer * texdst->resolution.height * texdst->resolution.width +
+						 y * texdst->resolution.width +
 						 x] = glm::vec4(1.);
 				} else {
 //					if(directionvectortemp.y<0.) data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]=glm::vec4(0.3, 0.3, 0.7, 1.);
@@ -371,8 +441,11 @@ void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 					const glm::vec3 P = glm::vec3(0., R, 0.), L = directionvectortemp;
 					const float b = 2 * glm::dot(P, L);
 					float t = (-b + sqrt(b * b + 8. * R * h + 4. * h * h)) / 2.;
-					data[layer * texdst->resolution.height * texdst->resolution.width + y * texdst->resolution.width +
-						 x] = glm::vec4((1. - directionvectortemp.y) * 0.5, (1. - directionvectortemp.y) * 0.5, 0.9,
+					data[layer * texdst->resolution.height * texdst->resolution.width +
+						 y * texdst->resolution.width +
+						 x] = glm::vec4((1. - directionvectortemp.y) * 0.5,
+										(1. - directionvectortemp.y) * 0.5,
+										0.9,
 										1.);
 //						float lambda;
 //						for(uint8_t i=0;i<3;i++){
@@ -451,7 +524,8 @@ float TextureHandler::linearInterpolatedNoise (glm::vec2 T, uint32_t N, float** 
 	TI = glm::ivec2(TI.x % N, TI.y % N);
 	if (T.x >= 0 && T.y >= 0) {
 		float xinterpa = dT.x * noise[(TI.x + 1) % N][TI.y] + (1.0 - dT.x) * noise[TI.x][TI.y],
-				xinterpb = dT.x * noise[(TI.x + 1) % N][(TI.y + 1) % N] + (1.0 - dT.x) * noise[TI.x][(TI.y + 1) % N];
+				xinterpb =
+				dT.x * noise[(TI.x + 1) % N][(TI.y + 1) % N] + (1.0 - dT.x) * noise[TI.x][(TI.y + 1) % N];
 		return dT.y * xinterpb + (1.0 - dT.y) * xinterpa;
 	}
 	return 0;
