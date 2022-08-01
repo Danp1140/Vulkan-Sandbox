@@ -23,10 +23,8 @@ Mesh::Mesh (
 			&uniformbuffermemories,
 			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
 	texInit(dir, nir, hir);
-	TextureInfo* texinfostemp[3] = {&diffusetexture,
-									&normaltexture,
-									&heighttexture};
-	TextureHandler::generateBlankTextures(&texinfostemp[0], 3);
+	// TODO: make textures optional
+	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
 	rewriteTextureDescriptorSets();
 }
 
@@ -682,7 +680,7 @@ Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {
 		TextureHandler::generateTextures({result->diffusetexture,
 										  result->normaltexture,
 										  result->heighttexture},
-										 TextureHandler::generateMacroTestSet);
+										 TextureHandler::colorfulMarbleTexGenSet);
 		result->rewriteTextureDescriptorSets();
 	}
 	return result;

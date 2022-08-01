@@ -32,8 +32,10 @@ WanglingEngine::WanglingEngine () {
 	 * To really find the best solution, we need to consider how TextureHandler is going to be used, what particular
 	 * function it has, other than some vague hope that it will help with efficiency.
 	 */
-	TextureInfo* textemp = ocean->getNormalMapPtr();
-	texturehandler.generateOceanTextures(&textemp, 1);
+	// diff btwn normalmap and normaltex??????
+//	TextureInfo* textemp = ocean->getNormalMapPtr();
+//	texturehandler.generateOceanTextures(&textemp, 1);
+	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
 	ocean->rewriteTextureDescriptorSets();
 
 	troubleshootingtext = new Text(
