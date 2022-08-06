@@ -21,6 +21,7 @@
 
 #include <thread>
 #include <rapidjson/document.h>
+#include <queue>
 
 #define NUM_RECORDING_THREADS 1
 #define TIME_OPERATION(op){ \
@@ -58,6 +59,8 @@ private:
 	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
 	uint64_t multiverseseed;
+	std::queue<std::function<void ()>> recordingtasks;
+	static std::mutex recordingmutex;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -72,6 +75,8 @@ private:
 
 	void recordSkyboxCommandBuffers (uint8_t fifindex, uint8_t sciindex);
 
+	static void recordSkyboxCommandBuffers (cbRecData data);
+
 	void recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex);
 
 	void recordTroubleshootingLinesCommandBuffers (uint8_t fifindex, uint8_t sciindex, WanglingEngine* self);
@@ -79,6 +84,13 @@ private:
 	void updateTexMonDescriptorSets (TextureInfo tex);
 
 	static void recordCommandBuffer (WanglingEngine* self, uint32_t fifindex);
+
+	void enqueueRecordingTasks ();
+
+	static void processRecordingTasks (std::queue<std::function<void ()>>* tasks);
+
+	// TODO: tack this onto the end of a thread
+	void collectSecondaryCommandBuffers ();
 
 	/* countSceneObjects and loadScene help with loading and pre-loading scenes from a json file. Pre-loading is done so
 	 * that GraphicsHandler can know how many meshes and lights to make space for before they are actually created.

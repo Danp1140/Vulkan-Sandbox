@@ -57,6 +57,14 @@ const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] =
 		VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
 		VK_SHADER_STAGE_FRAGMENT_BIT};
 
+typedef struct cbRecData {
+	VkRenderPass renderpass;
+	VkFramebuffer framebuffer;
+	VkCommandBuffer commandbuffer;
+	VkDescriptorSet descriptorset;
+} cbRecData;
+#define CB_REC_TASK_T void (*recTask) (cbRecData)
+
 typedef enum ChangeFlagBits {
 	NO_CHANGE_FLAG_BIT = 0x00000000,
 	CAMERA_LOOK_CHANGE_FLAG_BIT = 0x00000001,

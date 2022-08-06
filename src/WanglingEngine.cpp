@@ -6,6 +6,7 @@
 
 std::condition_variable WanglingEngine::conditionvariable = std::condition_variable();
 std::mutex WanglingEngine::submitfencemutex = std::mutex();
+std::mutex WanglingEngine::recordingmutex = std::mutex();
 bool WanglingEngine::submitfenceavailable = true;
 
 WanglingEngine::WanglingEngine () {
@@ -93,8 +94,11 @@ WanglingEngine::WanglingEngine () {
 	}
 
 	for (uint8_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-		recordingthreads[0] = std::thread(threadedCmdBufRecord, this);
+//		recordingthreads[0] = std::thread(threadedCmdBufRecord, this);
+		enqueueRecordingTasks();
+		recordingthreads[0] = std::thread(processRecordingTasks, &recordingtasks);
 		recordingthreads[0].join();
+		collectSecondaryCommandBuffers();
 		GraphicsHandler::vulkaninfo.currentframeinflight++;
 	}
 
@@ -452,6 +456,51 @@ void WanglingEngine::recordSkyboxCommandBuffers (uint8_t fifindex, uint8_t sciin
 	vkEndCommandBuffer(skyboxcommandbuffers[fifindex]);
 }
 
+void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data) {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			data.renderpass,
+			0,
+			data.framebuffer,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+			&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(data.commandbuffer, &cmdbufbegininfo);
+	vkCmdBindPipeline(
+			data.commandbuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipeline);
+	vkCmdPushConstants(
+			data.commandbuffer,
+			GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipelinelayout,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			0,
+			sizeof(SkyboxPushConstants),
+			&GraphicsHandler::vulkaninfo.skyboxpushconstants);
+	vkCmdBindDescriptorSets(
+			data.commandbuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipelinelayout,
+			0,
+			1, &data.descriptorset,     //is this theoretically identical to sceneds?
+			0, nullptr);
+	vkCmdDraw(
+			data.commandbuffer,
+			36,
+			1,
+			0,
+			0);
+	vkEndCommandBuffer(data.commandbuffer);
+}
+
 void WanglingEngine::recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -726,6 +775,51 @@ void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifinde
 	GraphicsHandler::changeflags[fifindex] = NO_CHANGE_FLAG_BIT;
 }
 
+void WanglingEngine::enqueueRecordingTasks () {
+	cbRecData tempdata {GraphicsHandler::vulkaninfo.primaryrenderpass,
+						GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex],
+						skyboxcommandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+						skyboxdescriptorsets[GraphicsHandler::swapchainimageindex]};
+	// TODO: get rid of this wacky cast syntax after we are no longer overloading
+	recordingtasks.push(std::bind(static_cast<void (*) (cbRecData)>(recordSkyboxCommandBuffers), tempdata));
+}
+
+void WanglingEngine::processRecordingTasks (std::queue<std::function<void ()>>* tasks) {
+	// this is quite a bit of copying, see if we can find a way to avoid later, b/c its neccesary in here anyway
+	std::function<void ()> temp;
+	std::unique_lock<std::mutex> lock(recordingmutex, std::defer_lock);
+	while (!tasks->empty()) {
+		lock.lock();
+		temp = tasks->front();
+		tasks->pop();
+		lock.unlock();
+		temp();
+	}
+}
+
+void WanglingEngine::collectSecondaryCommandBuffers () {
+	vkBeginCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+						 &cmdbufferbegininfo);
+	VkRenderPassBeginInfo renderpassbegininfo {
+			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			nullptr,
+			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex],
+			{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+			2,
+			&GraphicsHandler::vulkaninfo.primaryclears[0]
+	};
+	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+						 &renderpassbegininfo,
+						 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+						 1,
+						 &skyboxcommandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
+	vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
+	vkEndCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
+	GraphicsHandler::changeflags[GraphicsHandler::vulkaninfo.currentframeinflight] = NO_CHANGE_FLAG_BIT;
+}
+
 void WanglingEngine::draw () {
 	std::chrono::time_point<std::chrono::high_resolution_clock> start;
 
@@ -746,7 +840,11 @@ void WanglingEngine::draw () {
 	troubleshootingtext->setMessage(GraphicsHandler::troubleshootingsstrm.str(), GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
-	recordingthreads[0] = std::thread(threadedCmdBufRecord, this);
+	enqueueRecordingTasks();
+
+	recordingthreads[0] = std::thread(processRecordingTasks, &recordingtasks);
+
+//	recordingthreads[0] = std::thread(threadedCmdBufRecord, this);
 
 	glfwPollEvents();
 
@@ -846,6 +944,8 @@ void WanglingEngine::draw () {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	VERBOSE_TIME_OPERATION(recordingthreads[0].join());
+
+	collectSecondaryCommandBuffers();
 
 	// TODO: move below to a GH submitandpresent func
 	start = std::chrono::high_resolution_clock::now();
