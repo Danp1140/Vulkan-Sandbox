@@ -100,7 +100,7 @@ private:
 public:
 	ParticleSystem (ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
 
-	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const override;
+	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
 };
 
 #include "ParticleSystem.inl"

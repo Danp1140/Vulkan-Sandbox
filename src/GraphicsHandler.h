@@ -45,8 +45,8 @@
 #define SHIFT_TRIPLE(vec3) '('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<')'
 #define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
 
-#define MAX_FRAMES_IN_FLIGHT 6
-// TODO: get rid of VULKAN_ on these names
+#define NUM_RECORDING_THREADS 4
+#define MAX_FRAMES_IN_FLIGHT 3
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
 #define MAX_LIGHTS 2
 #define NUM_SHADER_STAGES_SUPPORTED 5
@@ -56,14 +56,6 @@ const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] =
 		VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 		VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
 		VK_SHADER_STAGE_FRAGMENT_BIT};
-
-typedef struct cbRecData {
-	VkRenderPass renderpass;
-	VkFramebuffer framebuffer;
-	VkCommandBuffer commandbuffer;
-	VkDescriptorSet descriptorset;
-} cbRecData;
-#define CB_REC_TASK_T void (*recTask) (cbRecData)
 
 typedef enum ChangeFlagBits {
 	NO_CHANGE_FLAG_BIT = 0x00000000,
@@ -183,6 +175,24 @@ typedef struct MeshUniformBuffer {
 			heightuvmatrix;
 } MeshUniformBuffer;
 
+typedef struct cbRecData {
+	VkRenderPass renderpass;
+	VkFramebuffer framebuffer;
+	VkCommandBuffer commandbuffer; // TODO: remove other stuff redundant w/ cbset
+	VkDescriptorSet descriptorset, scenedescriptorset;
+	PipelineInfo pipeline;
+	void* pushconstantdata;
+	std::mutex* dsmutex, * scenedsmutex;
+	VkBuffer vertexbuffer, indexbuffer;
+	uint16_t numtris;
+} cbRecData;
+
+// this is one per thread, so no sync required :)
+typedef struct cbSet {
+	VkCommandPool pool = VK_NULL_HANDLE;
+	std::vector<VkCommandBuffer> buffers {};
+} cbSet;
+
 typedef struct VulkanInfo {
 	GLFWwindow* window;
 	int horizontalres, verticalres, width, height;
@@ -211,8 +221,10 @@ typedef struct VulkanInfo {
 	VkFramebuffer* primaryframebuffers, * waterframebuffers;
 	VkClearValue primaryclears[2];
 	VkCommandPool commandpool;
+	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
 	VkCommandBuffer* commandbuffers, interimcommandbuffer;
 	VkSemaphore imageavailablesemaphores[MAX_FRAMES_IN_FLIGHT], renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
+	// TODO: remove recordinginvalidfences
 	VkFence* submitfinishedfences, * recordinginvalidfences, * presentfinishedfences;
 	int currentframeinflight;
 	VkBuffer stagingbuffer;
@@ -249,7 +261,7 @@ typedef struct Tri {
 const VkCommandBufferBeginInfo cmdbufferbegininfo {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		nullptr,
-		0,
+		0,        // could make this one time submit???
 		nullptr
 };
 

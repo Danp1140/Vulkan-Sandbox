@@ -12,7 +12,7 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos) {
 	for (uint16_t y = 0; y < OCEAN_PRE_TESS_SUBDIV + 1; y++) {
 		for (uint16_t x = 0; x < OCEAN_PRE_TESS_SUBDIV + 1; x++) {
 			vertices.push_back({pos + glm::vec3(dbounds.x * x, 0.0, dbounds.y * y), glm::vec3(0.0, 1.0, 0.0),
-									   glm::vec2(x * subdivwidth, y * subdivwidth)});
+								glm::vec2(x * subdivwidth, y * subdivwidth)});
 		}
 	}
 	for (uint16_t y = 0; y < OCEAN_PRE_TESS_SUBDIV; y++) {
@@ -45,15 +45,15 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos) {
 									   VK_IMAGE_LAYOUT_GENERAL,
 									   VK_IMAGE_VIEW_TYPE_2D);
 
-	glm::vec4*datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
+	glm::vec4* datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
 	memset((void*)datatemp, 0, 512 * 512 * sizeof(glm::vec4));
 	GraphicsHandler::VKHelperInitTexture(&normalmap,
-	                                     2048, 0,
-	                                     VK_FORMAT_R32G32B32A32_SFLOAT,
-	                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	                                     TEXTURE_TYPE_NORMAL,
-	                                     VK_IMAGE_VIEW_TYPE_2D,
-	                                     GraphicsHandler::genericsampler);
+										 2048, 0,
+										 VK_FORMAT_R32G32B32A32_SFLOAT,
+										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+										 TEXTURE_TYPE_NORMAL,
+										 VK_IMAGE_VIEW_TYPE_2D,
+										 GraphicsHandler::genericsampler);
 	free(datatemp);
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
 			vertices,
@@ -99,11 +99,11 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 	ShadowmapPushConstants temppcs {
 			projtemp * glm::lookAt(glm::vec3(0., 5., 0.), glm::vec3(0., -1., 0.), glm::vec3(0., 0., 1.))
 	};
-	seabed->recordShadowDraw(0, 0,
-							 GraphicsHandler::vulkaninfo.templateshadowrenderpass,
-							 framebuffertemp,
-							 0,
-							 &temppcs);
+//	seabed->recordShadowDraw(0, 0,
+//							 GraphicsHandler::vulkaninfo.templateshadowrenderpass,
+//							 framebuffertemp,
+//							 0,
+//							 &temppcs);
 
 	VkCommandBufferBeginInfo cmdbuffbi {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -237,7 +237,7 @@ void Ocean::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sce
 			0,
 			0
 	};
-	VkCommandBufferBeginInfo cmdbufbegininfo{
+	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,

@@ -57,6 +57,7 @@ Text::~Text () {
 	delete[] textures;
 }
 
+// TODO: get rid of index lmao
 void Text::setMessage (std::string m, uint32_t index) {
 	message = m;
 	pushconstants.scale = glm::vec2(2.0f / (float)horizontalres, 2.0f / (float)verticalres);
@@ -103,7 +104,7 @@ void Text::regenFaces (bool init) {
 	// i legitimately do not understand how this is working so well in real time, updating every frame. it may be taking
 	// a hidden tax on performance, so still consider optimizations, as there could be some, especially if we can update
 	// only part of the texture or stream the data straight from the freetype bitmap to the gpu memory
-	for (char c:message) {
+	for (char c: message) {
 		if (c == '\n') {
 			penposition.y -= face->size->metrics.height / 64;
 			penposition.x = 0;
@@ -191,43 +192,83 @@ void Text::initCommandBuffers () {
 	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
 }
 
-void Text::recordCommandBuffer (uint8_t fifindex, uint8_t sciindex) {
+//void Text::recordCommandBuffer (uint8_t fifindex, uint8_t sciindex) {
+//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+//			nullptr,
+//			GraphicsHandler::vulkaninfo.primaryrenderpass,
+//			0,
+//			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+//			VK_FALSE,
+//			0,
+//			0
+//	};
+//	VkCommandBufferBeginInfo cmdbufbegininfo{
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//			nullptr,
+//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+//			&cmdbufinherinfo
+//	};
+//	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+//	vkCmdBindPipeline(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipeline);
+//	vkCmdPushConstants(
+//			commandbuffers[fifindex],
+//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+//			VK_SHADER_STAGE_VERTEX_BIT,
+//			0,
+//			sizeof(TextPushConstants),
+//			&pushconstants);
+//	vkCmdBindDescriptorSets(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+//			0,
+//			1,
+//			&descriptorsets[fifindex],
+//			0, nullptr);
+//	vkCmdDraw(commandbuffers[fifindex], 6, 1, 0, 0);
+//	vkEndCommandBuffer(commandbuffers[fifindex]);
+//}
+
+void Text::recordCommandBuffer (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			data.renderpass,
 			0,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+			data.framebuffer,
 			VK_FALSE,
 			0,
 			0
 	};
-	VkCommandBufferBeginInfo cmdbufbegininfo{
+	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			nullptr,
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
 	vkCmdBindPipeline(
-			commandbuffers[fifindex],
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipeline);
+			data.pipeline.pipeline);
 	vkCmdPushConstants(
-			commandbuffers[fifindex],
-			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+			cb,
+			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
 			sizeof(TextPushConstants),
-			&pushconstants);
+			data.pushconstantdata);
 	vkCmdBindDescriptorSets(
-			commandbuffers[fifindex],
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			0,
-			1,
-			&descriptorsets[fifindex],
+			1, &data.descriptorset,
 			0, nullptr);
-	vkCmdDraw(commandbuffers[fifindex], 6, 1, 0, 0);
-	vkEndCommandBuffer(commandbuffers[fifindex]);
+	vkCmdDraw(cb, 6, 1, 0, 0);
+	vkEndCommandBuffer(cb);
 }

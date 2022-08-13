@@ -12,6 +12,10 @@ vec2 positions[4]={
     pushconstants.position+vec2(0, pushconstants.scale.y),
     pushconstants.position+pushconstants.scale,
     pushconstants.position+vec2(pushconstants.scale.x, 0),
+//    vec2(0.f, 0.f),
+//    vec2(0.f, 0.f)+vec2(0, 1.f),
+//    vec2(1.f, 1.f),
+//    vec2(0.f, 0.f)+vec2(1.f, 0),
 };
 const vec2 uvs[4]={
     vec2(0, 1),

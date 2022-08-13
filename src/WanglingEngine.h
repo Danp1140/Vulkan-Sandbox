@@ -23,12 +23,17 @@
 #include <rapidjson/document.h>
 #include <queue>
 
-#define NUM_RECORDING_THREADS 1
 #define TIME_OPERATION(op){ \
         start=std::chrono::high_resolution_clock::now(); \
         op; \
         GraphicsHandler::troubleshootingsstrm<<"\nline "<<__LINE__<<" execution time: "\
         <<std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-start).count();\
+}
+#define PRINT_TIME_OPERATION(op){ \
+        start=std::chrono::high_resolution_clock::now(); \
+        op; \
+        std::cout<<"\nline "<<__LINE__<<" execution time: "\
+        <<std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-start).count()<<std::endl;\
 }
 #define VERBOSE_TIME_OPERATION(op){ \
         start=std::chrono::high_resolution_clock::now(); \
@@ -55,12 +60,14 @@ private:
 	static bool submitfenceavailable;
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet* skyboxdescriptorsets, * scenedescriptorsets, * texmondescriptorsets, * compositingdescriptorsets;
+	VkDescriptorSet* skyboxdescriptorsets, * texmondescriptorsets, * compositingdescriptorsets;
+	static VkDescriptorSet* scenedescriptorsets;
 	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
 	uint64_t multiverseseed;
-	std::queue<std::function<void ()>> recordingtasks;
-	static std::mutex recordingmutex;
+	std::queue<std::function<void (VkCommandBuffer&)>> recordingtasks;
+	std::queue<VkCommandBuffer> secondarybuffers;
+	static std::mutex recordingmutex, scenedsmutex;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -73,9 +80,9 @@ private:
 
 	void updateSkyboxDescriptorSets ();
 
-	void recordSkyboxCommandBuffers (uint8_t fifindex, uint8_t sciindex);
+//	void recordSkyboxCommandBuffers (uint8_t fifindex, uint8_t sciindex);
 
-	static void recordSkyboxCommandBuffers (cbRecData data);
+	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
 	void recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex);
 
@@ -87,7 +94,12 @@ private:
 
 	void enqueueRecordingTasks ();
 
-	static void processRecordingTasks (std::queue<std::function<void ()>>* tasks);
+	static void processRecordingTasks (
+			std::queue<std::function<void (VkCommandBuffer&)>>* tasks,    // see if you can pass these by reference
+			std::queue<VkCommandBuffer>* resultcbs,
+			uint8_t fifindex, // TODO: switch the order of fifi and threadi to match that of threadcbsets
+			uint8_t threadidx,
+			VkDevice device);
 
 	// TODO: tack this onto the end of a thread
 	void collectSecondaryCommandBuffers ();

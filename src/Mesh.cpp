@@ -10,7 +10,7 @@ Mesh::Mesh (
 		glm::quat r,
 		uint32_t dir,
 		uint32_t nir,
-		uint32_t hir) : position(p), scale(s), rotation(r) {
+		uint32_t hir) : position(p), scale(s), rotation(r), dsmutex() {
 	recalculateModelMatrix();
 	initDescriptorSets();
 	initCommandBuffers();
@@ -293,13 +293,83 @@ void Mesh::rewriteTextureDescriptorSets () {
 	}
 }
 
-void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const {
+//void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const {
+//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+//			nullptr,
+//			GraphicsHandler::vulkaninfo.primaryrenderpass,
+//			0,
+//			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+//			VK_FALSE,
+//			0,
+//			0
+//	};
+//	VkCommandBufferBeginInfo cmdbufbegininfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//			nullptr,
+//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+//			&cmdbufinherinfo
+//	};
+//	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+//	vkCmdBindPipeline(      //would like to only do this bind once, but unlikely to work out...
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipeline);
+//	vkCmdPushConstants(
+//			commandbuffers[fifindex],
+//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+//			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
+//			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+//			0,
+//			sizeof(PrimaryGraphicsPushConstants),
+//			&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
+//	vkCmdBindDescriptorSets(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+//			0,
+//			1,
+//			&sceneds[sciindex],
+//			0, nullptr);
+//	//same down to here
+//	vkCmdBindDescriptorSets(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+//			1,
+//			1,
+//			&descriptorsets[sciindex],
+//			0, nullptr);
+//	VkDeviceSize offsettemp = 0u;
+//	vkCmdBindVertexBuffers(
+//			commandbuffers[fifindex],
+//			0,
+//			1,
+//			&vertexbuffer,
+//			&offsettemp);
+//	vkCmdBindIndexBuffer(
+//			commandbuffers[fifindex],
+//			indexbuffer,
+//			0,
+//			VK_INDEX_TYPE_UINT16);
+//	vkCmdDrawIndexed(
+//			commandbuffers[fifindex],
+//			tris.size() * 3,
+//			1,
+//			0,
+//			0,
+//			0);
+//	vkEndCommandBuffer(commandbuffers[fifindex]);
+//}
+
+void Mesh::recordDraw (cbRecData data) {
+//	std::cout << data.commandbuffer << std::endl;
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			data.renderpass,
 			0,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+			data.framebuffer,
 			VK_FALSE,
 			0,
 			0
@@ -310,67 +380,128 @@ void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* scen
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
-	vkCmdBindPipeline(      //would like to only do this bind once, but unlikely to work out...
-			commandbuffers[fifindex],
+	vkBeginCommandBuffer(data.commandbuffer, &cmdbufbegininfo);
+	vkCmdBindPipeline(
+			data.commandbuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipeline);
+			data.pipeline.pipeline);
+	std::unique_lock<std::mutex> scenedslock(*data.scenedsmutex);
 	vkCmdPushConstants(
-			commandbuffers[fifindex],
-			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			data.commandbuffer,
+			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
 			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			0,
 			sizeof(PrimaryGraphicsPushConstants),
-			&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
+			data.pushconstantdata);
 	vkCmdBindDescriptorSets(
-			commandbuffers[fifindex],
+			data.commandbuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			0,
-			1,
-			&sceneds[sciindex],
+			1, &data.scenedescriptorset,
 			0, nullptr);
-	//same down to here
+	scenedslock.unlock();
+	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
-			commandbuffers[fifindex],
+			data.commandbuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			1,
 			1,
-			&descriptorsets[sciindex],
+			&data.descriptorset,
 			0, nullptr);
+	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
-			commandbuffers[fifindex],
+			data.commandbuffer,
 			0,
 			1,
-			&vertexbuffer,
+			&data.vertexbuffer,
 			&offsettemp);
 	vkCmdBindIndexBuffer(
-			commandbuffers[fifindex],
-			indexbuffer,
+			data.commandbuffer,
+			data.indexbuffer,
 			0,
 			VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(
-			commandbuffers[fifindex],
-			tris.size() * 3,
+			data.commandbuffer,
+			data.numtris * 3,
 			1,
 			0,
 			0,
 			0);
-	vkEndCommandBuffer(commandbuffers[fifindex]);
+	vkEndCommandBuffer(data.commandbuffer);
 }
 
-void Mesh::recordShadowDraw (
-		uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
-		ShadowmapPushConstants* pc) const {
+//void Mesh::recordShadowDraw (
+//		uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
+//		ShadowmapPushConstants* pc) const {
+//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+//			nullptr,
+//			renderpass,
+//			0,
+//			framebuffer,
+//			VK_FALSE,
+//			0,
+//			0
+//	};
+//	VkCommandBufferBeginInfo cmdbufbegininfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//			nullptr,
+//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+//			&cmdbufinherinfo
+//	};
+//	vkBeginCommandBuffer(shadowcommandbuffers[lightidx][fifindex], &cmdbufbegininfo);
+//	vkCmdBindPipeline(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipeline);
+//	vkCmdPushConstants(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+//			VK_SHADER_STAGE_VERTEX_BIT,
+//			0,
+//			sizeof(ShadowmapPushConstants),
+//			pc);
+//	vkCmdBindDescriptorSets(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+//			1,
+//			1,
+//			&descriptorsets[sciindex],
+//			0, nullptr);
+//	VkDeviceSize offsettemp = 0u;
+//	vkCmdBindVertexBuffers(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			0,
+//			1,
+//			&vertexbuffer,
+//			&offsettemp);
+//	vkCmdBindIndexBuffer(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			indexbuffer,
+//			0,
+//			VK_INDEX_TYPE_UINT16);
+//	vkCmdDrawIndexed(
+//			shadowcommandbuffers[lightidx][fifindex],
+//			tris.size() * 3,
+//			1,
+//			0,
+//			0,
+//			0);
+//	vkEndCommandBuffer(shadowcommandbuffers[lightidx][fifindex]);
+//}
+
+void Mesh::recordShadowDraw (cbRecData data) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			renderpass,
+			data.renderpass,
 			0,
-			framebuffer,
+			data.framebuffer,
 			VK_FALSE,
 			0,
 			0
@@ -381,46 +512,47 @@ void Mesh::recordShadowDraw (
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(shadowcommandbuffers[lightidx][fifindex], &cmdbufbegininfo);
+	vkBeginCommandBuffer(data.commandbuffer, &cmdbufbegininfo);
 	vkCmdBindPipeline(
-			shadowcommandbuffers[lightidx][fifindex],
+			data.commandbuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipeline);
+			data.pipeline.pipeline);
 	vkCmdPushConstants(
-			shadowcommandbuffers[lightidx][fifindex],
-			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+			data.commandbuffer,
+			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
 			sizeof(ShadowmapPushConstants),
-			pc);
+			data.pushconstantdata);
+	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
-			shadowcommandbuffers[lightidx][fifindex],
+			data.commandbuffer,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			1,
-			1,
-			&descriptorsets[sciindex],
+			1, &data.descriptorset,        // see if we can refactor to get rid of this???
 			0, nullptr);
+	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
-			shadowcommandbuffers[lightidx][fifindex],
+			data.commandbuffer,
 			0,
 			1,
-			&vertexbuffer,
+			&data.vertexbuffer,
 			&offsettemp);
 	vkCmdBindIndexBuffer(
-			shadowcommandbuffers[lightidx][fifindex],
-			indexbuffer,
+			data.commandbuffer,
+			data.indexbuffer,
 			0,
 			VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(
-			shadowcommandbuffers[lightidx][fifindex],
-			tris.size() * 3,
+			data.commandbuffer,
+			data.numtris * 3,
 			1,
 			0,
 			0,
 			0);
-	vkEndCommandBuffer(shadowcommandbuffers[lightidx][fifindex]);
+	vkEndCommandBuffer(data.commandbuffer);
 }
 
 void
@@ -497,8 +629,8 @@ void Mesh::cleanUpVertsAndTris () {
 	uint32_t initverttotal = vertices.size();
 	//any efficiency possible with breaks and stuff??
 #ifndef NO_LOADING_BARS
-	std::cout<<"removing duplicates: "<<ANSI_GREEN_FORE<<std::endl;
-	uint16_t dupecounter=0;
+	std::cout << "removing duplicates: " << ANSI_GREEN_FORE << std::endl;
+	uint16_t dupecounter = 0;
 #endif
 	for (int x = 0; x < vertices.size(); x++) {
 		for (int y = 0; y < x; y++) {
@@ -512,21 +644,22 @@ void Mesh::cleanUpVertsAndTris () {
 				if (x < vertices.size()) vertices.erase(vertices.begin() + x);
 #ifndef NO_LOADING_BARS
 				dupecounter++;
-				std::cout<<'\r';
-				for(uint8_t bars=0;bars<50;bars++){
-					if(float(x+1)/float(vertices.size())*100.>=float(bars)*2.) std::cout<<"\u2588";
-					else std::cout<<' ';
+				std::cout << '\r';
+				for (uint8_t bars = 0; bars < 50; bars++) {
+					if (float(x + 1) / float(vertices.size()) * 100. >= float(bars) * 2.) std::cout << "\u2588";
+					else std::cout << ' ';
 				}
 #endif
 			}
 		}
 	}
 #ifndef NO_LOADING_BARS
-	std::cout<<ANSI_RESET_FORE<<std::endl;
-	std::cout<<dupecounter<<" duplicates removed! ("<<(float(dupecounter)/float(initverttotal)*100.0f)<<" percent size decrease!!!)"<<std::endl;
+	std::cout << ANSI_RESET_FORE << std::endl;
+	std::cout << dupecounter << " duplicates removed! (" << (float(dupecounter) / float(initverttotal) * 100.0f)
+			  << " percent size decrease!!!)" << std::endl;
 
 
-	std::cout<<"finding tri adjacencies: "<<ANSI_GREEN_FORE<<std::endl;
+	std::cout << "finding tri adjacencies: " << ANSI_GREEN_FORE << std::endl;
 #endif
 	bool adjacencyfound;
 	for (int x = 0; x < tris.size(); x++) {
@@ -547,27 +680,27 @@ void Mesh::cleanUpVertsAndTris () {
 			}
 		}
 #ifndef NO_LOADING_BARS
-		std::cout<<'\r';
-		for(uint8_t bars=0;bars<50;bars++){
-			if(float(x+1)/float(tris.size())*100.>=float(bars*2.)) std::cout<<"\u2588";
-			else std::cout<<' ';
+		std::cout << '\r';
+		for (uint8_t bars = 0; bars < 50; bars++) {
+			if (float(x + 1) / float(tris.size()) * 100. >= float(bars * 2.)) std::cout << "\u2588";
+			else std::cout << ' ';
 		}
 #endif
 	}
 #ifndef NO_LOADING_BARS
-	std::cout<<ANSI_RESET_FORE<<std::endl;
+	std::cout << ANSI_RESET_FORE << std::endl;
 #endif
 
 	for (uint32_t x = 0; x < tris.size(); x++) {
 		for (uint16_t y = 0; y < 3; y++) {
 			tris[x].vertices[y] = &vertices[tris[x].vertexindices[y]];
 #ifndef NO_LOADING_BARS
-			std::cout<<"\rgiving tris vertex addresses (tri "<<(x+1)<<" of "<<tris.size()<<')';
+			std::cout << "\rgiving tris vertex addresses (tri " << (x + 1) << " of " << tris.size() << ')';
 #endif
 		}
 	}
 #ifndef NO_LOADING_BARS
-	std::cout<<std::endl;
+	std::cout << std::endl;
 #endif
 
 	for (auto& t: tris) {

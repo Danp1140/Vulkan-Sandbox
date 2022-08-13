@@ -126,14 +126,14 @@ void GraphicsHandler::VKInitPipelines () {
 		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc[3] {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
 																										   position)},
-				{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-															normal)},
-				{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
-														 uv)}};
+															   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
+																										   normal)},
+															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
+																										uv)}};
 		const char* shaderfilepathstemp[4] = {"../resources/shaders/SPIRV/defaultvert.spv",
-				"../resources/shaders/SPIRV/defaulttesc.spv",
-				"../resources/shaders/SPIRV/defaulttese.spv",
-				"../resources/shaders/SPIRV/defaultfrag.spv"};
+											  "../resources/shaders/SPIRV/defaulttesc.spv",
+											  "../resources/shaders/SPIRV/defaulttese.spv",
+											  "../resources/shaders/SPIRV/defaultfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT
 						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
@@ -166,21 +166,21 @@ void GraphicsHandler::VKInitPipelines () {
 				nullptr
 		};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-				nullptr,
-				0,
-				0,
-				nullptr
-		},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&objectdslbinding
-				}};
+																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+																   nullptr,
+																   0,
+																   0,
+																   nullptr
+														   },
+														   {
+																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+																   nullptr,
+																   0,
+																   1,
+																   &objectdslbinding
+														   }};
 		const char* shaderfilepathstemp[2] = {"../resources/shaders/SPIRV/textvert.spv",
-				"../resources/shaders/SPIRV/textfrag.spv"};
+											  "../resources/shaders/SPIRV/textfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 						  &shaderfilepathstemp[0],
@@ -200,12 +200,12 @@ void GraphicsHandler::VKInitPipelines () {
 	//skybox
 	{
 		VkDescriptorSetLayoutBinding binding[1] {{
-				0,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				nullptr
-		}};
+														 0,
+														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+														 1,
+														 VK_SHADER_STAGE_FRAGMENT_BIT,
+														 nullptr
+												 }};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
 				{      //ideally migrate this to either all scenedsl, or no scenedsl and all objectdsl
 						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -222,7 +222,7 @@ void GraphicsHandler::VKInitPipelines () {
 						nullptr
 				}};
 		const char* shaderfilepathstemp[2] = {"../resources/shaders/SPIRV/skyboxvert.spv",
-				"../resources/shaders/SPIRV/skyboxfrag.spv"};
+											  "../resources/shaders/SPIRV/skyboxfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 						  &shaderfilepathstemp[0],
@@ -242,26 +242,26 @@ void GraphicsHandler::VKInitPipelines () {
 	//ocean graph
 	{
 		VkDescriptorSetLayoutBinding objectdslbindings[3] {{
-				0,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1,
-				VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-				nullptr
-		},
-				{
-						1,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						2,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				}};
+																   0,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+																   nullptr
+														   },
+														   {
+																   1,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_FRAGMENT_BIT,
+																   nullptr
+														   },
+														   {
+																   2,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_FRAGMENT_BIT,
+																   nullptr
+														   }};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
 				scenedslcreateinfo,
 				{
@@ -273,14 +273,14 @@ void GraphicsHandler::VKInitPipelines () {
 		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc[3] {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
 																										   position)},
-				{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-															normal)},
-				{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
-														 uv)}};
+															   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
+																										   normal)},
+															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
+																										uv)}};
 		const char* shaderfilepathstemp[4] = {"../resources/shaders/SPIRV/oceanvert.spv",
-				"../resources/shaders/SPIRV/oceantesc.spv",
-				"../resources/shaders/SPIRV/oceantese.spv",
-				"../resources/shaders/SPIRV/oceanfrag.spv"};
+											  "../resources/shaders/SPIRV/oceantesc.spv",
+											  "../resources/shaders/SPIRV/oceantese.spv",
+											  "../resources/shaders/SPIRV/oceanfrag.spv"};
 		VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT
 						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
@@ -305,33 +305,33 @@ void GraphicsHandler::VKInitPipelines () {
 	//ocean comp
 	{
 		VkDescriptorSetLayoutBinding objdslbindings[2] {{
-				0,
-				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-				1,
-				VK_SHADER_STAGE_COMPUTE_BIT,
-				nullptr
-		},
-				{
-						1,
-						VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-						1,
-						VK_SHADER_STAGE_COMPUTE_BIT,
-						nullptr
-				}};
+																0,
+																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+																1,
+																VK_SHADER_STAGE_COMPUTE_BIT,
+																nullptr
+														},
+														{
+																1,
+																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+																1,
+																VK_SHADER_STAGE_COMPUTE_BIT,
+																nullptr
+														}};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-				nullptr,
-				0,
-				0,
-				nullptr
-		},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						2,
-						&objdslbindings[0]
-				}};
+																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+																   nullptr,
+																   0,
+																   0,
+																   nullptr
+														   },
+														   {
+																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+																   nullptr,
+																   0,
+																   2,
+																   &objdslbindings[0]
+														   }};
 		const char* shaderfilepaths[1] = {"../resources/shaders/SPIRV/oceancomp.spv"};
 		VKSubInitPipeline(&vulkaninfo.oceancomputepipeline,
 						  VK_SHADER_STAGE_COMPUTE_BIT,
@@ -377,9 +377,9 @@ void GraphicsHandler::VKInitPipelines () {
 				{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
 				{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)}};
 		const char* shaderfilepaths[4] {"../resources/shaders/SPIRV/grassvert.spv",
-				"../resources/shaders/SPIRV/grasstesc.spv",
-				"../resources/shaders/SPIRV/grasstese.spv",
-				"../resources/shaders/SPIRV/grassfrag.spv"};
+										"../resources/shaders/SPIRV/grasstesc.spv",
+										"../resources/shaders/SPIRV/grasstese.spv",
+										"../resources/shaders/SPIRV/grassfrag.spv"};
 		VKSubInitPipeline(
 				&vulkaninfo.grassgraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT
@@ -454,9 +454,9 @@ void GraphicsHandler::VKInitPipelines () {
 		};
 		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc {0, 0, VK_FORMAT_R32G32B32_SFLOAT,
-				offsetof(Vertex, position)};
+															offsetof(Vertex, position)};
 		const char* shaderfilepaths[2] {"../resources/shaders/SPIRV/shadowmapvert.spv",
-				"../resources/shaders/SPIRV/shadowmapfrag.spv"};
+										"../resources/shaders/SPIRV/shadowmapfrag.spv"};
 		VKSubInitPipeline(
 				&vulkaninfo.shadowmapgraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -499,7 +499,7 @@ void GraphicsHandler::VKInitPipelines () {
 						&descriptorsetlayoutbinding
 				}};
 		const char* shaderfilepaths[2] {"../resources/shaders/SPIRV/texmonvert.spv",
-				"../resources/shaders/SPIRV/texmonfrag.spv"};
+										"../resources/shaders/SPIRV/texmonfrag.spv"};
 		VKSubInitPipeline(
 				&GraphicsHandler::vulkaninfo.texmongraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -786,7 +786,7 @@ void GraphicsHandler::VKSubInitSwapchain () {
 				VK_IMAGE_VIEW_TYPE_2D,
 				SWAPCHAIN_IMAGE_FORMAT,
 				{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-						VK_COMPONENT_SWIZZLE_IDENTITY},
+				 VK_COMPONENT_SWIZZLE_IDENTITY},
 				{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 		};
 		vkCreateImageView(vulkaninfo.logicaldevice, &imageviewcreateinfo, nullptr, &vulkaninfo.swapchainimageviews[x]);
@@ -821,23 +821,23 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 			nullptr
 	};
 	VkSubpassDependency shadowsubpassdependencies[2] {{
-			VK_SUBPASS_EXTERNAL,
-			0,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-			0
-	},
-			{
-					0,
-					VK_SUBPASS_EXTERNAL,
-					VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					0
-			}};
+															  VK_SUBPASS_EXTERNAL,
+															  0,
+															  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+															  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+															  VK_ACCESS_SHADER_READ_BIT,
+															  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+															  0
+													  },
+													  {
+															  0,
+															  VK_SUBPASS_EXTERNAL,
+															  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+															  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+															  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+															  VK_ACCESS_SHADER_READ_BIT,
+															  0
+													  }};
 	VkRenderPassCreateInfo shadowrenderpasscreateinfo {
 			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 			nullptr,
@@ -854,27 +854,27 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 
 	// primary renderpass
 	VkAttachmentDescription prattachmentdescriptions[2] {{
-			0,
-			SWAPCHAIN_IMAGE_FORMAT,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_ATTACHMENT_LOAD_OP_CLEAR,
-			VK_ATTACHMENT_STORE_OP_STORE,
-			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-			VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	},
-			{
-					0,
-					VK_FORMAT_D32_SFLOAT,
-					VK_SAMPLE_COUNT_1_BIT,
-					VK_ATTACHMENT_LOAD_OP_CLEAR,
-					VK_ATTACHMENT_STORE_OP_STORE,
-					VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					VK_ATTACHMENT_STORE_OP_DONT_CARE,
-					VK_IMAGE_LAYOUT_UNDEFINED,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-			}};
+																 0,
+																 SWAPCHAIN_IMAGE_FORMAT,
+																 VK_SAMPLE_COUNT_1_BIT,
+																 VK_ATTACHMENT_LOAD_OP_CLEAR,
+																 VK_ATTACHMENT_STORE_OP_STORE,
+																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																 VK_IMAGE_LAYOUT_UNDEFINED,
+																 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+														 },
+														 {
+																 0,
+																 VK_FORMAT_D32_SFLOAT,
+																 VK_SAMPLE_COUNT_1_BIT,
+																 VK_ATTACHMENT_LOAD_OP_CLEAR,
+																 VK_ATTACHMENT_STORE_OP_STORE,
+																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																 VK_IMAGE_LAYOUT_UNDEFINED,
+																 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+														 }};
 	VkAttachmentReference prcolorattachmentreference {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
 			prdepthattachmentreference {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 	VkSubpassDescription prsubpass {
@@ -909,20 +909,20 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 
 void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	VkDescriptorSetLayoutBinding scenedslbindings[2] {{
-			0,
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			MAX_LIGHTS,
-			VK_SHADER_STAGE_FRAGMENT_BIT |
-			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-			nullptr
-	},
-			{
-					1,
-					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					1,
-					VK_SHADER_STAGE_FRAGMENT_BIT,
-					nullptr
-			}};
+															  0,
+															  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+															  MAX_LIGHTS,
+															  VK_SHADER_STAGE_FRAGMENT_BIT |
+															  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+															  nullptr
+													  },
+													  {
+															  1,
+															  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+															  1,
+															  VK_SHADER_STAGE_FRAGMENT_BIT,
+															  nullptr
+													  }};
 	VkDescriptorSetLayoutCreateInfo scenedslcreateinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
@@ -992,19 +992,19 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &textdslcreateinfo, nullptr, &vulkaninfo.textdsl);
 
 	VkDescriptorSetLayoutBinding oceangraphdslbindings[2] {{
-			0,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			1,
-			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-			nullptr
-	},
-			{
-					1,
-					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					1,
-					VK_SHADER_STAGE_FRAGMENT_BIT,
-					nullptr
-			}};
+																   0,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+																   nullptr
+														   },
+														   {
+																   1,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_FRAGMENT_BIT,
+																   nullptr
+														   }};
 	VkDescriptorSetLayoutCreateInfo oceangraphdslcreateinfos {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
@@ -1015,19 +1015,19 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 								&vulkaninfo.oceangraphdsl);
 
 	VkDescriptorSetLayoutBinding oceancompdslbindings[2] {{
-			0,
-			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			1,
-			VK_SHADER_STAGE_COMPUTE_BIT,
-			nullptr
-	},
-			{
-					1,
-					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					1,
-					VK_SHADER_STAGE_COMPUTE_BIT,
-					nullptr
-			}};
+																  0,
+																  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+																  1,
+																  VK_SHADER_STAGE_COMPUTE_BIT,
+																  nullptr
+														  },
+														  {
+																  1,
+																  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+																  1,
+																  VK_SHADER_STAGE_COMPUTE_BIT,
+																  nullptr
+														  }};
 	VkDescriptorSetLayoutCreateInfo oceancompdslcreateinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
@@ -1126,27 +1126,27 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	//one input attachment for ocean, two for compositing
 	//we should find a better way to do this lol
 	VkDescriptorPoolSize descriptorpoolsizes[5] {{
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			vulkaninfo.numswapchainimages *
-			(2 * MAX_LIGHTS + nummeshes)
-	},
-			{
-					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					vulkaninfo.numswapchainimages *
-					(4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) + MAX_FRAMES_IN_FLIGHT
-			},
-			{
-					VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					vulkaninfo.numswapchainimages * 2
-			},
-			{
-					VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-					vulkaninfo.numswapchainimages
-			},
-			{
-					VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-					vulkaninfo.numswapchainimages * (1 + 2)
-			}};
+														 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+														 vulkaninfo.numswapchainimages *
+														 (2 * MAX_LIGHTS + nummeshes)
+												 },
+												 {
+														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+														 vulkaninfo.numswapchainimages *
+														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) + MAX_FRAMES_IN_FLIGHT
+												 },
+												 {
+														 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+														 vulkaninfo.numswapchainimages * 2
+												 },
+												 {
+														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														 vulkaninfo.numswapchainimages
+												 },
+												 {
+														 VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+														 vulkaninfo.numswapchainimages * (1 + 2)
+												 }};
 	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 			nullptr,
@@ -1296,7 +1296,7 @@ void GraphicsHandler::VKSubInitFramebuffers () {
 	vulkaninfo.primaryframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < vulkaninfo.numswapchainimages; x++) {
 		VkImageView attachmentstemp[2] = {vulkaninfo.swapchainimageviews[x],
-				vulkaninfo.depthbuffer.imageview};
+										  vulkaninfo.depthbuffer.imageview};
 		VkFramebufferCreateInfo framebuffercreateinfo {
 				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 				nullptr,
@@ -1331,6 +1331,15 @@ void GraphicsHandler::VKSubInitCommandPool () {
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
 	vulkaninfo.primaryclears[0] = {0.0f, 0.0f, 0.1f, 1.0f};
 	vulkaninfo.primaryclears[1] = {1.0f, 0.0f};
+
+	for (uint8_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		for (uint8_t t = 0; t < NUM_RECORDING_THREADS; t++) {
+			vkCreateCommandPool(vulkaninfo.logicaldevice,
+								&cmdpoolcreateinfo,
+								nullptr,
+								&vulkaninfo.threadCbSets[t][i].pool);
+		}
+	}
 }
 
 void GraphicsHandler::VKSubInitSemaphoresAndFences () {
@@ -1744,7 +1753,7 @@ void GraphicsHandler::VKSubInitDepthBuffer () {
 			VK_IMAGE_VIEW_TYPE_2D,
 			VK_FORMAT_D32_SFLOAT,
 			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-					VK_COMPONENT_SWIZZLE_IDENTITY},
+			 VK_COMPONENT_SWIZZLE_IDENTITY},
 			{
 					VK_IMAGE_ASPECT_DEPTH_BIT,
 					0,
@@ -2115,9 +2124,9 @@ void GraphicsHandler::VKHelperInitImage (
 			imgviewtype,
 			imgdst->format,
 			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-					VK_COMPONENT_SWIZZLE_IDENTITY},
+			 VK_COMPONENT_SWIZZLE_IDENTITY},
 			{format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
-					uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1)}
+			 uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1)}
 	};
 	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &imgdst->imageview);
 

@@ -33,6 +33,7 @@ protected:
 	VkDescriptorSet* descriptorsets;
 	VkCommandBuffer* commandbuffers, ** shadowcommandbuffers;
 	MeshUniformBuffer uniformbufferdata;
+	std::mutex dsmutex;
 
 	virtual void initDescriptorSets ();
 
@@ -68,11 +69,15 @@ public:
 
 	virtual void rewriteTextureDescriptorSets ();
 
-	virtual void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
+//	virtual void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
 
-	virtual void recordShadowDraw (
-			uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
-			ShadowmapPushConstants* pc) const;
+	static void recordDraw (cbRecData data);
+
+//	virtual void recordShadowDraw (
+//			uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
+//			ShadowmapPushConstants* pc) const;
+
+	static void recordShadowDraw (cbRecData data);
 
 	void generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed);
 
@@ -98,6 +103,7 @@ public:
 
 	glm::vec3 getMax () {return max;}
 
+	// TODO: don't give out pointers unless /absolutely/ neccesary, its unsafe and lame
 	VkCommandBuffer* getCommandBuffers () const {return commandbuffers;}
 
 	VkCommandBuffer** getShadowCommandBuffers () const {return shadowcommandbuffers;}
@@ -111,6 +117,12 @@ public:
 	TextureInfo* getHeightTexturePtr () {return &heighttexture;}
 
 	VkDeviceMemory* getUniformBufferMemories () const {return uniformbuffermemories;}
+
+	VkBuffer getVertexBuffer () {return vertexbuffer;}
+
+	VkBuffer getIndexBuffer () {return indexbuffer;}
+
+	std::mutex* getDSMutexPtr () {return &dsmutex;}
 
 	MeshUniformBuffer getUniformBufferData ();
 
