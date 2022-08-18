@@ -14,7 +14,7 @@ Text::Text () {
 	textures = new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
-	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
+	FT_New_Face(ftlib, WORKING_DIRECTORY "/resources/fonts/arial.ttf", 0, &face);
 	//unsure what params mean in this function...
 	FT_Set_Char_Size(face, 0, fontsize * 64, 0, 72);
 	//probably shouldnt call this function on a null-init'd text
@@ -35,7 +35,7 @@ Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) 
 	textures = new TextureInfo[MAX_FRAMES_IN_FLIGHT];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
-	FT_New_Face(ftlib, "../resources/fonts/arial.ttf", 0, &face);
+	FT_New_Face(ftlib, WORKING_DIRECTORY "/resources/fonts/arial.ttf", 0, &face);
 	//unsure what params mean in this function...
 	//unit of width is ???, unit of resolution is dpi
 	FT_Set_Char_Size(face, 0, fontsize * 64, 0, 36);

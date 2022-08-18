@@ -65,8 +65,8 @@ private:
 	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
 	uint64_t multiverseseed;
-	std::queue<std::function<void (VkCommandBuffer&)>> recordingtasks;
-	std::queue<VkCommandBuffer> secondarybuffers;
+	std::queue<cbRecTask> recordingtasks;
+	std::queue<cbCollectInfo> secondarybuffers;
 	static std::mutex recordingmutex, scenedsmutex;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
@@ -95,8 +95,8 @@ private:
 	void enqueueRecordingTasks ();
 
 	static void processRecordingTasks (
-			std::queue<std::function<void (VkCommandBuffer&)>>* tasks,    // see if you can pass these by reference
-			std::queue<VkCommandBuffer>* resultcbs,
+			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference
+			std::queue<cbCollectInfo>* resultcbs,
 			uint8_t fifindex, // TODO: switch the order of fifi and threadi to match that of threadcbsets
 			uint8_t threadidx,
 			VkDevice device);

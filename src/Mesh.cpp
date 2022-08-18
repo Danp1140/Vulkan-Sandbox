@@ -362,8 +362,7 @@ void Mesh::rewriteTextureDescriptorSets () {
 //	vkEndCommandBuffer(commandbuffers[fifindex]);
 //}
 
-void Mesh::recordDraw (cbRecData data) {
-//	std::cout << data.commandbuffer << std::endl;
+void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
@@ -380,14 +379,14 @@ void Mesh::recordDraw (cbRecData data) {
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(data.commandbuffer, &cmdbufbegininfo);
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
 	vkCmdBindPipeline(
-			data.commandbuffer,
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipeline);
 	std::unique_lock<std::mutex> scenedslock(*data.scenedsmutex);
 	vkCmdPushConstants(
-			data.commandbuffer,
+			cb,
 			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
 			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -395,7 +394,7 @@ void Mesh::recordDraw (cbRecData data) {
 			sizeof(PrimaryGraphicsPushConstants),
 			data.pushconstantdata);
 	vkCmdBindDescriptorSets(
-			data.commandbuffer,
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipelinelayout,
 			0,
@@ -404,7 +403,7 @@ void Mesh::recordDraw (cbRecData data) {
 	scenedslock.unlock();
 	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
-			data.commandbuffer,
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipelinelayout,
 			1,
@@ -414,24 +413,24 @@ void Mesh::recordDraw (cbRecData data) {
 	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
-			data.commandbuffer,
+			cb,
 			0,
 			1,
 			&data.vertexbuffer,
 			&offsettemp);
 	vkCmdBindIndexBuffer(
-			data.commandbuffer,
+			cb,
 			data.indexbuffer,
 			0,
 			VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(
-			data.commandbuffer,
+			cb,
 			data.numtris * 3,
 			1,
 			0,
 			0,
 			0);
-	vkEndCommandBuffer(data.commandbuffer);
+	vkEndCommandBuffer(cb);
 }
 
 //void Mesh::recordShadowDraw (
@@ -495,7 +494,7 @@ void Mesh::recordDraw (cbRecData data) {
 //	vkEndCommandBuffer(shadowcommandbuffers[lightidx][fifindex]);
 //}
 
-void Mesh::recordShadowDraw (cbRecData data) {
+void Mesh::recordShadowDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
@@ -512,13 +511,13 @@ void Mesh::recordShadowDraw (cbRecData data) {
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(data.commandbuffer, &cmdbufbegininfo);
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
 	vkCmdBindPipeline(
-			data.commandbuffer,
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipeline);
 	vkCmdPushConstants(
-			data.commandbuffer,
+			cb,
 			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
@@ -526,7 +525,7 @@ void Mesh::recordShadowDraw (cbRecData data) {
 			data.pushconstantdata);
 	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
-			data.commandbuffer,
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipelinelayout,
 			1,
@@ -535,24 +534,24 @@ void Mesh::recordShadowDraw (cbRecData data) {
 	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
-			data.commandbuffer,
+			cb,
 			0,
 			1,
 			&data.vertexbuffer,
 			&offsettemp);
 	vkCmdBindIndexBuffer(
-			data.commandbuffer,
+			cb,
 			data.indexbuffer,
 			0,
 			VK_INDEX_TYPE_UINT16);
 	vkCmdDrawIndexed(
-			data.commandbuffer,
+			cb,
 			data.numtris * 3,
 			1,
 			0,
 			0,
 			0);
-	vkEndCommandBuffer(data.commandbuffer);
+	vkEndCommandBuffer(cb);
 }
 
 void
@@ -782,11 +781,11 @@ void Mesh::loadOBJ (const char* filepath) {
 }
 
 void Mesh::makeIntoIcosphere () {
-	loadOBJ("../resources/objs/icosphere.obj");
+	loadOBJ(WORKING_DIRECTORY "/resources/objs/icosphere.obj");
 }
 
 void Mesh::makeIntoCube () {
-	loadOBJ("../resources/objs/fuckingcube.obj");
+	loadOBJ(WORKING_DIRECTORY "/resources/objs/fuckingcube.obj");
 }
 
 Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {

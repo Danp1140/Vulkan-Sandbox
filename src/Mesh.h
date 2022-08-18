@@ -71,13 +71,13 @@ public:
 
 //	virtual void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
 
-	static void recordDraw (cbRecData data);
+	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
 
 //	virtual void recordShadowDraw (
 //			uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
 //			ShadowmapPushConstants* pc) const;
 
-	static void recordShadowDraw (cbRecData data);
+	static void recordShadowDraw (cbRecData data, VkCommandBuffer& cb);
 
 	void generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed);
 

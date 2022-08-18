@@ -130,10 +130,10 @@ void GraphicsHandler::VKInitPipelines () {
 																										   normal)},
 															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
 																										uv)}};
-		const char* shaderfilepathstemp[4] = {"../resources/shaders/SPIRV/defaultvert.spv",
-											  "../resources/shaders/SPIRV/defaulttesc.spv",
-											  "../resources/shaders/SPIRV/defaulttese.spv",
-											  "../resources/shaders/SPIRV/defaultfrag.spv"};
+		const char* shaderfilepathstemp[4] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/defaultvert.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaulttesc.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaulttese.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaultfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT
 						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
@@ -179,8 +179,8 @@ void GraphicsHandler::VKInitPipelines () {
 																   1,
 																   &objectdslbinding
 														   }};
-		const char* shaderfilepathstemp[2] = {"../resources/shaders/SPIRV/textvert.spv",
-											  "../resources/shaders/SPIRV/textfrag.spv"};
+		const char* shaderfilepathstemp[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/textvert.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/textfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 						  &shaderfilepathstemp[0],
@@ -221,8 +221,8 @@ void GraphicsHandler::VKInitPipelines () {
 						0,
 						nullptr
 				}};
-		const char* shaderfilepathstemp[2] = {"../resources/shaders/SPIRV/skyboxvert.spv",
-											  "../resources/shaders/SPIRV/skyboxfrag.spv"};
+		const char* shaderfilepathstemp[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/skyboxvert.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/skyboxfrag.spv"};
 		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 						  &shaderfilepathstemp[0],
@@ -277,10 +277,10 @@ void GraphicsHandler::VKInitPipelines () {
 																										   normal)},
 															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
 																										uv)}};
-		const char* shaderfilepathstemp[4] = {"../resources/shaders/SPIRV/oceanvert.spv",
-											  "../resources/shaders/SPIRV/oceantesc.spv",
-											  "../resources/shaders/SPIRV/oceantese.spv",
-											  "../resources/shaders/SPIRV/oceanfrag.spv"};
+		const char* shaderfilepathstemp[4] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/oceanvert.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceantesc.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceantese.spv",
+											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceanfrag.spv"};
 		VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
 						  VK_SHADER_STAGE_VERTEX_BIT
 						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
@@ -332,7 +332,7 @@ void GraphicsHandler::VKInitPipelines () {
 																   2,
 																   &objdslbindings[0]
 														   }};
-		const char* shaderfilepaths[1] = {"../resources/shaders/SPIRV/oceancomp.spv"};
+		const char* shaderfilepaths[1] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/oceancomp.spv"};
 		VKSubInitPipeline(&vulkaninfo.oceancomputepipeline,
 						  VK_SHADER_STAGE_COMPUTE_BIT,
 						  &shaderfilepaths[0],
@@ -376,10 +376,10 @@ void GraphicsHandler::VKInitPipelines () {
 		VkVertexInputAttributeDescription vertinattribdescs[2] {
 				{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
 				{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)}};
-		const char* shaderfilepaths[4] {"../resources/shaders/SPIRV/grassvert.spv",
-										"../resources/shaders/SPIRV/grasstesc.spv",
-										"../resources/shaders/SPIRV/grasstese.spv",
-										"../resources/shaders/SPIRV/grassfrag.spv"};
+		const char* shaderfilepaths[4] {WORKING_DIRECTORY "/resources/shaders/SPIRV/grassvert.spv",
+										WORKING_DIRECTORY "/resources/shaders/SPIRV/grasstesc.spv",
+										WORKING_DIRECTORY "/resources/shaders/SPIRV/grasstese.spv",
+										WORKING_DIRECTORY "/resources/shaders/SPIRV/grassfrag.spv"};
 		VKSubInitPipeline(
 				&vulkaninfo.grassgraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT
@@ -455,8 +455,8 @@ void GraphicsHandler::VKInitPipelines () {
 		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc {0, 0, VK_FORMAT_R32G32B32_SFLOAT,
 															offsetof(Vertex, position)};
-		const char* shaderfilepaths[2] {"../resources/shaders/SPIRV/shadowmapvert.spv",
-										"../resources/shaders/SPIRV/shadowmapfrag.spv"};
+		const char* shaderfilepaths[2] {WORKING_DIRECTORY "/resources/shaders/SPIRV/shadowmapvert.spv",
+										WORKING_DIRECTORY "/resources/shaders/SPIRV/shadowmapfrag.spv"};
 		VKSubInitPipeline(
 				&vulkaninfo.shadowmapgraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -498,8 +498,8 @@ void GraphicsHandler::VKInitPipelines () {
 						1,
 						&descriptorsetlayoutbinding
 				}};
-		const char* shaderfilepaths[2] {"../resources/shaders/SPIRV/texmonvert.spv",
-										"../resources/shaders/SPIRV/texmonfrag.spv"};
+		const char* shaderfilepaths[2] {WORKING_DIRECTORY "/resources/shaders/SPIRV/texmonvert.spv",
+										WORKING_DIRECTORY "/resources/shaders/SPIRV/texmonfrag.spv"};
 		VKSubInitPipeline(
 				&GraphicsHandler::vulkaninfo.texmongraphicspipeline,
 				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -549,8 +549,8 @@ void GraphicsHandler::VKInitPipelines () {
 						nullptr
 				}};
 		const char* shaderfilepaths[2] {
-				"../resources/shaders/SPIRV/linevert.spv",
-				"../resources/shaders/SPIRV/linefrag.spv"
+				WORKING_DIRECTORY "/resources/shaders/SPIRV/linevert.spv",
+				WORKING_DIRECTORY "/resources/shaders/SPIRV/linefrag.spv"
 		};
 		VKSubInitPipeline(
 				&GraphicsHandler::vulkaninfo.linegraphicspipeline,
@@ -1331,6 +1331,7 @@ void GraphicsHandler::VKSubInitCommandPool () {
 	vkAllocateCommandBuffers(vulkaninfo.logicaldevice, &cmdbufferallocateinfo, &(vulkaninfo.interimcommandbuffer));
 	vulkaninfo.primaryclears[0] = {0.0f, 0.0f, 0.1f, 1.0f};
 	vulkaninfo.primaryclears[1] = {1.0f, 0.0f};
+	vulkaninfo.shadowmapclear = {1.f, 0.f};
 
 	for (uint8_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		for (uint8_t t = 0; t < NUM_RECORDING_THREADS; t++) {
@@ -2418,7 +2419,9 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 	}
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback (
+VKAPI_ATTR VkBool32
+
+VKAPI_CALL GraphicsHandler::debugCallback (
 		VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 		VkDebugUtilsMessageTypeFlagsEXT type,
 		const VkDebugUtilsMessengerCallbackDataEXT* callbackdata,

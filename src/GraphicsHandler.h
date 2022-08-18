@@ -45,6 +45,7 @@
 #define SHIFT_TRIPLE(vec3) '('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<')'
 #define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
 
+#define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
 #define NUM_RECORDING_THREADS 4
 #define MAX_FRAMES_IN_FLIGHT 3
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
@@ -175,10 +176,12 @@ typedef struct MeshUniformBuffer {
 			heightuvmatrix;
 } MeshUniformBuffer;
 
+// TODO: clean up these typedefs to maximize efficiency
+// clean up naming too
+
 typedef struct cbRecData {
 	VkRenderPass renderpass;
 	VkFramebuffer framebuffer;
-	VkCommandBuffer commandbuffer; // TODO: remove other stuff redundant w/ cbset
 	VkDescriptorSet descriptorset, scenedescriptorset;
 	PipelineInfo pipeline;
 	void* pushconstantdata;
@@ -187,8 +190,71 @@ typedef struct cbRecData {
 	uint16_t numtris;
 } cbRecData;
 
+typedef std::function<void (VkCommandBuffer&)> cbRecFunc;
+
+typedef struct cbRecTask {
+	explicit cbRecTask (cbRecFunc f) : type(CB_REC_TASK_TYPE_COMMAND_BUFFER) {
+		new(&data.func) cbRecFunc(f);
+	}
+
+	explicit cbRecTask (VkRenderPassBeginInfo r) : type(CB_REC_TASK_TYPE_RENDERPASS) {
+		data.rpbi = r;
+	}
+
+	explicit cbRecTask (VkDependencyInfoKHR d) : type(CB_REC_TASK_TYPE_DEPENDENCY) {
+		data.di = d;
+	}
+
+	cbRecTask (const cbRecTask& c) : type(c.type) {
+		if (type == CB_REC_TASK_TYPE_COMMAND_BUFFER) new(&data.func) cbRecFunc(c.data.func);
+		else if (type == CB_REC_TASK_TYPE_RENDERPASS) data.rpbi = c.data.rpbi;
+		else data.di = c.data.di;
+	}
+
+	~cbRecTask () {
+		type.~cbRecTaskType();
+		data.~cbRecTaskData();
+	}
+
+	enum cbRecTaskType {
+		CB_REC_TASK_TYPE_COMMAND_BUFFER,
+		CB_REC_TASK_TYPE_RENDERPASS,
+		CB_REC_TASK_TYPE_DEPENDENCY,
+	} type;
+
+	union cbRecTaskData {
+		cbRecTaskData () {}
+
+		~cbRecTaskData () {} // union destructors are impossible to write...too bad!
+
+		cbRecFunc func;
+		VkRenderPassBeginInfo rpbi;
+		VkDependencyInfoKHR di;
+	} data;
+} cbRecTask;
+
+typedef struct cbCollectInfo {
+	explicit cbCollectInfo (const VkCommandBuffer& c) : type(CB_COLLECT_INFO_TYPE_COMMAND_BUFFER), data {.cmdbuf = c} {}
+
+	explicit cbCollectInfo (const VkRenderPassBeginInfo& r) : type(CB_COLLECT_INFO_TYPE_RENDERPASS), data {.rpbi = r} {}
+
+	explicit cbCollectInfo (const VkDependencyInfoKHR& d) : type(CB_COLLECT_INFO_TYPE_DEPENDENCY), data {.di = d} {}
+
+	enum cbCollectInfoType {
+		CB_COLLECT_INFO_TYPE_COMMAND_BUFFER,
+		CB_COLLECT_INFO_TYPE_RENDERPASS,
+		CB_COLLECT_INFO_TYPE_DEPENDENCY
+	} type;
+	union cbCollectInfoData {
+		VkCommandBuffer cmdbuf;
+		VkRenderPassBeginInfo rpbi;
+		VkDependencyInfoKHR di;
+	} data;
+} cbCollectInfo;
+
 // this is one per thread, so no sync required :)
-typedef struct cbSet {
+typedef
+struct cbSet {
 	VkCommandPool pool = VK_NULL_HANDLE;
 	std::vector<VkCommandBuffer> buffers {};
 } cbSet;
@@ -219,7 +285,7 @@ typedef struct VulkanInfo {
 			texmongraphicspipeline,
 			linegraphicspipeline;
 	VkFramebuffer* primaryframebuffers, * waterframebuffers;
-	VkClearValue primaryclears[2];
+	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
 	VkCommandBuffer* commandbuffers, interimcommandbuffer;

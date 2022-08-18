@@ -10,14 +10,14 @@
       "type": "sun"
     }
   ],
-  "meshes":[
+  "meshes": [
     {
-      "filepath": "../resources/objs/plane.obj",
+      "filepath": "/Users/danp/Desktop/C Coding/VulkanSandbox/resources/objs/plane.obj",
       "position": "0 0 0",
       "scale": "1 1 1",
       "rotation": "0 0 0 1",
       "textures":[
-        {"type": "diffuse", "resolution": 1024, "position": "0 0", "scale": "1 1", "rotation": 0},
+        {"type": "diffuse", "resolution": 1024, "position": "0 0", "scale": "10 10", "rotation": 0},
         {"type": "normal", "resolution": 64, "position": "0 0", "scale": "1 1", "rotation": 0},
         {"type": "height", "resolution": 64, "position": "0 0", "scale":  "1 1", "rotation": 0}
       ]
