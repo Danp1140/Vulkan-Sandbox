@@ -124,7 +124,7 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 	};
 	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.interimcommandbuffer, &renderpassbi,
 						 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.interimcommandbuffer, 1, &seabed->getShadowCommandBuffers()[0][0]);
+//	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.interimcommandbuffer, 1, &seabed->getShadowCommandBuffers()[0][0]);
 	vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.interimcommandbuffer);
 	vkEndCommandBuffer(GraphicsHandler::vulkaninfo.interimcommandbuffer);
 
@@ -227,73 +227,73 @@ void Ocean::rewriteTextureDescriptorSets () {
 }
 
 void Ocean::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) {
-	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
-			0,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
-			VK_FALSE,
-			0,
-			0
-	};
-	VkCommandBufferBeginInfo cmdbufbegininfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-			&cmdbufinherinfo
-	};
-	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
-
-	vkCmdBindPipeline(
-			commandbuffers[fifindex],
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipeline);
-	vkCmdPushConstants(
-			commandbuffers[fifindex],
-			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
-			VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-			| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-			| VK_SHADER_STAGE_FRAGMENT_BIT,
-			0,
-			sizeof(OceanPushConstants),
-			&GraphicsHandler::vulkaninfo.oceanpushconstants);
-	vkCmdBindDescriptorSets(
-			commandbuffers[fifindex],
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
-			0,
-			1,
-			&sceneds[0],
-			0, nullptr);
-	vkCmdBindDescriptorSets(
-			commandbuffers[fifindex],
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
-			1,
-			1,
-			&descriptorsets[0],
-			0, nullptr);
-	VkDeviceSize offsettemp = 0u;
-	vkCmdBindVertexBuffers(
-			commandbuffers[fifindex],
-			0,
-			1,
-			&vertexbuffer,
-			&offsettemp);
-	vkCmdBindIndexBuffer(
-			commandbuffers[fifindex],
-			indexbuffer,
-			0,
-			VK_INDEX_TYPE_UINT16);
-	vkCmdDrawIndexed(
-			commandbuffers[fifindex],
-			tris.size() * 3,
-			1,
-			0,
-			0,
-			0);
-	vkEndCommandBuffer(commandbuffers[fifindex]);
+//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+//			nullptr,
+//			GraphicsHandler::vulkaninfo.primaryrenderpass,
+//			0,
+//			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+//			VK_FALSE,
+//			0,
+//			0
+//	};
+//	VkCommandBufferBeginInfo cmdbufbegininfo {
+//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//			nullptr,
+//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+//			&cmdbufinherinfo
+//	};
+//	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
+//
+//	vkCmdBindPipeline(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipeline);
+//	vkCmdPushConstants(
+//			commandbuffers[fifindex],
+//			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
+//			VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+//			| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+//			| VK_SHADER_STAGE_FRAGMENT_BIT,
+//			0,
+//			sizeof(OceanPushConstants),
+//			&GraphicsHandler::vulkaninfo.oceanpushconstants);
+//	vkCmdBindDescriptorSets(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
+//			0,
+//			1,
+//			&sceneds[0],
+//			0, nullptr);
+//	vkCmdBindDescriptorSets(
+//			commandbuffers[fifindex],
+//			VK_PIPELINE_BIND_POINT_GRAPHICS,
+//			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
+//			1,
+//			1,
+//			&descriptorsets[0],
+//			0, nullptr);
+//	VkDeviceSize offsettemp = 0u;
+//	vkCmdBindVertexBuffers(
+//			commandbuffers[fifindex],
+//			0,
+//			1,
+//			&vertexbuffer,
+//			&offsettemp);
+//	vkCmdBindIndexBuffer(
+//			commandbuffers[fifindex],
+//			indexbuffer,
+//			0,
+//			VK_INDEX_TYPE_UINT16);
+//	vkCmdDrawIndexed(
+//			commandbuffers[fifindex],
+//			tris.size() * 3,
+//			1,
+//			0,
+//			0,
+//			0);
+//	vkEndCommandBuffer(commandbuffers[fifindex]);
 }
 
 void Ocean::recordCompute (uint8_t fifindex) {

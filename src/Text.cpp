@@ -20,7 +20,6 @@ Text::Text () {
 	//probably shouldnt call this function on a null-init'd text
 	regenFaces(true);
 	initDescriptorSet();
-	initCommandBuffers();
 }
 
 Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) {
@@ -41,7 +40,6 @@ Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) 
 	FT_Set_Char_Size(face, 0, fontsize * 64, 0, 36);
 	regenFaces(true);
 	initDescriptorSet();
-	initCommandBuffers();
 }
 
 Text::~Text () {
@@ -179,59 +177,6 @@ void Text::initDescriptorSet () {
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 	}
 }           //perhaps make a more general version of this as a VKHelper, cause we're doing this in a couple places
-
-void Text::initCommandBuffers () {
-	commandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
-	};
-	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
-}
-
-//void Text::recordCommandBuffer (uint8_t fifindex, uint8_t sciindex) {
-//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-//			nullptr,
-//			GraphicsHandler::vulkaninfo.primaryrenderpass,
-//			0,
-//			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
-//			VK_FALSE,
-//			0,
-//			0
-//	};
-//	VkCommandBufferBeginInfo cmdbufbegininfo{
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-//			nullptr,
-//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-//			&cmdbufinherinfo
-//	};
-//	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
-//	vkCmdBindPipeline(
-//			commandbuffers[fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipeline);
-//	vkCmdPushConstants(
-//			commandbuffers[fifindex],
-//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
-//			VK_SHADER_STAGE_VERTEX_BIT,
-//			0,
-//			sizeof(TextPushConstants),
-//			&pushconstants);
-//	vkCmdBindDescriptorSets(
-//			commandbuffers[fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.textgraphicspipeline.pipelinelayout,
-//			0,
-//			1,
-//			&descriptorsets[fifindex],
-//			0, nullptr);
-//	vkCmdDraw(commandbuffers[fifindex], 6, 1, 0, 0);
-//	vkEndCommandBuffer(commandbuffers[fifindex]);
-//}
 
 void Text::recordCommandBuffer (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {

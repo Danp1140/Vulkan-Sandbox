@@ -46,7 +46,7 @@
 #define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
 
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
-#define NUM_RECORDING_THREADS 4
+#define NUM_RECORDING_THREADS 1
 #define MAX_FRAMES_IN_FLIGHT 3
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
 #define MAX_LIGHTS 2
@@ -193,6 +193,8 @@ typedef struct cbRecData {
 typedef std::function<void (VkCommandBuffer&)> cbRecFunc;
 
 typedef struct cbRecTask {
+	cbRecTask () : type(CB_REC_TASK_TYPE_UNINITIALIZED), data() {}
+
 	explicit cbRecTask (cbRecFunc f) : type(CB_REC_TASK_TYPE_COMMAND_BUFFER) {
 		new(&data.func) cbRecFunc(f);
 	}
@@ -211,12 +213,23 @@ typedef struct cbRecTask {
 		else data.di = c.data.di;
 	}
 
+	void operator= (const cbRecTask& c) {
+		type = c.type;
+		if (type == CB_REC_TASK_TYPE_COMMAND_BUFFER) new(&data.func) cbRecFunc(c.data.func);
+		else if (type == CB_REC_TASK_TYPE_RENDERPASS) data.rpbi = c.data.rpbi;
+		else data.di = c.data.di;
+	}
+
 	~cbRecTask () {
+		if (type == CB_REC_TASK_TYPE_COMMAND_BUFFER) {
+			data.func.~function();
+		}
 		type.~cbRecTaskType();
 		data.~cbRecTaskData();
 	}
 
 	enum cbRecTaskType {
+		CB_REC_TASK_TYPE_UNINITIALIZED,
 		CB_REC_TASK_TYPE_COMMAND_BUFFER,
 		CB_REC_TASK_TYPE_RENDERPASS,
 		CB_REC_TASK_TYPE_DEPENDENCY,

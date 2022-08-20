@@ -1150,7 +1150,8 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	VkDescriptorPoolCreateInfo descriptorpoolcreateinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 			nullptr,
-			VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,      //perhaps look into flags; do we really need update after bind?
+			VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT |
+			VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,      //perhaps look into flags; do we really need update after bind?
 			vulkaninfo.numswapchainimages * (2 * MAX_LIGHTS + 4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1 + 2) +
 			MAX_FRAMES_IN_FLIGHT,
 			5,
@@ -1167,6 +1168,14 @@ void GraphicsHandler::VKSubInitUniformBuffer (
 		VkBuffer** buffers,
 		VkDeviceMemory** memories,
 		VkDescriptorSetLayout descsetlayout) {
+	// TODO: don't do this descriptor set alloc. this is awful. this was a terrible idea, why did you ever do this???
+	if (*descsets) {
+		vkFreeDescriptorSets(vulkaninfo.logicaldevice,
+							 vulkaninfo.descriptorpool,
+							 vulkaninfo.numswapchainimages,
+							 *descsets);
+		delete[] *descsets;
+	}
 	*descsets = new VkDescriptorSet[vulkaninfo.numswapchainimages];       //is this really something we should be doing inside the method???
 	VkDescriptorSetLayout dsltemp[vulkaninfo.numswapchainimages];
 	for (unsigned char x = 0; x < vulkaninfo.numswapchainimages; x++) dsltemp[x] = descsetlayout;

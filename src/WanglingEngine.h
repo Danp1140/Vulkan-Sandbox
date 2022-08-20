@@ -80,8 +80,6 @@ private:
 
 	void updateSkyboxDescriptorSets ();
 
-//	void recordSkyboxCommandBuffers (uint8_t fifindex, uint8_t sciindex);
-
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
 	void recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex);

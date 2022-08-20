@@ -19,8 +19,6 @@ class Mesh {
 private:
 	TextureInfo diffusetexture, normaltexture, heighttexture;
 
-	void initCommandBuffers ();
-
 	void recalculateModelMatrix ();
 
 protected:
@@ -30,8 +28,7 @@ protected:
 	std::vector<Tri> tris;
 	VkBuffer vertexbuffer = VK_NULL_HANDLE, indexbuffer = VK_NULL_HANDLE, * uniformbuffers;
 	VkDeviceMemory vertexbuffermemory, indexbuffermemory, * uniformbuffermemories;
-	VkDescriptorSet* descriptorsets;
-	VkCommandBuffer* commandbuffers, ** shadowcommandbuffers;
+	VkDescriptorSet* descriptorsets = nullptr;
 	MeshUniformBuffer uniformbufferdata;
 	std::mutex dsmutex;
 
@@ -69,13 +66,7 @@ public:
 
 	virtual void rewriteTextureDescriptorSets ();
 
-//	virtual void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
-
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
-
-//	virtual void recordShadowDraw (
-//			uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
-//			ShadowmapPushConstants* pc) const;
 
 	static void recordShadowDraw (cbRecData data, VkCommandBuffer& cb);
 
@@ -104,10 +95,6 @@ public:
 	glm::vec3 getMax () {return max;}
 
 	// TODO: don't give out pointers unless /absolutely/ neccesary, its unsafe and lame
-	VkCommandBuffer* getCommandBuffers () const {return commandbuffers;}
-
-	VkCommandBuffer** getShadowCommandBuffers () const {return shadowcommandbuffers;}
-
 	VkDescriptorSet* getDescriptorSets () const {return descriptorsets;}
 
 	TextureInfo* getDiffuseTexturePtr () {return &diffusetexture;}

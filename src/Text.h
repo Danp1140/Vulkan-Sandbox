@@ -21,14 +21,11 @@ private:
 	float fontsize;
 	TextPushConstants pushconstants;
 	VkDescriptorSet* descriptorsets;
-	VkCommandBuffer* commandbuffers;
 	TextureInfo* textures;
 
 	void regenFaces (bool init);
 
 	void initDescriptorSet ();
-
-	void initCommandBuffers ();
 
 public:
 	FT_Library ftlib;
@@ -42,10 +39,7 @@ public:
 
 	void setMessage (std::string m, uint32_t index);
 
-//	void recordCommandBuffer(uint8_t fifindex, uint8_t sciindex);
 	static void recordCommandBuffer (cbRecData data, VkCommandBuffer& cb);
-
-	VkCommandBuffer* getCommandBuffers () {return commandbuffers;}
 
 	VkDescriptorSet* getDescriptorSets () {return descriptorsets;}
 

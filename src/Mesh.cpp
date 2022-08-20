@@ -13,7 +13,6 @@ Mesh::Mesh (
 		uint32_t hir) : position(p), scale(s), rotation(r), dsmutex() {
 	recalculateModelMatrix();
 	initDescriptorSets();
-	initCommandBuffers();
 	GraphicsHandler::VKSubInitUniformBuffer(
 			&descriptorsets,
 			0,
@@ -54,47 +53,9 @@ Mesh::~Mesh () {
 		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffers[scii], nullptr);
 		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffermemories[scii], nullptr);
 	}
-	for (uint8_t lightidx = 0; lightidx < MAX_LIGHTS; lightidx++) {
-		vkFreeCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice,
-							 GraphicsHandler::vulkaninfo.commandpool,
-							 MAX_FRAMES_IN_FLIGHT,
-							 shadowcommandbuffers[lightidx]);
-		delete[] shadowcommandbuffers[lightidx];
-	}
-	vkFreeCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice,
-						 GraphicsHandler::vulkaninfo.commandpool,
-						 MAX_FRAMES_IN_FLIGHT,
-						 commandbuffers);
-	delete[] shadowcommandbuffers;
-	delete[] commandbuffers;
 	delete[] descriptorsets;
 	delete[] uniformbuffers;
 	delete[] uniformbuffermemories;
-}
-
-void Mesh::initCommandBuffers () {
-	commandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
-	};
-	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, commandbuffers);
-	shadowcommandbuffers = new VkCommandBuffer* [MAX_LIGHTS];
-	for (uint8_t i = 0; i < MAX_LIGHTS; i++) {
-		shadowcommandbuffers[i] = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-		VkCommandBufferAllocateInfo shadowcmdbufallocinfo {
-				VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				nullptr,
-				GraphicsHandler::vulkaninfo.commandpool,
-				VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-				MAX_FRAMES_IN_FLIGHT
-		};
-		vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &shadowcmdbufallocinfo,
-								 &shadowcommandbuffers[i][0]);
-	}
 }
 
 void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
@@ -218,6 +179,12 @@ void Mesh::initDescriptorSets () {
 	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
 	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
 		layoutstemp[x] = GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl;
+	if (descriptorsets)
+		vkFreeDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+							 GraphicsHandler::vulkaninfo.descriptorpool,
+							 GraphicsHandler::vulkaninfo.numswapchainimages,
+							 descriptorsets);
+	delete[] descriptorsets;
 	descriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
 	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -293,75 +260,6 @@ void Mesh::rewriteTextureDescriptorSets () {
 	}
 }
 
-//void Mesh::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const {
-//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-//			nullptr,
-//			GraphicsHandler::vulkaninfo.primaryrenderpass,
-//			0,
-//			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
-//			VK_FALSE,
-//			0,
-//			0
-//	};
-//	VkCommandBufferBeginInfo cmdbufbegininfo {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-//			nullptr,
-//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-//			&cmdbufinherinfo
-//	};
-//	vkBeginCommandBuffer(commandbuffers[fifindex], &cmdbufbegininfo);
-//	vkCmdBindPipeline(      //would like to only do this bind once, but unlikely to work out...
-//			commandbuffers[fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipeline);
-//	vkCmdPushConstants(
-//			commandbuffers[fifindex],
-//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
-//			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
-//			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-//			0,
-//			sizeof(PrimaryGraphicsPushConstants),
-//			&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
-//	vkCmdBindDescriptorSets(
-//			commandbuffers[fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
-//			0,
-//			1,
-//			&sceneds[sciindex],
-//			0, nullptr);
-//	//same down to here
-//	vkCmdBindDescriptorSets(
-//			commandbuffers[fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.primarygraphicspipeline.pipelinelayout,
-//			1,
-//			1,
-//			&descriptorsets[sciindex],
-//			0, nullptr);
-//	VkDeviceSize offsettemp = 0u;
-//	vkCmdBindVertexBuffers(
-//			commandbuffers[fifindex],
-//			0,
-//			1,
-//			&vertexbuffer,
-//			&offsettemp);
-//	vkCmdBindIndexBuffer(
-//			commandbuffers[fifindex],
-//			indexbuffer,
-//			0,
-//			VK_INDEX_TYPE_UINT16);
-//	vkCmdDrawIndexed(
-//			commandbuffers[fifindex],
-//			tris.size() * 3,
-//			1,
-//			0,
-//			0,
-//			0);
-//	vkEndCommandBuffer(commandbuffers[fifindex]);
-//}
-
 void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -384,7 +282,6 @@ void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipeline);
-	std::unique_lock<std::mutex> scenedslock(*data.scenedsmutex);
 	vkCmdPushConstants(
 			cb,
 			data.pipeline.pipelinelayout,
@@ -400,8 +297,6 @@ void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 			0,
 			1, &data.scenedescriptorset,
 			0, nullptr);
-	scenedslock.unlock();
-	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
 			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -410,7 +305,6 @@ void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 			1,
 			&data.descriptorset,
 			0, nullptr);
-	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
 			cb,
@@ -432,67 +326,6 @@ void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 			0);
 	vkEndCommandBuffer(cb);
 }
-
-//void Mesh::recordShadowDraw (
-//		uint8_t fifindex, uint8_t sciindex, VkRenderPass renderpass, VkFramebuffer framebuffer, uint8_t lightidx,
-//		ShadowmapPushConstants* pc) const {
-//	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-//			nullptr,
-//			renderpass,
-//			0,
-//			framebuffer,
-//			VK_FALSE,
-//			0,
-//			0
-//	};
-//	VkCommandBufferBeginInfo cmdbufbegininfo {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-//			nullptr,
-//			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-//			&cmdbufinherinfo
-//	};
-//	vkBeginCommandBuffer(shadowcommandbuffers[lightidx][fifindex], &cmdbufbegininfo);
-//	vkCmdBindPipeline(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipeline);
-//	vkCmdPushConstants(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
-//			VK_SHADER_STAGE_VERTEX_BIT,
-//			0,
-//			sizeof(ShadowmapPushConstants),
-//			pc);
-//	vkCmdBindDescriptorSets(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			VK_PIPELINE_BIND_POINT_GRAPHICS,
-//			GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline.pipelinelayout,
-//			1,
-//			1,
-//			&descriptorsets[sciindex],
-//			0, nullptr);
-//	VkDeviceSize offsettemp = 0u;
-//	vkCmdBindVertexBuffers(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			0,
-//			1,
-//			&vertexbuffer,
-//			&offsettemp);
-//	vkCmdBindIndexBuffer(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			indexbuffer,
-//			0,
-//			VK_INDEX_TYPE_UINT16);
-//	vkCmdDrawIndexed(
-//			shadowcommandbuffers[lightidx][fifindex],
-//			tris.size() * 3,
-//			1,
-//			0,
-//			0,
-//			0);
-//	vkEndCommandBuffer(shadowcommandbuffers[lightidx][fifindex]);
-//}
 
 void Mesh::recordShadowDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
@@ -523,15 +356,13 @@ void Mesh::recordShadowDraw (cbRecData data, VkCommandBuffer& cb) {
 			0,
 			sizeof(ShadowmapPushConstants),
 			data.pushconstantdata);
-	std::unique_lock<std::mutex> dslock(*data.dsmutex);
 	vkCmdBindDescriptorSets(
 			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			data.pipeline.pipelinelayout,
 			1,
-			1, &data.descriptorset,        // see if we can refactor to get rid of this???
+			1, &data.descriptorset,
 			0, nullptr);
-	dslock.unlock();
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
 			cb,
