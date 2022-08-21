@@ -53,14 +53,11 @@ private:
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
-	VkCommandBuffer* skyboxcommandbuffers, * texmoncommandbuffers, * troubleshootinglinescommandbuffers, * ssrrcpycommandbuffers;
+	VkCommandBuffer* skyboxcommandbuffers, * troubleshootinglinescommandbuffers;
 	std::thread recordingthreads[NUM_RECORDING_THREADS];
-	static std::condition_variable conditionvariable;
-	static std::mutex submitfencemutex;
-	static bool submitfenceavailable;
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet* skyboxdescriptorsets, * texmondescriptorsets, * compositingdescriptorsets;
+	VkDescriptorSet* skyboxdescriptorsets, * texmondescriptorsets;
 	static VkDescriptorSet* scenedescriptorsets;
 	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
@@ -82,7 +79,7 @@ private:
 
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
-	void recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex);
+	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
 	void recordTroubleshootingLinesCommandBuffers (uint8_t fifindex, uint8_t sciindex, WanglingEngine* self);
 
@@ -110,24 +107,6 @@ private:
 	void loadScene (const char* scenefilepath);
 
 	void genScene ();
-
-	// TODO: read more about multi-threading/thread safety. it feels unwise and unsafe to pass in a self-reference here
-	/* Significant overhaul of multi-thread recording is neccesary. Firstly, while read/write is currently /mostly/
-	 * stable, it is not explicitly safe. Some useful changes/insights.
-	 *      1) Obviously passing in an entire WanglingEngine* is bad practice. Instead, figure out data that needs to
-	 *         be read and make a const copy of it for the threads. Then, create a multi-read lock on it. To do multi-
-	 *         read, we may need to use a std::shared_mutex and a std::shared_lock.
-	 *      2) To better represent recording and create a good > 1 thread implementation, try using a queue of function
-	 *         pointers to represent recording work that needs to be done. Either dispatch all secondary threads from
-	 *         the main loop, or dispatch one secondary that dispatches multiple tertiaries (joe's idea, not sure why
-	 *         this could be better.
-	 *      3) Joe also suggested using "closures," which, as he explained them, allow data to be passed between threads
-	 *         I don't see a use for them here yet, but it's good to know they exist in case we need to do something
-	 *         like that in the future.
-	 *      4) > 1 recording thread is going to require > 1 command pool (one per thread) which will be passed to the
-	 *         cmd buf begin info.
-	 */
-	[[noreturn]] static void threadedCmdBufRecord (WanglingEngine* self);
 
 public:
 	WanglingEngine ();
