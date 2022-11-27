@@ -137,6 +137,11 @@ WanglingEngine::WanglingEngine () {
 		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
 	}
 	GraphicsHandler::swapchainimageindex = 0;
+
+//	meshes[1]->transform(GraphicsHandler::projectFromView(primarycamera->getProjectionMatrix(),
+//														  primarycamera->getPosition(),
+//														  primarycamera->getPosition() + primarycamera->getForward(),
+//														  glm::vec3(0.f, 1.f, 0.f)));
 }
 
 void WanglingEngine::countSceneObjects (const char* scenefilepath, uint8_t* nummeshes, uint8_t* numlights) {
@@ -255,6 +260,15 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 //	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1.f, 1.f));
 //	meshes[0]->getDiffuseTexturePtr()->setUVPosition(glm::vec2(0.f, 0.f));
 //	meshes[0]->rewriteTextureDescriptorSets();
+
+//	std::default_random_engine randeng {};
+//	std::uniform_real_distribution uni(-10.f, 10.f);
+//	for (uint8_t i = 0; i < 32; i++) {
+//		meshes.push_back(new Mesh(WORKING_DIRECTORY "resources/objs/fuckingcube.obj",
+//								  glm::vec3(uni(randeng), uni(randeng), uni(randeng))));
+//	}
+
+
 	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
 	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
@@ -912,41 +926,73 @@ void WanglingEngine::draw () {
 				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
 	}
 
+	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
 		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
 				primarycamera->getProjectionMatrix() * primarycamera->calcAndGetSkyboxViewMatrix(),
 				lights[0]->getPosition()
 		};
-		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-		for (uint8_t i = 0; i < lights.size(); i++) {
-			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE) {  // this is a lie
-				glm::vec3* tempb = new glm::vec3[8];
-				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
-				lights[i]->recalculateLSOrthoBasis(primarycamera->getForward(),
-												   primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
-				delete[] tempb;
-				lightuniformbuffertemp[i] = {
-						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-						lights[i]->getPosition(),
-						lights[i]->getIntensity(),
-						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-						lights[i]->getType(),
-						lights[i]->getColor()
-				};
-				GraphicsHandler::VKHelperUpdateUniformBuffer(
-						MAX_LIGHTS,
-						sizeof(LightUniformBuffer),
-						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-						&lightuniformbuffertemp[0]);
-			}
-		}
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE ||
+//				lights[i]->getShadowType() == SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE) {  // this is a lie
+//				glm::vec3* tempb = new glm::vec3[8];
+//				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
+//				lights[i]->updateMatrices(primarycamera->getForward(),
+//										  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
+//				delete[] tempb;
+//				lightuniformbuffertemp[i] = {
+//						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//						lights[i]->getPosition(),
+//						lights[i]->getIntensity(),
+//						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//						lights[i]->getType(),
+//						lights[i]->getColor()
+//				};
+//				GraphicsHandler::VKHelperUpdateUniformBuffer(   // feels like this could be moved a level down, watch out for swapping if and for
+//						MAX_LIGHTS,
+//						sizeof(LightUniformBuffer),
+//						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//						&lightuniformbuffertemp[0]);
+//			}
+//		}
 	}
 
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+	// how is this not redundant w/ the above??
+//	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			lightuniformbuffertemp[i] = {
+//					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//					lights[i]->getPosition(),
+//					lights[i]->getIntensity(),
+//					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//					lights[i]->getType(),
+//					lights[i]->getColor()
+//			};
+//			GraphicsHandler::VKHelperUpdateUniformBuffer(
+//					MAX_LIGHTS,
+//					sizeof(LightUniformBuffer),
+//					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//					&lightuniformbuffertemp[0]);
+//		}
+//		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
+//		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+//	}
+
+	// making this block execute no matter what for shadowmap troubleshooting
+	{
+		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
+			glm::vec3 tempb[8], * tempbp = &tempb[0];
+			GraphicsHandler::makeRectPrism(&tempbp, meshes[0]->getMin(), meshes[0]->getMax());
+			lights[i]->updateMatrices(primarycamera->getForward(),
+									  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.),
+									  tempbp,
+									  8);
 			lightuniformbuffertemp[i] = {
 					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
 					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
@@ -956,14 +1002,12 @@ void WanglingEngine::draw () {
 					lights[i]->getType(),
 					lights[i]->getColor()
 			};
-			GraphicsHandler::VKHelperUpdateUniformBuffer(
-					MAX_LIGHTS,
-					sizeof(LightUniformBuffer),
-					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-					&lightuniformbuffertemp[0]);
 		}
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+		GraphicsHandler::VKHelperUpdateUniformBuffer(
+				lights.size(),
+				sizeof(LightUniformBuffer),
+				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+				&lightuniformbuffertemp[0]);
 	}
 
 	MeshUniformBuffer temp;

@@ -14,7 +14,10 @@ layout(push_constant) uniform PushConstants{
 } pc;
 
 void main(){
-    vec4 temp=pc.lspmatrix*mub.modelmatrix*vec4(vertexposition, 1.);    //pretty inefficient, see if we can recombine later
-    temp/=temp.w;
-    gl_Position=pc.lightvpmatrices*temp;
+//    vec4 temp = pc.lspmatrix * mub.modelmatrix * vec4(vertexposition, 1.f);    //pretty inefficient, see if we can recombine later
+//    temp /= temp.w;
+    // theres a chance that we don't need to do the w divide here, and can just let it happen in between shaders normally
+    // see DefaultTessellationEvaluation.glsl for simlar change to be considered
+//    gl_Position = pc.lightvpmatrices * temp;
+    gl_Position = pc.lightvpmatrices * pc.lspmatrix * mub.modelmatrix * vec4(vertexposition, 1.f);
 }

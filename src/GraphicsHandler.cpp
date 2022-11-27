@@ -2390,10 +2390,21 @@ void GraphicsHandler::VKHelperRecordImageTransition (
 }
 
 glm::vec3 GraphicsHandler::mat4TransformVec3 (glm::mat4 M, glm::vec3 v) {
-	glm::vec4 w = glm::vec4(v.x, v.y, v.z, 1.);
-	w = M * w;
+	glm::vec4 w = M * glm::vec4(v.x, v.y, v.z, 1.);
 	w /= w.w;
 	return glm::vec3(w.x, w.y, w.z);
+}
+
+glm::mat4 GraphicsHandler::projectFromView (glm::mat4 P, glm::vec3 p, glm::vec3 c, glm::vec3 u) {
+	// there is likely a more efficient version of this using p, c, and u to `determine the inverse view matrix w/o using mat4TransformVec3
+//	return glm::lookAt(glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f));
+	glm::vec3 look = p - c, newup = glm::cross(glm::cross(u, look), look);
+	PRINT_TRIPLE(newup);
+	std::cout << std::endl;
+	glm::mat4 V = glm::lookAt(p, c, glm::vec3(0.f, 1.f, 0.f));
+	return glm::lookAt(mat4TransformVec3(V, glm::vec3(0.f)),
+					   mat4TransformVec3(V, glm::vec3(0.f, 0.f, -1.f)),
+					   mat4TransformVec3(V, glm::vec3(0.f, 1.f, 0.f))) * P * V;
 }
 
 void GraphicsHandler::makeRectPrism (glm::vec3** dst, glm::vec3 min, glm::vec3 max) {
