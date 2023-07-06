@@ -48,7 +48,7 @@
 
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
 #define NUM_RECORDING_THREADS 1
-#define MAX_FRAMES_IN_FLIGHT 3
+#define MAX_FRAMES_IN_FLIGHT 3 // i did bad indexing somewhere, change this to see errors lol
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
 #define MAX_LIGHTS 2
 #define NUM_SHADER_STAGES_SUPPORTED 5
@@ -297,7 +297,9 @@ typedef struct VulkanInfo {
 			grassgraphicspipeline,
 			shadowmapgraphicspipeline,
 			texmongraphicspipeline,
-			linegraphicspipeline;
+			linegraphicspipeline,
+			terraingencomputepipeline,
+			voxeltroubleshootingpipeline;
 	VkFramebuffer* primaryframebuffers, * waterframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
@@ -320,6 +322,7 @@ typedef struct VulkanInfo {
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;
+	glm::mat4 terrainpushconstants;
 } VulkanInfo;
 
 typedef struct Vertex {
@@ -462,13 +465,14 @@ public:
 			VkDeviceMemory** memories,
 			VkDescriptorSetLayout descsetlayout);
 
+	// TODO: refactor naming of buffers and memories args to agree with count
 	static void VKSubInitStorageBuffer (
-			VkDescriptorSet** descriptorsets,
+			VkDescriptorSet* descriptorsets,
 			uint32_t binding,
 			VkDeviceSize elementsize,
 			uint32_t elementcount,
-			VkBuffer** buffers,
-			VkDeviceMemory** memories);
+			VkBuffer* buffers,
+			VkDeviceMemory* memories);
 
 	static void VKHelperCreateAndAllocateBuffer (
 			VkBuffer* buffer,

@@ -559,7 +559,102 @@ void GraphicsHandler::VKInitPipelines () {
 				&dslci[0],
 				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
 				pvisci,
-				true);
+				false);
+	}
+	//terrain gen
+	{
+		VkDescriptorSetLayoutBinding objdslbindings[2] {{0,
+														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														 1,
+														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+														 VK_SHADER_STAGE_FRAGMENT_BIT,
+														 nullptr},
+														{1,
+														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														 1,
+														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+														 VK_SHADER_STAGE_FRAGMENT_BIT,
+														 nullptr}};
+		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
+				{
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						0,
+						nullptr
+				},
+				{
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						2,
+						&objdslbindings[0]
+				}
+		};
+		const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/tgvoxelcomp.spv";
+		VKSubInitPipeline(&vulkaninfo.terraingencomputepipeline,
+						  VK_SHADER_STAGE_COMPUTE_BIT,
+						  &shaderfilepaths,
+						  &dslcreateinfos[0],
+						  {},
+						  {
+								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+								  nullptr,
+								  0,
+								  0,
+								  nullptr,
+								  0,
+								  nullptr
+						  },
+						  false);
+	}
+	// voxel troubleshooting
+	{
+		VkDescriptorSetLayoutBinding objdslbindings[2] {{0,
+														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														 1,
+														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+														 VK_SHADER_STAGE_FRAGMENT_BIT,
+														 nullptr},
+														{1,
+														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														 1,
+														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+														 VK_SHADER_STAGE_FRAGMENT_BIT,
+														 nullptr}};
+		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
+				{
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						0,
+						nullptr
+				},
+				{
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						2,
+						&objdslbindings[0]
+				}
+		};
+		const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/voxeltroubleshootingvert.spv",
+										  WORKING_DIRECTORY "/resources/shaders/SPIRV/voxeltroubleshootingfrag.spv"};
+		VKSubInitPipeline(&vulkaninfo.voxeltroubleshootingpipeline,
+						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+						  &shaderfilepaths[0],
+						  &dslcreateinfos[0],
+						  {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
+						  {
+								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+								  nullptr,
+								  0,
+								  0,
+								  nullptr,
+								  0,
+								  nullptr
+						  },
+						  false);
 	}
 }
 
@@ -706,7 +801,9 @@ void GraphicsHandler::VKSubInitDevices () {
 //		std::cout<<deviceextprops[x].extensionName<<std::endl;
 		if (strcmp(deviceextprops[x].extensionName, "VK_KHR_portability_subset"))
 			deviceextnames.push_back("VK_KHR_portability_subset");
-		if (strcmp(deviceextprops[x].extensionName, "VK_KHR_swapchain")) deviceextnames.push_back("VK_KHR_swapchain");
+		if (strcmp(deviceextprops[x].extensionName,
+				   "VK_KHR_swapchain"))
+			deviceextnames.push_back("VK_KHR_swapchain");
 	}
 	VkPhysicalDeviceFeatures feattemp {};
 	vkGetPhysicalDeviceFeatures(vulkaninfo.physicaldevice, &feattemp);
@@ -738,7 +835,10 @@ void GraphicsHandler::VKSubInitDevices () {
 
 void GraphicsHandler::VKSubInitQueues () {
 	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.graphicsqueuefamilyindex, 0, &vulkaninfo.graphicsqueue);
-	vkGetDeviceQueue(vulkaninfo.logicaldevice, vulkaninfo.presentqueuefamilyindex, 0, &vulkaninfo.presentationqueue);
+	vkGetDeviceQueue(vulkaninfo.logicaldevice,
+					 vulkaninfo.presentqueuefamilyindex,
+					 0,
+					 &vulkaninfo.presentationqueue);
 }
 
 void GraphicsHandler::VKSubInitSwapchain () {
@@ -789,7 +889,10 @@ void GraphicsHandler::VKSubInitSwapchain () {
 				 VK_COMPONENT_SWIZZLE_IDENTITY},
 				{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 		};
-		vkCreateImageView(vulkaninfo.logicaldevice, &imageviewcreateinfo, nullptr, &vulkaninfo.swapchainimageviews[x]);
+		vkCreateImageView(vulkaninfo.logicaldevice,
+						  &imageviewcreateinfo,
+						  nullptr,
+						  &vulkaninfo.swapchainimageviews[x]);
 	}
 	swapchainimageindex = 0u;
 }
@@ -904,7 +1007,10 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 			1, &prsubpass,
 			1, &prsubpassdepenedency    // can this just be nullptr???
 	};
-	vkCreateRenderPass(vulkaninfo.logicaldevice, &primaryrenderpasscreateinfo, nullptr, &vulkaninfo.primaryrenderpass);
+	vkCreateRenderPass(vulkaninfo.logicaldevice,
+					   &primaryrenderpasscreateinfo,
+					   nullptr,
+					   &vulkaninfo.primaryrenderpass);
 }
 
 void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
@@ -1034,7 +1140,10 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 			0,
 			2, &oceancompdslbindings[0]
 	};
-	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &oceancompdslcreateinfo, nullptr, &vulkaninfo.oceancompdsl);
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+								&oceancompdslcreateinfo,
+								nullptr,
+								&vulkaninfo.oceancompdsl);
 
 	VkDescriptorSetLayoutBinding particledslbinding {
 			0,
@@ -1093,7 +1202,10 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 			0,
 			5, &shadowmapdslbindings[0]
 	};
-	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice, &shadowmapdslcreateinfo, nullptr, &vulkaninfo.shadowmapdsl);
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+								&shadowmapdslcreateinfo,
+								nullptr,
+								&vulkaninfo.shadowmapdsl);
 
 	VkDescriptorSetLayoutBinding texmondslbinding {
 			0,
@@ -1133,7 +1245,8 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 												 {
 														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 														 vulkaninfo.numswapchainimages *
-														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) + MAX_FRAMES_IN_FLIGHT
+														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) +
+														 MAX_FRAMES_IN_FLIGHT
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -1141,7 +1254,7 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														 vulkaninfo.numswapchainimages
+														 vulkaninfo.numswapchainimages * 10
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -1157,7 +1270,10 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 			5,
 			&descriptorpoolsizes[0]
 	};
-	vkCreateDescriptorPool(vulkaninfo.logicaldevice, &descriptorpoolcreateinfo, nullptr, &vulkaninfo.descriptorpool);
+	vkCreateDescriptorPool(vulkaninfo.logicaldevice,
+						   &descriptorpoolcreateinfo,
+						   nullptr,
+						   &vulkaninfo.descriptorpool);
 }
 
 void GraphicsHandler::VKSubInitUniformBuffer (
@@ -1257,12 +1373,12 @@ void GraphicsHandler::VKSubInitUniformBuffer (
 }
 
 void GraphicsHandler::VKSubInitStorageBuffer (
-		VkDescriptorSet** descriptorsets,
+		VkDescriptorSet* descriptorsets,
 		uint32_t binding,
 		VkDeviceSize elementsize,
 		uint32_t elementcount,
-		VkBuffer** buffers,
-		VkDeviceMemory** memories) {
+		VkBuffer* buffers,
+		VkDeviceMemory* memories) {
 	VkPhysicalDeviceProperties pdprops;
 	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
 	VkDeviceSize roundedupsize = elementsize;
@@ -1270,35 +1386,33 @@ void GraphicsHandler::VKSubInitStorageBuffer (
 		roundedupsize = (1 + floor((float)elementsize / (float)pdprops.limits.minUniformBufferOffsetAlignment)) *
 						pdprops.limits.minUniformBufferOffsetAlignment;
 	}
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
-		VKHelperCreateAndAllocateBuffer(
-				&buffers[0][scii],
-				roundedupsize * elementcount,
-				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				&memories[0][scii],
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		//unneccesary, clean up later
-		VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
-		for (uint32_t y = 0; y < elementcount; y++) {
-			descriptorbuffinfos[y].buffer = (*buffers)[scii];
-			descriptorbuffinfos[y].offset = y * roundedupsize;
-			descriptorbuffinfos[y].range = elementsize;
-		}
-		//clearly my understanding of this struct, esp the elementcount field, is flawed
-		VkWriteDescriptorSet writedescriptorset {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				(*descriptorsets)[scii],
-				binding,
-				0,
-				1,      //i mean, we only /really/ have to update the buffers for active lights
-				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				nullptr,
-				&descriptorbuffinfos[0],
-				nullptr
-		};
-		vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
+	VKHelperCreateAndAllocateBuffer(
+			&buffers[0],
+			roundedupsize * elementcount,
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			&memories[0],
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	//unneccesary, clean up later
+	VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
+	for (uint32_t y = 0; y < elementcount; y++) {
+		descriptorbuffinfos[y].buffer = *buffers;
+		descriptorbuffinfos[y].offset = y * roundedupsize;
+		descriptorbuffinfos[y].range = elementsize;
 	}
+	//clearly my understanding of this struct, esp the elementcount field, is flawed
+	VkWriteDescriptorSet writedescriptorset {
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			*descriptorsets,
+			binding,
+			0,
+			1,      //i mean, we only /really/ have to update the buffers for active lights
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			nullptr,
+			&descriptorbuffinfos[0],
+			nullptr
+	};
+	vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
 }
 
 void GraphicsHandler::VKSubInitFramebuffers () {
@@ -1518,7 +1632,10 @@ void GraphicsHandler::VKSubInitPipeline (
 			pushconstantrange.size == 0 ? 0u : 1u,
 			&pushconstantrange
 	};
-	vkCreatePipelineLayout(vulkaninfo.logicaldevice, &pipelinelayoutcreateinfo, nullptr, &pipelineinfo->pipelinelayout);
+	vkCreatePipelineLayout(vulkaninfo.logicaldevice,
+						   &pipelinelayoutcreateinfo,
+						   nullptr,
+						   &pipelineinfo->pipelinelayout);
 
 	VkPipelineInputAssemblyStateCreateInfo inputassemblystatecreateinfo {
 			VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1626,7 +1743,8 @@ void GraphicsHandler::VKSubInitPipeline (
 			VK_BLEND_FACTOR_SRC_ALPHA,
 			VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 			VK_BLEND_OP_SUBTRACT,
-			VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+			VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+			VK_COLOR_COMPONENT_A_BIT
 	};
 	VkPipelineColorBlendStateCreateInfo colorblendstatecreateinfo {
 			VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -1705,8 +1823,9 @@ void GraphicsHandler::VKSubInitShaders (
 			(*createinfos)[stagecounter].stage = supportedshaderstages[x];
 			(*createinfos)[stagecounter].module = (*modules)[stagecounter];
 			(*createinfos)[stagecounter].pName = "main";
-			(*createinfos)[stagecounter].pSpecializationInfo = specializationinfos ? &specializationinfos[stagecounter]
-																				   : nullptr;
+			(*createinfos)[stagecounter].pSpecializationInfo = specializationinfos
+															   ? &specializationinfos[stagecounter]
+															   : nullptr;
 			delete[] shadersrc;
 			stagecounter++;
 		}
@@ -2104,7 +2223,8 @@ void GraphicsHandler::VKHelperInitImage (
 	uint32_t memindex = -1u;
 	for (uint32_t x = 0; x < physicaldevicememprops.memoryTypeCount; x++) {
 		if (memrequirements.memoryTypeBits & (1 << x)
-			&& ((physicaldevicememprops.memoryTypes[x].propertyFlags & imgdst->memoryprops) == imgdst->memoryprops)) {
+			&&
+			((physicaldevicememprops.memoryTypes[x].propertyFlags & imgdst->memoryprops) == imgdst->memoryprops)) {
 			memindex = x;
 			break;
 		}
@@ -2183,13 +2303,18 @@ void GraphicsHandler::VKHelperInitTexture (
 			layout,
 			imgviewtype);
 
-	VkDeviceSize size = texturedst->resolution.width * texturedst->resolution.height * VKHelperGetPixelSize(format) *
-						(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1);
+	VkDeviceSize size =
+			texturedst->resolution.width * texturedst->resolution.height * VKHelperGetPixelSize(format) *
+			(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1);
 	//below stuff has redundant code in updatewholeimages...is it necessary?
-	if (imgviewtype != VK_IMAGE_VIEW_TYPE_CUBE && format != VK_FORMAT_D32_SFLOAT && textype != TEXTURE_TYPE_SUBPASS) {
+	if (imgviewtype != VK_IMAGE_VIEW_TYPE_CUBE && format != VK_FORMAT_D32_SFLOAT &&
+		textype != TEXTURE_TYPE_SUBPASS) {
 		VkSubresourceLayout subresourcelayout;
 		VkImageSubresource imgsubresource {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texturedst->image, &imgsubresource, &subresourcelayout);
+		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice,
+									texturedst->image,
+									&imgsubresource,
+									&subresourcelayout);
 		size = subresourcelayout.size;
 	}
 
@@ -2399,8 +2524,8 @@ glm::mat4 GraphicsHandler::projectFromView (glm::mat4 P, glm::vec3 p, glm::vec3 
 	// there is likely a more efficient version of this using p, c, and u to `determine the inverse view matrix w/o using mat4TransformVec3
 //	return glm::lookAt(glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f));
 	glm::vec3 look = p - c, newup = glm::cross(glm::cross(u, look), look);
-	PRINT_TRIPLE(newup);
-	std::cout << std::endl;
+//	PRINT_TRIPLE(newup);
+//	std::cout << std::endl;
 	glm::mat4 V = glm::lookAt(p, c, glm::vec3(0.f, 1.f, 0.f));
 	return glm::lookAt(mat4TransformVec3(V, glm::vec3(0.f)),
 					   mat4TransformVec3(V, glm::vec3(0.f, 0.f, -1.f)),
@@ -2447,7 +2572,8 @@ VKAPI_CALL GraphicsHandler::debugCallback (
 		const VkDebugUtilsMessengerCallbackDataEXT* callbackdata,
 		void* userdata) {
 	if (severity < VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) return VK_FALSE;
-	if (severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) std::cout << callbackdata->pMessage << std::endl;
+	if (severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		std::cout << callbackdata->pMessage << std::endl;
 	uint32_t newlinecounter = 0u, charcounter = 0u;
 	if (callbackdata->messageIdNumber != -1539028524) {
 		while (callbackdata->pMessage[charcounter] != '\0') {
@@ -2484,7 +2610,8 @@ void GraphicsHandler::DestroyDebugUtilsMessengerEXT (
 }
 
 void GraphicsHandler::glfwErrorCallback (int error, const char* description) {
-	std::cout << "oopsie, glfw error (how'd you even do that? we do almost nothing with that lib lol...)" << std::endl;
+	std::cout << "oopsie, glfw error (how'd you even do that? we do almost nothing with that lib lol...)"
+			  << std::endl;
 	std::cout << description << std::endl;
 }
 

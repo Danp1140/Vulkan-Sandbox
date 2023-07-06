@@ -38,7 +38,7 @@ Light::Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType
 	intensity = i;
 	type = t;
 	shadowmapresolution = smr;
-	shadowtype = SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE;
+	shadowtype = SHADOW_TYPE_UNIFORM;
 	worldspacescenebb[0] = glm::vec3(-100., -100., -100.);
 	worldspacescenebb[1] = glm::vec3(100., 100., 100.);
 	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
@@ -208,8 +208,8 @@ void Light::recalculateLSPSMMatrix (glm::vec3 cameraforward, glm::vec3 camerapos
 													   camerapos + v * t,
 													   camerapos + v * t + cameraforward,
 													   glm::vec3(0.f, 1.f, 0.f));
-		std::cout << std::endl;
-		PRINT_4MAT(lspsmmatrix);
+//		std::cout << std::endl;
+//		PRINT_4MAT(lspsmmatrix);
 	} else {
 		// prelim world-space min-maxing, could be made more efficient
 		glm::vec3 min, max;

@@ -18,6 +18,7 @@
 #include "TextureHandler.h"
 #include "Ocean.h"
 #include "ParticleSystem.h"
+#include "Terrain.h"
 
 #include <thread>
 #include <rapidjson/document.h>
@@ -65,6 +66,7 @@ private:
 	std::queue<cbRecTask> recordingtasks;
 	std::queue<cbCollectInfo> secondarybuffers;
 	static std::mutex recordingmutex, scenedsmutex;
+	Terrain* testterrain;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -81,7 +83,7 @@ private:
 
 	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
-	void recordTroubleshootingLinesCommandBuffers (uint8_t fifindex, uint8_t sciindex, WanglingEngine* self);
+	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 
 	void updateTexMonDescriptorSets (TextureInfo tex);
 
