@@ -403,7 +403,7 @@ Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<g
 	}
 	subdivide(4);
 	cleanUpVertsAndTris();
-	float depthtemp = -3.f, mindist, disttemp;
+	float depthtemp = -2.5f, mindist, disttemp;
 	for (std::vector<glm::vec3>& w: waters) {
 		for (Vertex& v: vertices) {
 			mindist = 99999999.9f;

@@ -40,14 +40,15 @@
 
 #define PRINT_DOUBLE(vec2) std::cout<<'('<<vec2[0]<<", "<<vec2[1]<<")\n"
 #define PRINT_TRIPLE(vec3) std::cout<<'('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<")\n"
-#define PRINT_QUAD(vec4) std::cout<<'('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<")\n"
+#define PRINT_QUAD(vec4) std::cout<<'('<<std::fixed<<std::setprecision(2)<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<")\n"
+#define PRINT_4MAT(mat4) PRINT_QUAD(mat4[0]); PRINT_QUAD(mat4[1]); PRINT_QUAD(mat4[2]); PRINT_QUAD(mat4[3]);
 #define SHIFT_DOUBLE(vec2) '('<<vec2[0]<<", "<<vec2[1]<<')'
 #define SHIFT_TRIPLE(vec3) '('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<')'
 #define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
 
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
 #define NUM_RECORDING_THREADS 1
-#define MAX_FRAMES_IN_FLIGHT 3
+#define MAX_FRAMES_IN_FLIGHT 3 // i did bad indexing somewhere, change this to see errors lol
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
 #define MAX_LIGHTS 2
 #define NUM_SHADER_STAGES_SUPPORTED 5
@@ -296,7 +297,9 @@ typedef struct VulkanInfo {
 			grassgraphicspipeline,
 			shadowmapgraphicspipeline,
 			texmongraphicspipeline,
-			linegraphicspipeline;
+			linegraphicspipeline,
+			terraingencomputepipeline,
+			voxeltroubleshootingpipeline;
 	VkFramebuffer* primaryframebuffers, * waterframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
@@ -319,6 +322,7 @@ typedef struct VulkanInfo {
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;
+	glm::mat4 terrainpushconstants;
 } VulkanInfo;
 
 typedef struct Vertex {
@@ -461,13 +465,14 @@ public:
 			VkDeviceMemory** memories,
 			VkDescriptorSetLayout descsetlayout);
 
+	// TODO: refactor naming of buffers and memories args to agree with count
 	static void VKSubInitStorageBuffer (
-			VkDescriptorSet** descriptorsets,
+			VkDescriptorSet* descriptorsets,
 			uint32_t binding,
 			VkDeviceSize elementsize,
 			uint32_t elementcount,
-			VkBuffer** buffers,
-			VkDeviceMemory** memories);
+			VkBuffer* buffers,
+			VkDeviceMemory* memories);
 
 	static void VKHelperCreateAndAllocateBuffer (
 			VkBuffer* buffer,
@@ -552,6 +557,8 @@ public:
 
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);
+
+	static glm::mat4 projectFromView (glm::mat4 P, glm::vec3 p, glm::vec3 c, glm::vec3 u);
 
 	static void makeRectPrism (glm::vec3** dst, glm::vec3 min, glm::vec3 max);
 

@@ -4,11 +4,8 @@
 
 #include "WanglingEngine.h"
 
-std::condition_variable WanglingEngine::conditionvariable = std::condition_variable();
-std::mutex WanglingEngine::submitfencemutex = std::mutex();
 std::mutex WanglingEngine::recordingmutex = std::mutex();
 std::mutex WanglingEngine::scenedsmutex = std::mutex();
-bool WanglingEngine::submitfenceavailable = true;
 VkDescriptorSet* WanglingEngine::scenedescriptorsets = nullptr;
 
 WanglingEngine::WanglingEngine () {
@@ -19,27 +16,16 @@ WanglingEngine::WanglingEngine () {
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
-	genScene();
+	testterrain = new Terrain();
+//	genScene();
 
 	physicshandler = PhysicsHandler(primarycamera);
 
-	// TODO: move this array creation to somewhere in Mesh
-	/* Honestly, we need to find a more elegant way to handle Mesh texture generation via TextureHandler. A few options
-	 * to consider:
-	 * 1) Get rid of TextureHandler and move generation functions to Mesh. This seems easy, but i actually think that
-	 *    having it as a seperate object may help later, especially if/when we get to dynamic texture generation and
-	 *    possibly texture generation multithreading.
-	 * 2) Make some revisions above, but ultimately settle for a mediocre-looking solution. No.
-	 * 3) Make a Mesh function to handle all this that takes a function pointer from texture handler and variadic args.
-	 * 4) Something else???
-	 * To really find the best solution, we need to consider how TextureHandler is going to be used, what particular
-	 * function it has, other than some vague hope that it will help with efficiency.
-	 */
 	// diff btwn normalmap and normaltex??????
 //	TextureInfo* textemp = ocean->getNormalMapPtr();
 //	texturehandler.generateOceanTextures(&textemp, 1);
-	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
-	ocean->rewriteTextureDescriptorSets();
+//	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
+//	ocean->rewriteTextureDescriptorSets();
 
 	troubleshootingtext = new Text(
 			"troubleshooting text",
@@ -62,14 +48,14 @@ WanglingEngine::WanglingEngine () {
 	texturehandler.generateSkyboxTexture(&skyboxtexture);
 	updateSkyboxDescriptorSets();
 
-	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
-	meshes[0]->rewriteTextureDescriptorSets();
+//	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
+//	meshes[0]->rewriteTextureDescriptorSets();
 
 	initSceneData();
 
 	initTroubleshootingLines();
 
-	updateTexMonDescriptorSets(*meshes[1]->getDiffuseTexturePtr());
+	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
@@ -252,14 +238,11 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 //									glm::vec3(-10., 0., -4),
 //									glm::vec3(-11., 0., 4.)}},
 //								  0.f);
-//	TextureHandler::generateNewSystemTextures({*(meshes[0]->getDiffuseTexturePtr()),
-//											   *(meshes[0]->getNormalTexturePtr()),
-//											   *(meshes[0]->getHeightTexturePtr())});
-//	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1.f, 1.f));
-//	meshes[0]->getDiffuseTexturePtr()->setUVPosition(glm::vec2(0.f, 0.f));
+//	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(.1f, .1f));
 //	meshes[0]->rewriteTextureDescriptorSets();
-	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
-	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
+
+//	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
+//	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
 }
 
@@ -321,16 +304,6 @@ void WanglingEngine::initSkybox () {
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descsetallocinfo, &skyboxdescriptorsets[0]);
 
-	texmoncommandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cbai {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
-	};
-	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cbai, texmoncommandbuffers);
-
 	texmondescriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
 	VkDescriptorSetLayout dsl[GraphicsHandler::vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
@@ -347,39 +320,39 @@ void WanglingEngine::initSkybox () {
 
 void WanglingEngine::initTroubleshootingLines () {
 	std::vector<Vertex> troubleshootinglinespoints;
-	std::vector<glm::vec3> controlpoints {
-			glm::vec3(11., 0., 11.),
-			glm::vec3(10., 0., -8.),
-			glm::vec3(4., 0., -6.),
-			glm::vec3(4., 0., 4.),
-			glm::vec3(-4., 0., 6.),
-			glm::vec3(-6., 0., 4.),
-			glm::vec3(-10., 0., -4),
-			glm::vec3(-11., 0., 4.)
-	};
-	glm::vec3 splinePos;
-	for (uint8_t p1 = 1; p1 + 2 < controlpoints.size(); p1++) {
-		for (uint8_t x = 0; x < 25; x++) {
-			splinePos = PhysicsHandler::catmullRomSplineAtMatrified(
-					controlpoints,
-					p1,
-					0.5,
-					float_t(x) / 24.f);
-			troubleshootinglinespoints.push_back({
-														 splinePos,
-														 glm::vec3(0., 0., 0.),
-														 glm::vec2(0., 0.)
-												 });
-			troubleshootinglinespoints.push_back({
-														 splinePos,
-														 glm::vec3(0., 0., 0.),
-														 glm::vec2(0., 0.)
-												 });
-
-		}
-	}
-	troubleshootinglinespoints.erase(troubleshootinglinespoints.begin());
-	troubleshootinglinespoints.erase(troubleshootinglinespoints.end() - 1);
+//	std::vector<glm::vec3> controlpoints {
+//			glm::vec3(11., 0., 11.),
+//			glm::vec3(10., 0., -8.),
+//			glm::vec3(4., 0., -6.),
+//			glm::vec3(4., 0., 4.),
+//			glm::vec3(-4., 0., 6.),
+//			glm::vec3(-6., 0., 4.),
+//			glm::vec3(-10., 0., -4),
+//			glm::vec3(-11., 0., 4.)
+//	};
+//	glm::vec3 splinePos;
+//	for (uint8_t p1 = 1; p1 + 2 < controlpoints.size(); p1++) {
+//		for (uint8_t x = 0; x < 25; x++) {
+//			splinePos = PhysicsHandler::catmullRomSplineAtMatrified(
+//					controlpoints,
+//					p1,
+//					0.5,
+//					float_t(x) / 24.f);
+//			troubleshootinglinespoints.push_back({
+//														 splinePos,
+//														 glm::vec3(0., 0., 0.),
+//														 glm::vec2(0., 0.)
+//												 });
+//			troubleshootinglinespoints.push_back({
+//														 splinePos,
+//														 glm::vec3(0., 0., 0.),
+//														 glm::vec2(0., 0.)
+//												 });
+//
+//		}
+//	}
+//	troubleshootinglinespoints.erase(troubleshootinglinespoints.begin());
+//	troubleshootinglinespoints.erase(troubleshootinglinespoints.end() - 1);
 
 	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
 	troubleshootinglinespoints.push_back({glm::vec3(0.5, 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
@@ -387,6 +360,7 @@ void WanglingEngine::initTroubleshootingLines () {
 	troubleshootinglinespoints.push_back({glm::vec3(0., 0.5, 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
 	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
 	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.5), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
+
 
 	GraphicsHandler::VKHelperInitVertexBuffer(
 			troubleshootinglinespoints,
@@ -468,13 +442,13 @@ void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer
 	vkEndCommandBuffer(cb);
 }
 
-void WanglingEngine::recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciindex) {
+void WanglingEngine::recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			data.renderpass,
 			0,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+			data.framebuffer,
 			VK_FALSE,
 			0,
 			0
@@ -485,44 +459,29 @@ void WanglingEngine::recordTexMonCommandBuffers (uint8_t fifindex, uint8_t sciin
 			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
 			&cmdbufinherinfo
 	};
-	vkBeginCommandBuffer(texmoncommandbuffers[fifindex], &cmdbufbegininfo);
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
 	vkCmdBindPipeline(
-			texmoncommandbuffers[fifindex],
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			GraphicsHandler::vulkaninfo.texmongraphicspipeline.pipeline);
-//	vkCmdPushConstants(
-//			texmoncommandbuffers[fifindex],
-//			GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.pipelinelayout,
-//			VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-//			0,
-//			sizeof(SkyboxPushConstants),
-//			&GraphicsHandler::vulkaninfo.skyboxpushconstants);
 	vkCmdBindDescriptorSets(
-			texmoncommandbuffers[fifindex],
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			GraphicsHandler::vulkaninfo.texmongraphicspipeline.pipelinelayout,
 			0,
-			1, &texmondescriptorsets[sciindex],
+			1, &data.descriptorset,
 			0, nullptr);
-	vkCmdDraw(
-			texmoncommandbuffers[fifindex],
-			6,
-			1,
-			0,
-			0);
-	vkEndCommandBuffer(texmoncommandbuffers[fifindex]);
+	vkCmdDraw(cb, 6, 1, 0, 0);
+	vkEndCommandBuffer(cb);
 }
 
-void WanglingEngine::recordTroubleshootingLinesCommandBuffers (
-		uint8_t fifindex,
-		uint8_t sciindex,
-		WanglingEngine* self) {
+void WanglingEngine::recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cbii {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
+			data.renderpass,
 			0,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[sciindex],
+			data.framebuffer,
 			VK_FALSE,
 			0,
 			0
@@ -534,33 +493,33 @@ void WanglingEngine::recordTroubleshootingLinesCommandBuffers (
 			&cbii
 	};
 	vkBeginCommandBuffer(
-			troubleshootinglinescommandbuffers[fifindex],
+			cb,
 			&cbbi);
 	vkCmdBindPipeline(
-			troubleshootinglinescommandbuffers[fifindex],
+			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.linegraphicspipeline.pipeline);
+			data.pipeline.pipeline);
 	vkCmdPushConstants(
-			troubleshootinglinescommandbuffers[fifindex],
-			GraphicsHandler::vulkaninfo.linegraphicspipeline.pipelinelayout,
+			cb,
+			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
 			sizeof(glm::mat4),
-			&GraphicsHandler::vulkaninfo.grasspushconstants);
+			&GraphicsHandler::vulkaninfo.grasspushconstants);        // this is odd
 	VkDeviceSize offsettemp = 0u;
 	vkCmdBindVertexBuffers(
-			troubleshootinglinescommandbuffers[fifindex],
+			cb,
 			0,
 			1,
-			&self->troubleshootinglinesvertexbuffer,
+			&data.vertexbuffer,
 			&offsettemp);
 	vkCmdDraw(
-			troubleshootinglinescommandbuffers[fifindex],
-			254,
+			cb,
+			254,        // so is this
 			1,
 			0,
 			0);
-	vkEndCommandBuffer(troubleshootinglinescommandbuffers[fifindex]);
+	vkEndCommandBuffer(cb);
 }
 
 void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
@@ -586,8 +545,6 @@ void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifinde
 	self->ocean->recordCompute(fifindex);
 	self->ocean->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
 	self->grass->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
-	self->recordTexMonCommandBuffers(fifindex, GraphicsHandler::swapchainimageindex);
-	self->recordTroubleshootingLinesCommandBuffers(fifindex, GraphicsHandler::swapchainimageindex, self);
 
 	vkResetCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 0);
 
@@ -611,12 +568,8 @@ void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifinde
 	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], &renderpassbegininfo,
 						 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-//
 //	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 1,
 //						 &self->grass->getCommandBuffers()[fifindex]);
-
-	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 1,
-						 &self->texmoncommandbuffers[fifindex]);
 
 	vkCmdExecuteCommands(
 			GraphicsHandler::vulkaninfo.commandbuffers[fifindex],
@@ -685,6 +638,10 @@ void WanglingEngine::enqueueRecordingTasks () {
 						nullptr,
 						VK_NULL_HANDLE, VK_NULL_HANDLE, 0u};
 	// hey so im not even certain that i have to sync ds access, maybe just alloc/free
+
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
+	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
 	// do we need those ds mutexes???
 	// try removing them from draws once we have both mesh draws in and are stress testing
@@ -766,6 +723,23 @@ void WanglingEngine::enqueueRecordingTasks () {
 		tempdata.numtris = m->getTrisPtr()->size();
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Mesh::recordDraw(tempdata, c);}));
 	}
+
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.linegraphicspipeline;
+	tempdata.vertexbuffer = troubleshootinglinesvertexbuffer;
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		recordTroubleshootingLinesCommandBuffers(tempdata,
+												 c);
+	}));
+
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.voxeltroubleshootingpipeline;
+	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terrainpushconstants);
+	tempdata.numtris = testterrain->getNumLeaves() * 2u;
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordTroubleshootDraw(tempdata, c);}));
+
+	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight];
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
 
 	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
@@ -909,16 +883,6 @@ void WanglingEngine::draw () {
 									GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
-	enqueueRecordingTasks();
-
-	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
-		recordingthreads[x] = std::thread(processRecordingTasks,
-										  &recordingtasks,
-										  &secondarybuffers,
-										  GraphicsHandler::vulkaninfo.currentframeinflight,
-										  x,
-										  GraphicsHandler::vulkaninfo.logicaldevice);
-	}
 
 	glfwPollEvents();
 
@@ -943,41 +907,76 @@ void WanglingEngine::draw () {
 				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
 	}
 
+	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
 		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
 				primarycamera->getProjectionMatrix() * primarycamera->calcAndGetSkyboxViewMatrix(),
 				lights[0]->getPosition()
 		};
-		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-		for (uint8_t i = 0; i < lights.size(); i++) {
-			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE) {  // this is a lie
-				glm::vec3* tempb = new glm::vec3[8];
-				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
-				lights[i]->recalculateLSOrthoBasis(primarycamera->getForward(),
-												   primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
-				delete[] tempb;
-				lightuniformbuffertemp[i] = {
-						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-						lights[i]->getPosition(),
-						lights[i]->getIntensity(),
-						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-						lights[i]->getType(),
-						lights[i]->getColor()
-				};
-				GraphicsHandler::VKHelperUpdateUniformBuffer(
-						MAX_LIGHTS,
-						sizeof(LightUniformBuffer),
-						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-						&lightuniformbuffertemp[0]);
-			}
-		}
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE ||
+//				lights[i]->getShadowType() == SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE) {  // this is a lie
+//				glm::vec3* tempb = new glm::vec3[8];
+//				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
+//				lights[i]->updateMatrices(primarycamera->getForward(),
+//										  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
+//				delete[] tempb;
+//				lightuniformbuffertemp[i] = {
+//						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//						lights[i]->getPosition(),
+//						lights[i]->getIntensity(),
+//						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//						lights[i]->getType(),
+//						lights[i]->getColor()
+//				};
+//				GraphicsHandler::VKHelperUpdateUniformBuffer(   // feels like this could be moved a level down, watch out for swapping if and for
+//						MAX_LIGHTS,
+//						sizeof(LightUniformBuffer),
+//						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//						&lightuniformbuffertemp[0]);
+//			}
+//		}
 	}
 
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+	GraphicsHandler::vulkaninfo.terrainpushconstants =
+			primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+
+	// how is this not redundant w/ the above??
+//	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			lightuniformbuffertemp[i] = {
+//					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//					lights[i]->getPosition(),
+//					lights[i]->getIntensity(),
+//					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//					lights[i]->getType(),
+//					lights[i]->getColor()
+//			};
+//			GraphicsHandler::VKHelperUpdateUniformBuffer(
+//					MAX_LIGHTS,
+//					sizeof(LightUniformBuffer),
+//					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//					&lightuniformbuffertemp[0]);
+//		}
+//		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
+//		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+//	}
+
+	// making this block execute no matter what for shadowmap troubleshooting
+	{
+		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
+			glm::vec3 tempb[8], * tempbp = &tempb[0];
+			GraphicsHandler::makeRectPrism(&tempbp, meshes[0]->getMin(), meshes[0]->getMax());
+			lights[i]->updateMatrices(primarycamera->getForward(),
+									  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.),
+									  tempbp,
+									  8);
 			lightuniformbuffertemp[i] = {
 					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
 					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
@@ -987,14 +986,12 @@ void WanglingEngine::draw () {
 					lights[i]->getType(),
 					lights[i]->getColor()
 			};
-			GraphicsHandler::VKHelperUpdateUniformBuffer(
-					MAX_LIGHTS,
-					sizeof(LightUniformBuffer),
-					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-					&lightuniformbuffertemp[0]);
 		}
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+		GraphicsHandler::VKHelperUpdateUniformBuffer(
+				lights.size(),
+				sizeof(LightUniformBuffer),
+				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+				&lightuniformbuffertemp[0]);
 	}
 
 	MeshUniformBuffer temp;
@@ -1017,6 +1014,17 @@ void WanglingEngine::draw () {
 			GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]);
 
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	enqueueRecordingTasks();
+
+	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
+		recordingthreads[x] = std::thread(processRecordingTasks,
+										  &recordingtasks,
+										  &secondarybuffers,
+										  GraphicsHandler::vulkaninfo.currentframeinflight,
+										  x,
+										  GraphicsHandler::vulkaninfo.logicaldevice);
+	}
 
 	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
 		recordingthreads[i].join();
@@ -1062,25 +1070,4 @@ void WanglingEngine::draw () {
 bool WanglingEngine::shouldClose () {
 	return glfwWindowShouldClose(GraphicsHandler::vulkaninfo.window)
 		   || glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
-}
-
-[[noreturn]] void WanglingEngine::threadedCmdBufRecord (WanglingEngine* self) {
-	/* consider making immutable copy of all data being accessed (i.e. push constants & whatnot)
-	 * channel allows communication between threads.
-	 * consider "closures"
-	 * another idea is a queue of function ptrs */
-	std::unique_lock<std::mutex> ulock(submitfencemutex, std::defer_lock);
-	ulock.lock();
-	conditionvariable.wait(ulock, [] {return submitfenceavailable;});
-	submitfenceavailable = false;
-	vkWaitForFences(
-			GraphicsHandler::vulkaninfo.logicaldevice,
-			1,
-			&GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight],
-			VK_FALSE,
-			UINT64_MAX);
-	ulock.unlock();
-	submitfenceavailable = true;
-	conditionvariable.notify_one();
-	recordCommandBuffer(self, GraphicsHandler::vulkaninfo.currentframeinflight);
 }

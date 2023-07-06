@@ -16,19 +16,20 @@
  * LIGHT_TYPE_PLANE is directional, casting rays in a sphere limited by its fov
  * Notably, all types other than LIGHT_TYPE_SUN have yet to be fully implemented, and therefore will not work well.
  */
-typedef enum LightType{
+typedef enum LightType {
 	LIGHT_TYPE_SUN,
 	LIGHT_TYPE_POINT,
 	LIGHT_TYPE_PLANE,
 	LIGHT_TYPE_SPOT
-}LightType;
+} LightType;
 
-typedef enum ShadowType{
+typedef enum ShadowType {
 	SHADOW_TYPE_UNIFORM,
+	SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE,
 	SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE
-}ShadowType;
+} ShadowType;
 
-class Light{
+class Light {
 private:
 	glm::vec3 position, forward, up, lsorthobasis[3], worldspacescenebb[2];
 	glm::vec4 color;
@@ -64,7 +65,7 @@ private:
 
 	void recalculateViewMatrix ();
 
-	void recalculateLSPSMMatrix (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3*b, uint8_t numb);
+	void recalculateLSPSMMatrix (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
 
 public:
 	Light ();
@@ -73,18 +74,18 @@ public:
 
 	// TODO: consolidate gets and sets
 	// TODO: update functions that pass by pointer to pass by const &
-	// TODO: evaluate usefulness of recalculateLSOrthoBasis
+	// TODO: evaluate usefulness of updateMatrices
 	void setPosition (glm::vec3 p);
 
 	void setForward (glm::vec3 f);
 
 	void setWorldSpaceSceneBB (glm::vec3 min, glm::vec3 max);
 
-	glm::mat4 getProjectionMatrix (){return projectionmatrix;}
+	glm::mat4 getProjectionMatrix () {return projectionmatrix;}
 
-	glm::mat4 getViewMatrix (){return viewmatrix;}
+	glm::mat4 getViewMatrix () {return viewmatrix;}
 
-	void recalculateLSOrthoBasis (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
+	void updateMatrices (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
 
 	int getShadowmapResolution () {return shadowmapresolution;}
 
