@@ -26,9 +26,15 @@ public:
 
 	void renderDepthMap(Mesh*seabed);
 	void rewriteTextureDescriptorSets();
-	void recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds);
-	void recordCompute(uint8_t fifindex);
-	void rewriteDescriptorSet(uint32_t index);
+	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds);
+
+	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
+
+	void recordCompute (uint8_t fifindex);
+
+	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
+
+	void rewriteDescriptorSet (uint32_t index);
 	VkDescriptorSet*getComputeDescriptorSets(){return computedescriptorsets;}
 	VkCommandBuffer*getComputeCommandBuffers(){return computecommandbuffers;}
 	TextureInfo*getHeightMapPtr(){return &heightmap;}   //perhaps use displacement map instead (better for cresting and such)

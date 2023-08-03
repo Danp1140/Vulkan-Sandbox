@@ -241,7 +241,7 @@ void GraphicsHandler::VKInitPipelines () {
 	}
 	//ocean graph
 	{
-		VkDescriptorSetLayoutBinding objectdslbindings[3] {{
+		VkDescriptorSetLayoutBinding objectdslbindings[4] {{
 																   0,
 																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 																   1,
@@ -261,6 +261,13 @@ void GraphicsHandler::VKInitPipelines () {
 																   1,
 																   VK_SHADER_STAGE_FRAGMENT_BIT,
 																   nullptr
+														   },
+														   {
+																   3,
+																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																   1,
+																   VK_SHADER_STAGE_FRAGMENT_BIT,
+																   nullptr
 														   }};
 		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
 				scenedslcreateinfo,
@@ -268,7 +275,7 @@ void GraphicsHandler::VKInitPipelines () {
 						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 						nullptr,
 						0,
-						3, &objectdslbindings[0]
+						4, &objectdslbindings[0]
 				}};
 		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 		VkVertexInputAttributeDescription vertinattribdesc[3] {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
@@ -923,6 +930,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 			0,
 			nullptr
 	};
+	// why do we have 2 dependencies here??
 	VkSubpassDependency shadowsubpassdependencies[2] {{
 															  VK_SUBPASS_EXTERNAL,
 															  0,
@@ -965,7 +973,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
 																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 														 },
 														 {
 																 0,
@@ -976,7 +984,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
 																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 														 }};
 	VkAttachmentReference prcolorattachmentreference {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
 			prdepthattachmentreference {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
@@ -1011,6 +1019,64 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 					   &primaryrenderpasscreateinfo,
 					   nullptr,
 					   &vulkaninfo.primaryrenderpass);
+
+	// not sure if we should make above render to transfer src and below render from that to present src
+	VkAttachmentDescription ssrrattachmentdescriptions[2] {{
+																   0,
+																   SWAPCHAIN_IMAGE_FORMAT,
+																   VK_SAMPLE_COUNT_1_BIT,
+																   VK_ATTACHMENT_LOAD_OP_LOAD,
+																   VK_ATTACHMENT_STORE_OP_STORE,
+																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+																   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+														   }, {
+																   0,
+																   VK_FORMAT_D32_SFLOAT,
+																   VK_SAMPLE_COUNT_1_BIT,
+																   VK_ATTACHMENT_LOAD_OP_LOAD,
+																   VK_ATTACHMENT_STORE_OP_STORE,
+																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+																   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+														   }};
+	// idk what this layout means lmao
+	VkAttachmentReference ssrrattachmentreferences[2] {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+													   {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};
+	// what is input attachment for???? maybe we use this here???
+	// or perhaps it only matters for multiple subpasses
+	// tbh im not even certain we really need another renderpass here but its whatever
+	VkSubpassDescription ssrrsubpass {
+			0,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			0, nullptr,
+			1, &ssrrattachmentreferences[0], nullptr, &ssrrattachmentreferences[1],
+			0, nullptr
+	};
+	VkSubpassDependency ssrrdependency {
+			VK_SUBPASS_EXTERNAL, 0,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			0
+	};
+	VkRenderPassCreateInfo ssrrrenderpasscreateinfo {
+			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			nullptr,
+			0,
+			2, &ssrrattachmentdescriptions[0],
+			1, &ssrrsubpass,
+			1, &ssrrdependency
+	};
+	// adding this renderpass caused screen to blank grey on quit
+	// on second thought, why bother with another renderpass? see if we can just cpy mid-render (w/ pipeline barrier obv)
+	vkCreateRenderPass(vulkaninfo.logicaldevice,
+					   &ssrrrenderpasscreateinfo,
+					   nullptr,
+					   &vulkaninfo.ssrrrenderpass);
 }
 
 void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
@@ -1417,7 +1483,10 @@ void GraphicsHandler::VKSubInitStorageBuffer (
 
 void GraphicsHandler::VKSubInitFramebuffers () {
 	vulkaninfo.primaryframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.ssrrframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < vulkaninfo.numswapchainimages; x++) {
+		// if ssrr renderpass pans out, we dont need this swapchain image view here
+		// frankly, though, shadowmaps may form a good analog for ssrr stuff in terms of renderpass/pipeline techniques
 		VkImageView attachmentstemp[2] = {vulkaninfo.swapchainimageviews[x],
 										  vulkaninfo.depthbuffer.imageview};
 		VkFramebufferCreateInfo framebuffercreateinfo {
@@ -1430,6 +1499,19 @@ void GraphicsHandler::VKSubInitFramebuffers () {
 		};
 		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr,
 							&vulkaninfo.primaryframebuffers[x]);
+
+		VkFramebufferCreateInfo ssrrframebuffercreateinfo {
+				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				nullptr,
+				0,
+				vulkaninfo.ssrrrenderpass,
+				2, &attachmentstemp[0],
+				vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1
+		};
+		vkCreateFramebuffer(vulkaninfo.logicaldevice,
+							&ssrrframebuffercreateinfo,
+							nullptr,
+							&vulkaninfo.ssrrframebuffers[x]);
 	}
 }
 
@@ -1771,7 +1853,9 @@ void GraphicsHandler::VKSubInitPipeline (
 			&colorblendstatecreateinfo,
 			nullptr,
 			pipelineinfo->pipelinelayout,
-			issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass,  // TODO: add renderpass arg
+			issm ? vulkaninfo.templateshadowrenderpass : (pipelineinfo == &vulkaninfo.oceangraphicspipeline
+														  ? vulkaninfo.ssrrrenderpass
+														  : vulkaninfo.primaryrenderpass),  // TODO: add renderpass arg (!!!)
 			0,
 			VK_NULL_HANDLE,
 			-1
@@ -1844,7 +1928,7 @@ void GraphicsHandler::VKSubInitDepthBuffer () {
 			1,
 			VK_SAMPLE_COUNT_1_BIT,
 			VK_IMAGE_TILING_OPTIMAL,        //apparently this development device's implementation doesn't support tiling linear
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 			VK_SHARING_MODE_EXCLUSIVE,
 			0,
 			nullptr,
@@ -2284,7 +2368,7 @@ void GraphicsHandler::VKHelperInitTexture (
 		layout = VK_IMAGE_LAYOUT_GENERAL;
 	} else if (textype == TEXTURE_TYPE_SSRR_BUFFER) {
 		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		layout = VK_IMAGE_LAYOUT_GENERAL;
+		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // is this layout correct?
 	} else if (memprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
 		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2318,7 +2402,7 @@ void GraphicsHandler::VKHelperInitTexture (
 		size = subresourcelayout.size;
 	}
 
-	if (textype != TEXTURE_TYPE_SHADOWMAP && textype != TEXTURE_TYPE_SUBPASS) {
+	if (textype != TEXTURE_TYPE_SHADOWMAP && textype != TEXTURE_TYPE_SUBPASS && textype != TEXTURE_TYPE_SSRR_BUFFER) {
 		char* emptydata = new char[size];
 		memset(emptydata, 0, size);
 		VKHelperUpdateWholeTexture(texturedst, reinterpret_cast<void*>(emptydata));
@@ -2512,6 +2596,39 @@ void GraphicsHandler::VKHelperRecordImageTransition (
 						 0, nullptr,
 						 0, nullptr,
 						 1, &imgmembar);
+}
+
+void GraphicsHandler::recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb) {
+	VkCommandBufferInheritanceInfo cbinherinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			VK_NULL_HANDLE,
+			0,
+			VK_NULL_HANDLE,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cbbeginfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			0,
+			&cbinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cbbeginfo);
+	// vkCmdCopyImage2(cb, &cpyinfo);
+	VkImageCopy imgcpy = {
+			cpyinfo.pRegions->srcSubresource,
+			cpyinfo.pRegions->srcOffset,
+			cpyinfo.pRegions->dstSubresource,
+			cpyinfo.pRegions->dstOffset,
+			cpyinfo.pRegions->extent
+	};
+	vkCmdCopyImage(cb,
+				   cpyinfo.srcImage, cpyinfo.srcImageLayout,
+				   cpyinfo.dstImage, cpyinfo.dstImageLayout,
+				   cpyinfo.regionCount, &imgcpy);
+	vkEndCommandBuffer(cb);
 }
 
 glm::vec3 GraphicsHandler::mat4TransformVec3 (glm::mat4 M, glm::vec3 v) {

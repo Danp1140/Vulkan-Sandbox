@@ -21,11 +21,37 @@ WanglingEngine::WanglingEngine () {
 
 	physicshandler = PhysicsHandler(primarycamera);
 
+	// theres probably a better place for this
+	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrdepthbuffer,
+										 GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height,
+										 VK_FORMAT_D32_SFLOAT,
+										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+										 TEXTURE_TYPE_SSRR_BUFFER,
+										 VK_IMAGE_VIEW_TYPE_2D,
+										 GraphicsHandler::genericsampler);
+	GraphicsHandler::vulkaninfo.ssrrbuffers = new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
+	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
+//		VKHelperInitImage(&GraphicsHandler::vulkaninfo.ssrrbuffers[scii],
+//						  GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height,
+//						  VK_FORMAT_B8G8R8A8_SRGB,
+//						  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+//						  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE);
+		GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrbuffers[scii],
+											 GraphicsHandler::vulkaninfo.swapchainextent.width,
+											 GraphicsHandler::vulkaninfo.swapchainextent.height,
+											 VK_FORMAT_B8G8R8A8_SRGB,
+											 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+											 TEXTURE_TYPE_SSRR_BUFFER,
+											 VK_IMAGE_VIEW_TYPE_2D,
+											 GraphicsHandler::genericsampler); // could try messing with the sampler
+	}
+
 	// diff btwn normalmap and normaltex??????
-//	TextureInfo* textemp = ocean->getNormalMapPtr();
-//	texturehandler.generateOceanTextures(&textemp, 1);
-//	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
-//	ocean->rewriteTextureDescriptorSets();
+	//TextureInfo* textemp = ocean->getNormalMapPtr();
+	//texturehandler.generateOceanTextures(&textemp, 1);
+	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
+	ocean->rewriteTextureDescriptorSets();
 
 	troubleshootingtext = new Text(
 			"troubleshooting text",
@@ -48,6 +74,13 @@ WanglingEngine::WanglingEngine () {
 	texturehandler.generateSkyboxTexture(&skyboxtexture);
 	updateSkyboxDescriptorSets();
 
+//	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/fuckingcube.obj", glm::vec3(3., 1., -2.)));
+	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
+							  glm::vec3(0., -1., 5.),
+							  glm::vec3(1.),
+							  glm::quat(sin(1.57), 0., 0., cos(1.57)), 2048u));
+	TextureHandler::generateTextures({*meshes.back()->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
+
 //	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
 //	meshes[0]->rewriteTextureDescriptorSets();
 
@@ -55,7 +88,10 @@ WanglingEngine::WanglingEngine () {
 
 	initTroubleshootingLines();
 
-	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
+//	 updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
+//	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrbuffers[0]);
+	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrdepthbuffer);
+//	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
@@ -226,22 +262,22 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 		}
 	}
 
-//	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
-//										 glm::vec3(10., 0., -10.)};
-//	meshes[0]->generateSteppeMesh(steppearea,
-//								  {{glm::vec3(11., 0., 11.),
-//									glm::vec3(10., 0., -8.),
-//									glm::vec3(4., 0., -6.),
-//									glm::vec3(4., 0., 4.),
-//									glm::vec3(-4., 0., 6.),
-//									glm::vec3(-6., 0., 4.),
-//									glm::vec3(-10., 0., -4),
-//									glm::vec3(-11., 0., 4.)}},
-//								  0.f);
-//	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(.1f, .1f));
-//	meshes[0]->rewriteTextureDescriptorSets();
+	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
+										 glm::vec3(10., 0., -10.)};
+	meshes[0]->generateSteppeMesh(steppearea,
+								  {{glm::vec3(11., 0., 11.),
+									glm::vec3(10., 0., -8.),
+									glm::vec3(4., 0., -6.),
+									glm::vec3(4., 0., 4.),
+									glm::vec3(-4., 0., 6.),
+									glm::vec3(-6., 0., 4.),
+									glm::vec3(-10., 0., -4),
+									glm::vec3(-11., 0., 4.)}},
+								  0.f);
+	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(.1f, .1f));
+	meshes[0]->rewriteTextureDescriptorSets();
 
-//	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
+	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
 //	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
 }
@@ -643,6 +679,11 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceancomputepipeline;
+	tempdata.descriptorset = ocean->getComputeDescriptorSets()[GraphicsHandler::swapchainimageindex]; // double-check that this is correct idx
+	tempdata.pushconstantdata = reinterpret_cast<void*>(physicshandler.getTPtr());
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
+
 	// do we need those ds mutexes???
 	// try removing them from draws once we have both mesh draws in and are stress testing
 	// TODO: check for light change flag
@@ -737,14 +778,204 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.numtris = testterrain->getNumLeaves() * 2u;
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordTroubleshootDraw(tempdata, c);}));
 
+	// cpy op should take place here, only one texture needs to exist, probably in GH, cpy op could be in secondary buff, or we add a new type of cbRecTask
+	// we put it down below temporarily so we didnt need another renderpass for 2d stuff, but in the future we should do that
+
 	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
+//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
 
 	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
+
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+										  nullptr,
+										  VK_NULL_HANDLE,
+										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+										  {{0, 0}, {0, 0}},
+										  0, nullptr
+								  }));
+
+
+	// if this works, move and change to static
+
+	// feels a bit hamfisted to have so many membars, well do it like this for now, but see if there is a more elegant way later
+	// can combine these into one dependency rec task w/ 2 membars
+	VkImageMemoryBarrier2KHR* ssrrcolorpreimb = new VkImageMemoryBarrier2KHR {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+										  nullptr,
+										  0,
+										  0, nullptr,
+										  0, nullptr,
+										  1, ssrrcolorpreimb
+								  }));
+	VkImageMemoryBarrier2KHR* ssrrdepthpreimb = new VkImageMemoryBarrier2KHR {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+										  nullptr,
+										  0,
+										  0, nullptr,
+										  0, nullptr,
+										  1, ssrrdepthpreimb
+								  }));
+
+	VkImageSubresourceLayers subreclayers {
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			0,
+			0,
+			1
+	};
+	VkImageCopy2 imgcpy {
+			VK_STRUCTURE_TYPE_IMAGE_COPY_2,
+			nullptr,
+			subreclayers, {0, 0, 0},
+			subreclayers, {0, 0, 0},
+			{GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height, 1}
+	};
+	VkCopyImageInfo2 cpyinfo {
+			VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
+			nullptr,
+			GraphicsHandler::vulkaninfo.swapchainimages[GraphicsHandler::swapchainimageindex],
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &imgcpy
+	};
+	recordingtasks.push(cbRecTask([tempdata, cpyinfo] (VkCommandBuffer& c) {
+		GraphicsHandler::recordImgCpy(tempdata,
+									  cpyinfo,
+									  c);
+	}));
+
+	VkImageSubresourceLayers depthsubreclayers {
+			VK_IMAGE_ASPECT_DEPTH_BIT,
+			0,
+			0,
+			1
+	};
+	VkImageCopy2 depthimgcpy {
+			VK_STRUCTURE_TYPE_IMAGE_COPY_2,
+			nullptr,
+			depthsubreclayers, {0, 0, 0},
+			depthsubreclayers, {0, 0, 0},
+			{GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height, 1}
+	};
+	VkCopyImageInfo2 depthcpyinfo {
+			VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
+			nullptr,
+			GraphicsHandler::vulkaninfo.depthbuffer.image,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
+			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &depthimgcpy
+	};
+
+	recordingtasks.push(cbRecTask([tempdata, depthcpyinfo] (VkCommandBuffer& c) {
+		GraphicsHandler::recordImgCpy(tempdata,
+									  depthcpyinfo,
+									  c);
+	}));
+
+	// lmao why is this a pointer
+	// TODO: possible memory leak lmaoooooo
+	VkImageMemoryBarrier2KHR* ssrrcolorimb = new VkImageMemoryBarrier2KHR {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+										  nullptr,
+										  0,
+										  0, nullptr,
+										  0, nullptr,
+										  1, ssrrcolorimb
+								  }));
+
+	VkImageMemoryBarrier2KHR* ssrrdepthimb = new VkImageMemoryBarrier2KHR {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+										  nullptr,
+										  0,
+										  0, nullptr,
+										  0, nullptr,
+										  1, ssrrdepthimb
+								  }));
+
+
+	// random thought: could we cut it down to one ssrr buffer that gets reused for every frame??
+
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+										  nullptr,
+										  GraphicsHandler::vulkaninfo.ssrrrenderpass,
+										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+										  2,
+										  &GraphicsHandler::vulkaninfo.primaryclears[0]
+								  }));
+
+	tempdata.renderpass = GraphicsHandler::vulkaninfo.ssrrrenderpass;
+	tempdata.framebuffer = GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex];
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceangraphicspipeline;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.oceanpushconstants);
+	tempdata.descriptorset = ocean->getDescriptorSets()[GraphicsHandler::swapchainimageindex]; // check that this is the correct index
+	tempdata.vertexbuffer = ocean->getVertexBuffer();
+	tempdata.indexbuffer = ocean->getIndexBuffer();
+	tempdata.numtris = ocean->getTris().size();
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordDraw(tempdata, c);}));
 }
 
 void WanglingEngine::processRecordingTasks (
@@ -770,7 +1001,7 @@ void WanglingEngine::processRecordingTasks (
 		// order with which secondary buffers are enqueued strongly affects frequency of their alloc/free
 		// could store use frequency info in cbSet
 		lock.lock();
-		if (tasks->empty()) break;
+		if (tasks->empty()) break; // should we unlock here??
 		if (tasks->front().type == cbRecTask::cbRecTaskType::CB_REC_TASK_TYPE_RENDERPASS) {
 			resultcbs->push(cbCollectInfo(tasks->front().data.rpbi));
 			tasks->pop();
@@ -820,17 +1051,25 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 								 1,
 								 &secondarybuffers.front().data.cmdbuf);
 		} else if (secondarybuffers.front().type == cbCollectInfo::cbCollectInfoType::CB_COLLECT_INFO_TYPE_RENDERPASS) {
+			// ending an rp w/o starting another is done by passing a renderpassbi as if to begin, but with a null handle as renderpass
+			// check inrp logic here
 			if (inrp) vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
 			else inrp = true;
-			vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-								 &secondarybuffers.front().data.rpbi,
-								 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+			if (secondarybuffers.front().data.rpbi.renderPass != VK_NULL_HANDLE) {
+				vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+									 &secondarybuffers.front().data.rpbi,
+									 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+			} else inrp = false;
 		} else if (secondarybuffers.front().type == cbCollectInfo::cbCollectInfoType::CB_COLLECT_INFO_TYPE_DEPENDENCY) {
 			if (secondarybuffers.front().data.di.imageMemoryBarrierCount) {
 				if (inrp) {
 					vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
 					inrp = false;
 				}
+
+				// WLYL: you were investigating this "dependency" barrier system, and learning abt pipeline barrier to facilitate copying the screen buffer
+				// when troubleshooting this, try monitoring the memory in texmon
+				// perhaps just try running a cpy lol
 
 				VkImageMemoryBarrier imb {
 						// TODO: sequester this shit to a function
