@@ -126,6 +126,8 @@ WanglingEngine::WanglingEngine () {
 		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
 	}
 	GraphicsHandler::swapchainimageindex = 0;
+
+	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
 }
 
 void WanglingEngine::countSceneObjects (const char* scenefilepath, uint8_t* nummeshes, uint8_t* numlights) {

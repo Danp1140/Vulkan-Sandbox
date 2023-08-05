@@ -91,6 +91,19 @@ void setupTree (uint depth) {
     */
 }
 
+/* returns a pointer to the node next to v in the direction of dir. returns -1u if there is no node in that direction.
+ * presumed to start on a leaf
+ */
+uint getNeighbor(uint v, bvec3 dir) {
+    /*
+    if (v + dir is sibling) {
+        proceed to that sibling
+        proceed in -dir til leaf
+    }
+    else (go up, etc)
+    */
+}
+
 /*
  * eventually we will need a barrier after this compute/before troubleshooting/meshing shaders
  */
@@ -129,6 +142,8 @@ void main () {
 
     voxelbuffer.voxels[0].material = 0;
     if (voxelbuffer.voxels.length() > 0) voxelbuffer.voxels[0].material = 1;
+
+    // for the time being, i'm going to combine the mesh gen and voxel gen in the same shader
 }
 
 uint getChildPtr(uint nodeptr, bvec3 oct) {
