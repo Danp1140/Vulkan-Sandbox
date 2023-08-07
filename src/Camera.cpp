@@ -9,8 +9,8 @@ Camera::Camera () {
 	forward = glm::vec3(-1, -1, -1);
 	up = glm::vec3(0, 1, 0);
 	fovy = 0.785f;
-	nearclip = 0.001f;
-	farclip = 100.0f;
+	nearclip = 0.1f;
+	farclip = 50.0f;
 	aspectratio = 16.0f / 9.0f;
 	movementsens = 0.1f;
 	mousesens = 0.005f;
@@ -28,7 +28,7 @@ Camera::Camera (GLFWwindow* w, int hres, int vres) {
 	forward = glm::vec3(-1, -1, -1);
 	up = glm::vec3(0, 1, 0);
 	fovy = 0.785f;
-	nearclip = 0.001f;
+	nearclip = 0.1f;
 	farclip = 50.;
 	aspectratio = float(hres) / float(vres);
 	movementsens = 0.1f;

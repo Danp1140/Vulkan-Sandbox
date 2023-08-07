@@ -160,13 +160,23 @@ TEX_FUNC_IMPL_HEIGHT(colorfulMarble) {}
 // TODO: add back ocean textures
 TEX_FUNC_IMPL_DIFFUSE(ocean) {}
 
-TEX_FUNC_IMPL_NORMAL(ocean) {}
+TEX_FUNC_IMPL_NORMAL(ocean) {
+//	BaseGenInfo geninfo {};
+//	BaseUseInfo<glm::vec4> useinfo {.interp = {{glm::vec4(1., 1., 0., 0.), glm::vec4(-1., 1., 0., 0)}}};
+//	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+//		geninfo.wave = {WAVE_TYPE_TRI, 20.f, 100.f * generateTurbulence(x, y, texdst, geninfo)};
+////		datadst[x * texdst.resolution.height + y]
+//		// perhaps we need a setTexel method
+//		addTexel(texdst, datadst[x * texdst.resolution.height + y], generateWave, geninfo, interp, useinfo, x, y);
+//	}
+}
 
 TEX_FUNC_IMPL_HEIGHT(ocean) {}
 
 TEX_FUNC_IMPL_DIFFUSE(blank) {
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 			datadst[x * texdst.resolution.height + y] = glm::vec4(1.f);
+			datadst[x * texdst.resolution.height + y] = glm::vec4(0.1, 0.9, 0.2, 1.);
 		}
 }
 

@@ -22,16 +22,16 @@ typedef struct PhysicsObject{
 	double mass;
 }PhysicsObject;
 
-class PhysicsHandler{
+class PhysicsHandler {
 private:
-	const Tri*standingtri;
+	const Tri* standingtri;
 	glm::vec2 standinguv;
-	Camera*camera;      //could consider just passing position and maybe forward
+	Camera* camera;      //could consider just passing position and maybe forward
 	PhysicsObject cameraPO;
-	float dt;
-	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime;
+	float dt, t;
+	std::chrono::time_point<std::chrono::high_resolution_clock> lasttime, t0;
 
-	static inline bool edgeTest2D (glm::vec2 a, glm::vec2 b){return (a.y * b.x) >= (a.x * b.y);}
+	static inline bool edgeTest2D (glm::vec2 a, glm::vec2 b) {return (a.y * b.x) >= (a.x * b.y);}
 
 	//could streamline this w/ input mask of zeroed out normals
 	static bool triIntersectionNoY (glm::vec3 tripoints[3], glm::vec3 q);
@@ -39,7 +39,7 @@ private:
 	//could also pass input mask of zeroed normals for efficiency
 	static bool cylinderTriIntersection (Tri tri, glm::vec3 cylinderorigin, float r, float h);
 
-	void updateStandingTri (const std::vector<Tri>&land);
+	void updateStandingTri (const std::vector<Tri>& land);
 
 	void updateCameraPos (const std::vector<Tri>&land);
 
@@ -63,15 +63,17 @@ public:
 
 	const Tri*getStandingTri (){return standingtri;}
 
-	glm::vec2 getStandingUV (){return standinguv;}
+	glm::vec2 getStandingUV () {return standinguv;}
 
 	static glm::vec3 catmullRomSplineAtMatrified (
-			const std::vector<glm::vec3>&controlpoints,
+			const std::vector<glm::vec3>& controlpoints,
 			size_t p1index,
 			float_t tau,
 			float_t u);
 
-	float*getDtPtr (){return &dt;}
+	float* getDtPtr () {return &dt;}
+
+	float* getTPtr () {return &t;}
 
 	static glm::vec3 getWindVelocity (glm::vec3 p);
 };

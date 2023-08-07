@@ -288,7 +288,7 @@ typedef struct VulkanInfo {
 	VkImage* swapchainimages;
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
-	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass;
+	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass, ssrrrenderpass;
 	PipelineInfo primarygraphicspipeline,
 			textgraphicspipeline,
 			skyboxgraphicspipeline,
@@ -300,7 +300,7 @@ typedef struct VulkanInfo {
 			linegraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline;
-	VkFramebuffer* primaryframebuffers, * waterframebuffers, * compositingframebuffers;
+	VkFramebuffer* primaryframebuffers, * ssrrframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
@@ -313,7 +313,7 @@ typedef struct VulkanInfo {
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	TextureInfo depthbuffer, scratchbuffer;
+	TextureInfo depthbuffer, * ssrrbuffers, ssrrdepthbuffer, scratchbuffer;; // trying single buf w/ depth, if it works do the same w/ color and refactor name
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
@@ -554,6 +554,8 @@ public:
 			VkImage image,
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
+
+	static void recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb);
 
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);
