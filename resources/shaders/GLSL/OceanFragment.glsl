@@ -75,6 +75,7 @@ void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
         combinedsample = mix(refractcolor, reflectcolor, 1. / fresnel);
         combinedsample.a = 1.;
     }
+
 }
 
 void main() {

@@ -30,7 +30,7 @@ WanglingEngine::WanglingEngine () {
 										 TEXTURE_TYPE_SSRR_BUFFER,
 										 VK_IMAGE_VIEW_TYPE_2D,
 										 GraphicsHandler::linearminmagsampler);
-	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrdepthbuffer,
+	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchdepthbuffer,
 										 GraphicsHandler::vulkaninfo.swapchainextent.width,
 										 GraphicsHandler::vulkaninfo.swapchainextent.height,
 										 VK_FORMAT_D32_SFLOAT,  // TODO: convert this to a macro too
@@ -38,22 +38,6 @@ WanglingEngine::WanglingEngine () {
 										 TEXTURE_TYPE_SSRR_BUFFER,
 										 VK_IMAGE_VIEW_TYPE_2D,
 										 GraphicsHandler::genericsampler);
-	GraphicsHandler::vulkaninfo.ssrrbuffers = new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
-//		VKHelperInitImage(&GraphicsHandler::vulkaninfo.ssrrbuffers[scii],
-//						  GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height,
-//						  VK_FORMAT_B8G8R8A8_SRGB,
-//						  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-//						  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE);
-		GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrbuffers[scii],
-											 GraphicsHandler::vulkaninfo.swapchainextent.width,
-											 GraphicsHandler::vulkaninfo.swapchainextent.height,
-											 SWAPCHAIN_IMAGE_FORMAT,
-											 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-											 TEXTURE_TYPE_SSRR_BUFFER,
-											 VK_IMAGE_VIEW_TYPE_2D,
-											 GraphicsHandler::genericsampler); // could try messing with the sampler
-	}
 
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
@@ -98,7 +82,7 @@ WanglingEngine::WanglingEngine () {
 
 //	 updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrbuffers[0]);
-	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrdepthbuffer);
+	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
 
 	// TODO: move to shadowsamplerinit func
@@ -798,6 +782,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
 
+	// dummy to end renderpass
 	recordingtasks.push(cbRecTask({
 										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 										  nullptr,
@@ -823,7 +808,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			VK_QUEUE_FAMILY_IGNORED,
 			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			GraphicsHandler::vulkaninfo.scratchbuffer.image,
 			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
@@ -845,7 +830,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			VK_QUEUE_FAMILY_IGNORED,
 			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
 			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
@@ -875,7 +860,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			nullptr,
 			GraphicsHandler::vulkaninfo.swapchainimages[GraphicsHandler::swapchainimageindex],
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			GraphicsHandler::vulkaninfo.scratchbuffer.image,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &imgcpy
 	};
@@ -903,7 +888,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			nullptr,
 			GraphicsHandler::vulkaninfo.depthbuffer.image,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
-			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &depthimgcpy
 	};
@@ -927,7 +912,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			VK_QUEUE_FAMILY_IGNORED,
 			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.ssrrbuffers[GraphicsHandler::swapchainimageindex].image,
+			GraphicsHandler::vulkaninfo.scratchbuffer.image,
 			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
@@ -950,7 +935,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			VK_QUEUE_FAMILY_IGNORED,
 			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.ssrrdepthbuffer.image,
+			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
 			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
@@ -961,9 +946,6 @@ void WanglingEngine::enqueueRecordingTasks () {
 										  0, nullptr,
 										  1, ssrrdepthimb
 								  }));
-
-
-	// random thought: could we cut it down to one ssrr buffer that gets reused for every frame??
 
 	recordingtasks.push(cbRecTask({
 										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,

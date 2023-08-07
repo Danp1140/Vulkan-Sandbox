@@ -218,14 +218,14 @@ void Ocean::rewriteTextureDescriptorSets () {
 //		writedescset.pImageInfo=&imginfo;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
-		imginfo = {GraphicsHandler::genericsampler,
-				   GraphicsHandler::vulkaninfo.ssrrbuffers[x].imageview,
+		imginfo = {GraphicsHandler::linearminmagsampler,
+				   GraphicsHandler::vulkaninfo.scratchbuffer.imageview,
 				   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 		writedescset.dstBinding = 2;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 		// could p consolidate these calls lol
 
-		imginfo.imageView = GraphicsHandler::vulkaninfo.ssrrdepthbuffer.imageview;
+		imginfo.imageView = GraphicsHandler::vulkaninfo.scratchdepthbuffer.imageview;
 		writedescset.dstBinding = 3;
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
 
