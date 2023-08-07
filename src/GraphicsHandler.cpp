@@ -902,14 +902,6 @@ void GraphicsHandler::VKSubInitSwapchain () {
 						  &vulkaninfo.swapchainimageviews[x]);
 	}
 	swapchainimageindex = 0u;
-
-	GraphicsHandler::VKHelperInitTexture(&scratchbuffer,
-										 GraphicsHandler::vulkaninfo.swapchainextent.width,
-										 GraphicsHandler::vulkaninfo.swapchainextent.height,
-										 SWAPCHAIN_IMAGE_FORMAT,
-										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-										 TEXTURE_TYPE_SSRR_BUFFER,
-										 GraphicsHandler::linearminmagsampler);
 }
 
 void GraphicsHandler::VKSubInitRenderpasses () {

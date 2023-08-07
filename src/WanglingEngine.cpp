@@ -22,10 +22,18 @@ WanglingEngine::WanglingEngine () {
 	physicshandler = PhysicsHandler(primarycamera);
 
 	// theres probably a better place for this
+	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchbuffer,
+										 GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height,
+										 SWAPCHAIN_IMAGE_FORMAT,
+										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+										 TEXTURE_TYPE_SSRR_BUFFER,
+										 VK_IMAGE_VIEW_TYPE_2D,
+										 GraphicsHandler::linearminmagsampler);
 	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrdepthbuffer,
 										 GraphicsHandler::vulkaninfo.swapchainextent.width,
 										 GraphicsHandler::vulkaninfo.swapchainextent.height,
-										 VK_FORMAT_D32_SFLOAT,
+										 VK_FORMAT_D32_SFLOAT,  // TODO: convert this to a macro too
 										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 										 TEXTURE_TYPE_SSRR_BUFFER,
 										 VK_IMAGE_VIEW_TYPE_2D,
@@ -40,7 +48,7 @@ WanglingEngine::WanglingEngine () {
 		GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.ssrrbuffers[scii],
 											 GraphicsHandler::vulkaninfo.swapchainextent.width,
 											 GraphicsHandler::vulkaninfo.swapchainextent.height,
-											 VK_FORMAT_B8G8R8A8_SRGB,
+											 SWAPCHAIN_IMAGE_FORMAT,
 											 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 											 TEXTURE_TYPE_SSRR_BUFFER,
 											 VK_IMAGE_VIEW_TYPE_2D,

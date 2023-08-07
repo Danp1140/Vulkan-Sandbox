@@ -313,7 +313,7 @@ typedef struct VulkanInfo {
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	TextureInfo depthbuffer, * ssrrbuffers, ssrrdepthbuffer, scratchbuffer;; // trying single buf w/ depth, if it works do the same w/ color and refactor name
+	TextureInfo depthbuffer, * ssrrbuffers, ssrrdepthbuffer, scratchbuffer; // trying single buf w/ depth, if it works do the same w/ color and refactor name
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
