@@ -853,7 +853,7 @@ void GraphicsHandler::VKSubInitSwapchain () {
 			0,
 			vulkaninfo.surface,
 			vulkaninfo.numswapchainimages,
-			VK_FORMAT_B8G8R8A8_SRGB,
+			SWAPCHAIN_IMAGE_FORMAT,
 			VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
 			vulkaninfo.swapchainextent,
 			1,
@@ -895,6 +895,14 @@ void GraphicsHandler::VKSubInitSwapchain () {
 						  &vulkaninfo.swapchainimageviews[x]);
 	}
 	swapchainimageindex = 0u;
+
+	GraphicsHandler::VKHelperInitTexture(&scratchbuffer,
+										 GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height,
+										 SWAPCHAIN_IMAGE_FORMAT,
+										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+										 TEXTURE_TYPE_SSRR_BUFFER,
+										 GraphicsHandler::linearminmagsampler);
 }
 
 void GraphicsHandler::VKSubInitRenderpasses () {
@@ -965,7 +973,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
 																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+																 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 														 },
 														 {
 																 0,
@@ -1011,6 +1019,49 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 					   &primaryrenderpasscreateinfo,
 					   nullptr,
 					   &vulkaninfo.primaryrenderpass);
+
+	VkAttachmentDescription compositingad[1] {{
+													  0,
+													  SWAPCHAIN_IMAGE_FORMAT,
+													  VK_SAMPLE_COUNT_1_BIT,
+													  VK_ATTACHMENT_LOAD_OP_LOAD,
+													  VK_ATTACHMENT_STORE_OP_STORE,
+													  VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+													  VK_ATTACHMENT_STORE_OP_DONT_CARE,
+													  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+													  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+											  }};
+	VkAttachmentReference compositingar {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkSubpassDescription compositingsp {
+			0,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			0, nullptr,
+			1,
+			&compositingar,
+			nullptr,
+			nullptr,
+			0, nullptr
+	};
+	VkSubpassDependency compositingspd {
+			VK_SUBPASS_EXTERNAL, 0,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			0
+	};
+	VkRenderPassCreateInfo compositingrpci {
+			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			nullptr,
+			0,
+			1, &compositingad[0],
+			1, &compositingsp,
+			1, &compositingspd
+	};
+	vkCreateRenderPass(vulkaninfo.logicaldevice,
+					   &compositingrpci,
+					   nullptr,
+					   &vulkaninfo.compositingrenderpass);
 }
 
 void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
@@ -1417,6 +1468,7 @@ void GraphicsHandler::VKSubInitStorageBuffer (
 
 void GraphicsHandler::VKSubInitFramebuffers () {
 	vulkaninfo.primaryframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.compositingframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < vulkaninfo.numswapchainimages; x++) {
 		VkImageView attachmentstemp[2] = {vulkaninfo.swapchainimageviews[x],
 										  vulkaninfo.depthbuffer.imageview};
@@ -1430,6 +1482,17 @@ void GraphicsHandler::VKSubInitFramebuffers () {
 		};
 		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr,
 							&vulkaninfo.primaryframebuffers[x]);
+
+		VkFramebufferCreateInfo compositingfbci {
+				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				nullptr,
+				0,
+				vulkaninfo.compositingrenderpass,
+				1, &attachmentstemp[0],
+				vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1
+		};
+		vkCreateFramebuffer(vulkaninfo.logicaldevice, &compositingfbci, nullptr,
+							&vulkaninfo.compositingframebuffers[x]);
 	}
 }
 

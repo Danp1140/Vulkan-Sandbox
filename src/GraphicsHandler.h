@@ -49,7 +49,7 @@
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
 #define NUM_RECORDING_THREADS 1
 #define MAX_FRAMES_IN_FLIGHT 3 // i did bad indexing somewhere, change this to see errors lol
-#define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
+#define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MAX_LIGHTS 2
 #define NUM_SHADER_STAGES_SUPPORTED 5
 const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] = {
@@ -288,7 +288,7 @@ typedef struct VulkanInfo {
 	VkImage* swapchainimages;
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
-	VkRenderPass primaryrenderpass, templateshadowrenderpass, waterrenderpass;
+	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass;
 	PipelineInfo primarygraphicspipeline,
 			textgraphicspipeline,
 			skyboxgraphicspipeline,
@@ -300,7 +300,7 @@ typedef struct VulkanInfo {
 			linegraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline;
-	VkFramebuffer* primaryframebuffers, * waterframebuffers;
+	VkFramebuffer* primaryframebuffers, * waterframebuffers, * compositingframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
@@ -313,7 +313,7 @@ typedef struct VulkanInfo {
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	TextureInfo depthbuffer, * ssrrbuffers;
+	TextureInfo depthbuffer, scratchbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???

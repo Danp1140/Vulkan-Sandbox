@@ -745,6 +745,16 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
+
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+										  nullptr,
+										  GraphicsHandler::vulkaninfo.compositingrenderpass,
+										  GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex],
+										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+										  1,
+										  &GraphicsHandler::vulkaninfo.primaryclears[0]
+								  }));
 }
 
 void WanglingEngine::processRecordingTasks (
