@@ -44,6 +44,34 @@
 }
 #define NUM_FRAME_SAMPLES 60 // number of frames to sample for fps statistics
 
+typedef enum SettingTypes {
+	SETTING_TYPE_TOGGLE,
+	SETTING_TYPE_RANGE
+} SettingTypes;
+typedef int SettingType;
+typedef struct SettingDataToggle {
+	bool on;
+} SettingDataToggle;
+typedef struct SettingDataRange {
+	float min, max, value;
+} SettingDataRange;
+typedef union SettingData {
+	SettingDataToggle toggle;
+	SettingDataRange range;
+} SettingData;
+typedef struct Setting {
+	const char* name;
+	int hotkey;
+	SettingType type;
+	SettingData data;
+} Setting;
+typedef struct SettingsFolder {
+	const char* name;
+	int hotkey;
+	std::vector<SettingsFolder> folders;
+	std::vector<Setting> settings;
+} SettingsFolder;
+
 class WanglingEngine {
 private:
 	Camera* primarycamera;
@@ -51,7 +79,7 @@ private:
 	std::vector<Light*> lights;
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
-	Text* troubleshootingtext;
+	Text* troubleshootingtext, * settingstext;
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
@@ -70,6 +98,12 @@ private:
 	Terrain* testterrain;
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
+	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
+	Setting* currentsetting;
+
+	void initSettings ();
+
+	void updateSettings ();
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).

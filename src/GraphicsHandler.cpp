@@ -1403,6 +1403,7 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	//one input attachment for ocean, two for compositing
 	//we should find a better way to do this lol
 	//tacking on another for postproc screenbuffer (will need one more soon for scratch buffer ig
+	// TODO: dear god there has to be a better way wtf is this shit
 	VkDescriptorPoolSize descriptorpoolsizes[5] {{
 														 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 														 vulkaninfo.numswapchainimages *
@@ -1411,7 +1412,7 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 												 {
 														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 														 MAX_FRAMES_IN_FLIGHT *
-														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) +
+														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1 + 1) +
 														 MAX_FRAMES_IN_FLIGHT
 												 },
 												 {

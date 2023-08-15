@@ -171,6 +171,7 @@ typedef struct ShadowmapPushConstants {
 
 typedef struct PostProcPushConstants {
 	PostProcOp op;
+	float exposure;
 } PostProcPushConstants;
 
 typedef struct LightUniformBuffer {

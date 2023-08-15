@@ -41,6 +41,18 @@ WanglingEngine::WanglingEngine () {
 										 GraphicsHandler::genericsampler);
 	GraphicsHandler::initPostProc();
 
+
+	// TODO: make it so our null inits dont crash the program, so we can stop making everything a fucking pointer
+	settingstext = new Text(
+			"hi im gonna be settings in a sec",
+			glm::vec2(0., 0.),
+			glm::vec4(0., 0., 0., 1.),
+			32.,
+			GraphicsHandler::vulkaninfo.horizontalres,
+			GraphicsHandler::vulkaninfo.verticalres);
+
+	initSettings();
+
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
 	//texturehandler.generateOceanTextures(&textemp, 1);
@@ -279,6 +291,34 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 
 void WanglingEngine::genScene () {
 	meshes.push_back(Mesh::generateBoulder(ROCK_TYPE_GRANITE, glm::vec3(1.f), 0u));
+}
+
+void WanglingEngine::initSettings () {
+	mainsettingsfolder.folders.push_back({"test Folder", GLFW_KEY_F, {}, {}});
+	mainsettingsfolder.settings.push_back({"test sEtting", GLFW_KEY_E, SETTING_TYPE_RANGE, {.range = {0., 1., 0.5}}});
+	currentsettingsfolder = &mainsettingsfolder;
+	currentsetting = nullptr;
+	updateSettings();
+	GraphicsHandler::vulkaninfo.currentframeinflight = 0;
+}
+
+void WanglingEngine::updateSettings () {
+	std::stringstream msg;
+	for (SettingsFolder f: currentsettingsfolder->folders) {
+		msg << f.name << '\n';
+	}
+	for (Setting s: currentsettingsfolder->settings) {
+		msg << s.name << '\n';
+	}
+	if (currentsetting) {
+		if (currentsetting->type == SETTING_TYPE_TOGGLE) {
+
+		} else if (currentsetting->type == SETTING_TYPE_RANGE) {
+			msg << currentsetting->data.range.min << " " << currentsetting->data.range.value << " "
+				<< currentsetting->data.range.max << '\n';
+		}
+	}
+	settingstext->setMessage(msg.str(), 0);
 }
 
 void WanglingEngine::initSceneData () {
@@ -1006,18 +1046,19 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
 	tempdata.descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
 	GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_LUMINANCE_CUTOFF;
+	GraphicsHandler::vulkaninfo.pppc[0].exposure = mainsettingsfolder.settings[0].data.range.value;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
 		GraphicsHandler::recordPostProcCompute(tempdata,
 											   c);
 	}));
 
-	GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_BLOOM;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-		GraphicsHandler::recordPostProcCompute(tempdata,
-											   c);
-	}));
+//	GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_BLOOM;
+//	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
+//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+//		GraphicsHandler::recordPostProcCompute(tempdata,
+//											   c);
+//	}));
 
 	recordingtasks.push(cbRecTask({
 										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1038,6 +1079,10 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
+
+	tempdata.descriptorset = settingstext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
+	tempdata.pushconstantdata = reinterpret_cast<void*>(settingstext->getPushConstantData());
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
 
 	// TODO: switch post-proc off of linear min-mag, should have no interp
@@ -1179,7 +1224,7 @@ void WanglingEngine::draw () {
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.swapchain,
 			UINT64_MAX,
-			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::swapchainimageindex],
+			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::swapchainimageindex], // semaphore val error comes here, i feel like we almost need our own sci counter or whatever...
 			VK_NULL_HANDLE,
 			&GraphicsHandler::swapchainimageindex);
 
@@ -1197,6 +1242,22 @@ void WanglingEngine::draw () {
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
 	glfwPollEvents();
+
+	if (GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.currentvalue
+		!= GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.lastvalue
+		&& GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.down) {
+		currentsetting = &currentsettingsfolder->settings[0];
+		updateSettings();
+	}
+	if (currentsetting && currentsetting->type == SETTING_TYPE_RANGE) {
+		if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+			currentsetting->data.range.value -= 0.01;
+			updateSettings();
+		} else if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+			currentsetting->data.range.value += 0.01;
+			updateSettings();
+		}
+	}
 
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
 	physicshandler.update(meshes[0]->getTris());
