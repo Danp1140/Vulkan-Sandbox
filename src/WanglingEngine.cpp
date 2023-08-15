@@ -22,6 +22,7 @@ WanglingEngine::WanglingEngine () {
 	physicshandler = PhysicsHandler(primarycamera);
 
 	// theres probably a better place for this
+	// could p put in initPostProc()
 	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchbuffer,
 										 GraphicsHandler::vulkaninfo.swapchainextent.width,
 										 GraphicsHandler::vulkaninfo.swapchainextent.height,
@@ -38,6 +39,7 @@ WanglingEngine::WanglingEngine () {
 										 TEXTURE_TYPE_SSRR_BUFFER,
 										 VK_IMAGE_VIEW_TYPE_2D,
 										 GraphicsHandler::genericsampler);
+	GraphicsHandler::initPostProc();
 
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
@@ -67,11 +69,12 @@ WanglingEngine::WanglingEngine () {
 	updateSkyboxDescriptorSets();
 
 //	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/fuckingcube.obj", glm::vec3(3., 1., -2.)));
-	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
+/*	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
 							  glm::vec3(0., -1., 5.),
 							  glm::vec3(1.),
 							  glm::quat(sin(1.57), 0., 0., cos(1.57)), 2048u));
 	TextureHandler::generateTextures({*meshes.back()->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
+	*/
 
 //	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
 //	meshes[0]->rewriteTextureDescriptorSets();
@@ -86,7 +89,7 @@ WanglingEngine::WanglingEngine () {
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
 
 	// TODO: move to shadowsamplerinit func
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
+	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
 		VkWriteDescriptorSet shadowsamplerwrites[lights.size()];
 		VkDescriptorImageInfo imginfo;
 		for (uint8_t m = 0; m < meshes.size(); m++) {
@@ -96,7 +99,7 @@ WanglingEngine::WanglingEngine () {
 				shadowsamplerwrites[l] = {
 						VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 						nullptr,
-						meshes[m]->getDescriptorSets()[scii],
+						meshes[m]->getDescriptorSets()[fifi],
 						4,
 						l,
 						1,
@@ -674,7 +677,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceancomputepipeline;
 	tempdata.descriptorset = ocean->getComputeDescriptorSets()[GraphicsHandler::swapchainimageindex]; // double-check that this is correct idx
 	tempdata.pushconstantdata = reinterpret_cast<void*>(physicshandler.getTPtr());
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
+//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
 
 	// do we need those ds mutexes???
 	// try removing them from draws once we have both mesh draws in and are stress testing
@@ -749,7 +752,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.primarygraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
 	for (auto& m: meshes) {
-		tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
+		tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 		tempdata.dsmutex = m->getDSMutexPtr();
 		tempdata.vertexbuffer = m->getVertexBuffer();
 		tempdata.indexbuffer = m->getIndexBuffer();
@@ -772,15 +775,6 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 	// cpy op should take place here, only one texture needs to exist, probably in GH, cpy op could be in secondary buff, or we add a new type of cbRecTask
 	// we put it down below temporarily so we didnt need another renderpass for 2d stuff, but in the future we should do that
-
-	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight];
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
-//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
-
-	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
 
 	// dummy to end renderpass
 	recordingtasks.push(cbRecTask({
@@ -965,17 +959,89 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.vertexbuffer = ocean->getVertexBuffer();
 	tempdata.indexbuffer = ocean->getIndexBuffer();
 	tempdata.numtris = ocean->getTris().size();
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordDraw(tempdata, c);}));
+//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordDraw(tempdata, c);}));
 
-//	recordingtasks.push(cbRecTask({
-//										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-//										  nullptr,
-//										  GraphicsHandler::vulkaninfo.compositingrenderpass,
-//										  GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex],
-//										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
-//										  1,
-//										  &GraphicsHandler::vulkaninfo.primaryclears[0]
-//								  }));
+	// dummy to end renderpass
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+										  nullptr,
+										  VK_NULL_HANDLE,
+										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+										  {{0, 0}, {0, 0}},
+										  0, nullptr
+								  }));
+
+	// post-proc computes can p go here, btwn renderpasses
+	// much as id like to just cpy the screen to scratch buffer and write post-proc right to present surface, effects
+	// like bloom seemingly neccesitate putting post-proc fx on scratch buffer, then adding that scratchbuffer to
+	// the present surface
+	// yeah b/c applying a kernel requires the full completion of the render
+	// yknow for smth like bloom itd be nice to progressively write to the bloom buffer, but b/c we're saving memory with
+	// a scratch buffer thats not an option rn
+
+	// this would result in one operation that writes the cutoff to the scratch buffer, a membar to make that finish,
+	// then an operation to blur and write to the present surface
+
+	// worth also considering how other post-proc fx would play in w/ this structure
+
+	// diffraction spikes could /probably/ be draw right on the present surface, assuming we can just sample intensity,
+	// really depends on our impl
+
+	// dof/bokeh would also require a tactic similar to bloom, but these two cannot be easily combined
+
+	// exposure adjustment can be done as each final present surface pixel sum is calculated (i think)
+	// analysis of proper exposure can also be done by writing to a uniform max/stat manager
+
+	// lens flares strike me as simlar impl questions as diffraction spikes
+
+	// heat distortion is gonna end up similar to ssrr (and also a bit like bloom and dof)
+
+	// the way i see it now, we either sacrifice memory by having multiple buffers, or sacrifice performance w/ multiple
+	// scans on the same pixel
+	// also p bad parallelization if we keep having to wait for the previous post-proc op to finish before the next can
+	// begin
+
+	/// for now, b/c i anticipate memory being tight, i will be working with one scratch buffer and multiple compute ops
+
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
+	tempdata.descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
+	GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_LUMINANCE_CUTOFF;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		GraphicsHandler::recordPostProcCompute(tempdata,
+											   c);
+	}));
+
+	GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_BLOOM;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		GraphicsHandler::recordPostProcCompute(tempdata,
+											   c);
+	}));
+
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+										  nullptr,
+										  GraphicsHandler::vulkaninfo.compositingrenderpass,
+										  GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex],
+										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+										  1,
+										  &GraphicsHandler::vulkaninfo.primaryclears[0]
+								  }));
+	tempdata.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
+	tempdata.framebuffer = GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex];
+
+	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::swapchainimageindex];
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
+
+	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
+
+	// TODO: switch post-proc off of linear min-mag, should have no interp
+
 }
 
 void WanglingEngine::processRecordingTasks (
@@ -1105,30 +1171,111 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 void WanglingEngine::draw () {
 	std::chrono::time_point<std::chrono::high_resolution_clock> start;
 
+	// still dont understand how we can pass a semaphore idx'd by a value that the function should be changing
+
+	start = std::chrono::high_resolution_clock::now();
+
 	vkAcquireNextImageKHR(
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.swapchain,
 			UINT64_MAX,
-			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
+			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::swapchainimageindex],
 			VK_NULL_HANDLE,
 			&GraphicsHandler::swapchainimageindex);
+
+	// ok so i can see framerate being limited by the 60Hz refresh rate of this screen, but that doesnt really explain getting the same img twice
+	// i do want to calc a theoretical framerate that subtracts the time it takes to wait for an image to be done presenting
 
 	vkWaitForFences(
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			1, &GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight],
 			VK_FALSE,
 			UINT64_MAX);
+
 	troubleshootingtext->setMessage(GraphicsHandler::troubleshootingsstrm.str(),
 									GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
-
 	glfwPollEvents();
-
-	start = std::chrono::high_resolution_clock::now();
 
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
 	physicshandler.update(meshes[0]->getTris());
+
+	// TODO: refine efficiency & tidiness in this func
+	// e.g. still have to update unibuf func to only use one buf and one mem
+	updatePCsAndBuffers();
+
+	enqueueRecordingTasks();
+
+	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
+		recordingthreads[x] = std::thread(
+				processRecordingTasks,
+				&recordingtasks,
+				&secondarybuffers,
+				GraphicsHandler::vulkaninfo.currentframeinflight,
+				x,
+				GraphicsHandler::vulkaninfo.logicaldevice);
+	}
+
+	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
+		recordingthreads[i].join();
+	}
+
+	collectSecondaryCommandBuffers();
+
+	start = std::chrono::high_resolution_clock::now();
+
+	// this function comes out to take ~ 0.012 or 0.013 seconds!
+	// and when we ran on my monitor @ 75Hz refresh rate, avg fps jumped up to 75 and this function took more like 0.007 to 0.009 seconds!
+	// TODO: time this func to find out exactly what call results in this time
+	// need to be able to separate gpu load from imposed refresh rate limitation
+	GraphicsHandler::submitAndPresent();
+
+	calcFrameStats();
+
+	GraphicsHandler::troubleshootingsstrm << (1. / rendertimemean) << " avg fps (SD " << (1. / rendertimesd) << ")"
+										  << "\ntheoretically could be as high as " << (1. / (rendertimemean -
+																							  std::chrono::duration<float>(
+																									  std::chrono::high_resolution_clock::now() -
+																									  start).count()))
+										  << "\nswapchain image: " << GraphicsHandler::swapchainimageindex
+										  << " frame in flight: "
+										  << GraphicsHandler::vulkaninfo.currentframeinflight
+										  << "\nchangeflags: "
+										  << std::bitset<8>(GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]);
+
+
+
+	// which one would be more efficient, modulus or ternary bounds check?
+	GraphicsHandler::vulkaninfo.currentframeinflight =
+			(GraphicsHandler::vulkaninfo.currentframeinflight + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+bool WanglingEngine::shouldClose () {
+	return glfwWindowShouldClose(GraphicsHandler::vulkaninfo.window)
+		   || glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+}
+
+void WanglingEngine::calcFrameStats (float sptime) {
+	if (framesamplecounter == NUM_FRAME_SAMPLES - 1) {
+		rendertimemean = 0.;
+		for (uint8_t i = 0u; i < NUM_FRAME_SAMPLES; i++) {
+			rendertimemean += rendertimes[i];
+		}
+		rendertimesd = 0.;
+		for (uint8_t i = 0u; i < NUM_FRAME_SAMPLES; i++) {
+			rendertimesd += pow(rendertimes[i] - rendertimemean, 2);
+		}
+		rendertimesd = sqrt(rendertimesd / (float)NUM_FRAME_SAMPLES);
+		rendertimemean /= (float)NUM_FRAME_SAMPLES;
+		framesamplecounter = 0u;
+	} else {
+		framesamplecounter++;
+	}
+	rendertimes[framesamplecounter] = *physicshandler.getDtPtr() - sptime;
+}
+
+void WanglingEngine::updatePCsAndBuffers () {
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
 		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices =
@@ -1146,7 +1293,7 @@ void WanglingEngine::draw () {
 				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
 	}
 
-	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
+//	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
 		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
@@ -1207,7 +1354,7 @@ void WanglingEngine::draw () {
 //	}
 
 	// making this block execute no matter what for shadowmap troubleshooting
-	{
+	/*{
 		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
 			glm::vec3 tempb[8], * tempbp = &tempb[0];
@@ -1231,7 +1378,7 @@ void WanglingEngine::draw () {
 				sizeof(LightUniformBuffer),
 				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
 				&lightuniformbuffertemp[0]);
-	}
+	}*/
 
 	MeshUniformBuffer temp;
 	for (auto& m: meshes) {
@@ -1242,71 +1389,4 @@ void WanglingEngine::draw () {
 				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
 				reinterpret_cast<void*>(&temp));
 	}
-
-	GraphicsHandler::troubleshootingsstrm << "calculation time: " << (std::chrono::duration<double>(
-			std::chrono::high_resolution_clock::now() - start).count());
-	GraphicsHandler::troubleshootingsstrm << '\n' << (1.0f / (*physicshandler.getDtPtr())) << " fps"
-										  << "\nswapchain image: " << GraphicsHandler::swapchainimageindex
-										  << " frame in flight: "
-										  << GraphicsHandler::vulkaninfo.currentframeinflight
-										  << "\nchangeflags: " << std::bitset<8>(
-			GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]);
-
-	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-	enqueueRecordingTasks();
-
-	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
-		recordingthreads[x] = std::thread(processRecordingTasks,
-										  &recordingtasks,
-										  &secondarybuffers,
-										  GraphicsHandler::vulkaninfo.currentframeinflight,
-										  x,
-										  GraphicsHandler::vulkaninfo.logicaldevice);
-	}
-
-	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
-		recordingthreads[i].join();
-	}
-
-	collectSecondaryCommandBuffers();
-
-	// TODO: move below to a GH submitandpresent func
-	VkSubmitInfo submitinfo {
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			nullptr,
-			1,
-			&GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
-			&pipelinestageflags,
-			1,
-			&GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-			1,
-			&GraphicsHandler::vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight]
-	};
-	vkResetFences(GraphicsHandler::vulkaninfo.logicaldevice, 1,
-				  &GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
-	vkQueueSubmit(GraphicsHandler::vulkaninfo.graphicsqueue,
-				  1,
-				  &submitinfo,
-				  GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
-	VkPresentInfoKHR presentinfo {
-			VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-			nullptr,
-			1,
-			&GraphicsHandler::vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
-			1,
-			&GraphicsHandler::vulkaninfo.swapchain,
-			&GraphicsHandler::swapchainimageindex,
-			nullptr
-	};
-	vkQueuePresentKHR(GraphicsHandler::vulkaninfo.graphicsqueue, &presentinfo);
-
-	// which one would be more efficient, modulus or ternary bounds check?
-	GraphicsHandler::vulkaninfo.currentframeinflight =
-			(GraphicsHandler::vulkaninfo.currentframeinflight + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
-bool WanglingEngine::shouldClose () {
-	return glfwWindowShouldClose(GraphicsHandler::vulkaninfo.window)
-		   || glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
 }

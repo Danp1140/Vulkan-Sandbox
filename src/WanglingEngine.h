@@ -42,6 +42,7 @@
         GraphicsHandler::troubleshootingsstrm<<'\n'<<#op<<" execution time: "\
         <<std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-start).count(); \
 }
+#define NUM_FRAME_SAMPLES 60 // number of frames to sample for fps statistics
 
 class WanglingEngine {
 private:
@@ -67,6 +68,8 @@ private:
 	std::queue<cbCollectInfo> secondarybuffers;
 	static std::mutex recordingmutex, scenedsmutex;
 	Terrain* testterrain;
+	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
+	uint8_t framesamplecounter = 0u;
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -109,6 +112,10 @@ private:
 	void loadScene (const char* scenefilepath);
 
 	void genScene ();
+
+	void calcFrameStats (float sptime = 0.);
+
+	void updatePCsAndBuffers ();
 
 public:
 	WanglingEngine ();

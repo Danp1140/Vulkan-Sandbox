@@ -239,6 +239,7 @@ void Ocean::rewriteTextureDescriptorSets () {
 	}
 }
 
+// TODO: remove old recordDraw & recordCompute functions
 void Ocean::recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) {
 //	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 //			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,

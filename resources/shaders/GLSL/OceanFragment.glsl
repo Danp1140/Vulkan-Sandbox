@@ -90,5 +90,6 @@ void main() {
 //    // TODO: implement binary search & parameterization for more precise sampling
 //    // TODO: implement blending when samples are not available; perhaps integrate with more advanced prediction of offscreen rays
     vec4 reflectsample, refractsample;
-    sampleSSRR(color, 1. / 1.33, normaldir);
+//    sampleSSRR(color, 1. / 1.33, normaldir);
+	color = vec4(0.1, 0.2, 0.9, 0.5);
 }
