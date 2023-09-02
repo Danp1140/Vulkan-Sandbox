@@ -97,8 +97,9 @@ WanglingEngine::WanglingEngine () {
 
 //	 updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrbuffers[0]);
-	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
+	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
+	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
@@ -514,6 +515,7 @@ void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer
 }
 
 void WanglingEngine::recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
+	// TODO: switch out graphics pipeline stuff to go through cbRecData instead
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 			nullptr,
@@ -943,7 +945,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			VK_ACCESS_SHADER_READ_BIT,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
 			VK_QUEUE_FAMILY_IGNORED,
 			VK_QUEUE_FAMILY_IGNORED,
 			GraphicsHandler::vulkaninfo.scratchbuffer.image,
@@ -1045,20 +1047,58 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
 	tempdata.descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
-	GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_LUMINANCE_CUTOFF;
+
+	/*
+	GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_DOWNSAMPLE;
 	GraphicsHandler::vulkaninfo.pppc[0].exposure = mainsettingsfolder.settings[0].data.range.value;
+	GraphicsHandler::vulkaninfo.pppc[0].numinvocs = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width / 2, GraphicsHandler::vulkaninfo.swapchainextent.height / 2);
+	GraphicsHandler::vulkaninfo.pppc[0].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
+	GraphicsHandler::vulkaninfo.pppc[0].dfdepth = 1;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
 		GraphicsHandler::recordPostProcCompute(tempdata,
 											   c);
 	}));
 
-//	GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_BLOOM;
-//	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
-//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-//		GraphicsHandler::recordPostProcCompute(tempdata,
-//											   c);
-//	}));
+	GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_DOWNSAMPLE;
+	GraphicsHandler::vulkaninfo.pppc[1].exposure = 0.;
+	GraphicsHandler::vulkaninfo.pppc[1].numinvocs = GraphicsHandler::vulkaninfo.pppc[0].numinvocs / 2;
+	GraphicsHandler::vulkaninfo.pppc[1].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
+	GraphicsHandler::vulkaninfo.pppc[1].dfdepth = 2;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		GraphicsHandler::recordPostProcCompute(tempdata,
+											   c);
+	}));
+	
+	GraphicsHandler::vulkaninfo.pppc[2].op = POST_PROC_OP_DOWNSAMPLE;
+	GraphicsHandler::vulkaninfo.pppc[2].exposure = 0.;
+	GraphicsHandler::vulkaninfo.pppc[2].numinvocs = GraphicsHandler::vulkaninfo.pppc[1].numinvocs / 2;
+	GraphicsHandler::vulkaninfo.pppc[2].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
+	GraphicsHandler::vulkaninfo.pppc[2].dfdepth = 3;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[2]);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {GraphicsHandler::recordPostProcCompute(tempdata, c);}));
+	*/
+	const uint8_t maxdfdepth = 5;
+	// theres def a better data type for this, refine when we get a better idea of what our postproc will look like
+	/*std::vector<cbRecData> postprocdata(maxdfdepth * 2);
+	for (uint8_t d = 0; d < maxdfdepth; d++) {
+		postprocdata[d].pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
+		postprocdata[d].descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
+		GraphicsHandler::vulkaninfo.pppc[d].op = POST_PROC_OP_DOWNSAMPLE;
+		GraphicsHandler::vulkaninfo.pppc[d].numinvocs = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height) / pow (2, d + 1); // check this, uint math is sketchy here
+		GraphicsHandler::vulkaninfo.pppc[d].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
+		GraphicsHandler::vulkaninfo.pppc[d].dfdepth = d + 1;
+		postprocdata[d].pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[d]);
+	}
+	*/
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		GraphicsHandler::recordPostProcCompute(tempdata,
+											   GraphicsHandler::vulkaninfo.pppc,
+											   c);
+	}));
+
 
 	recordingtasks.push(cbRecTask({
 										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1072,9 +1112,15 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex];
 
+	tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocgraphicspipeline;
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+		GraphicsHandler::recordPostProcGraphics(tempdata,
+												c);
+	}));
+
 	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::swapchainimageindex];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
+	// recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
 
 	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
@@ -1083,7 +1129,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 	tempdata.descriptorset = settingstext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pushconstantdata = reinterpret_cast<void*>(settingstext->getPushConstantData());
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
+	//recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
 
 	// TODO: switch post-proc off of linear min-mag, should have no interp
 

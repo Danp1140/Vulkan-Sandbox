@@ -71,7 +71,9 @@ typedef int ChangeFlag;
 typedef enum PostProcOps {
 	POST_PROC_OP_TONEMAP,
 	POST_PROC_OP_LUMINANCE_CUTOFF,
-	POST_PROC_OP_BLOOM
+	POST_PROC_OP_BLOOM,
+	POST_PROC_OP_DOWNSAMPLE,
+	POST_PROC_OP_UPSAMPLE
 } PostProcOps;
 typedef int PostProcOp;
 
@@ -172,6 +174,8 @@ typedef struct ShadowmapPushConstants {
 typedef struct PostProcPushConstants {
 	PostProcOp op;
 	float exposure;
+	glm::uvec2 numinvocs, scext;
+	uint32_t dfdepth; // would like to make this a uint8_t if possible
 } PostProcPushConstants;
 
 typedef struct LightUniformBuffer {
@@ -313,7 +317,8 @@ typedef struct VulkanInfo {
 			linegraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline,
-			postprocpipeline; // is it good to have this many pipelines? some can be combined if we want/need to
+			postprocpipeline,
+			postprocgraphicspipeline;    // is it good to have this many pipelines? some can be combined if we want/need to
 	VkFramebuffer* primaryframebuffers, * ssrrframebuffers, * compositingframebuffers; // TODO: is ssrrframebuffers deprecated?
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
@@ -340,7 +345,7 @@ typedef struct VulkanInfo {
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
 	// theres probably better than having multiple of these, one per post-proc op/stage
-	PostProcPushConstants pppc[3];
+	std::vector<PostProcPushConstants> pppc;
 } VulkanInfo;
 
 typedef struct Vertex {
@@ -580,7 +585,9 @@ public:
 
 	static void initPostProc ();
 
-	static void recordPostProcCompute (cbRecData data, VkCommandBuffer& cb);
+	static void recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb);
+
+	static void recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb);
 
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);
