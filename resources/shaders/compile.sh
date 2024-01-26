@@ -1,3 +1,5 @@
+path="/Users/danp/Desktop/C Coding/VulkanSandbox/resources/shaders"
+cd "$path"
 echo "compiling default shaders"
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/DefaultVertex.glsl -o SPIRV/defaultvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=tesc GLSL/DefaultTessellationControl.glsl -o SPIRV/defaulttesc.spv

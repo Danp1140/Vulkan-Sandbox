@@ -1,0 +1,1 @@
+"/Users/danp/Library/Application Support/JetBrains/Toolbox/apps/CLion/ch-0/231.9161.40/CLion.app/Contents/bin/cmake/mac/bin/cmake" --build "/Users/danp/Desktop/C Coding/VulkanSandbox/cmake-build-debug" --target VulkanSandbox -- -j 6 -Wno-deprecated-volatile

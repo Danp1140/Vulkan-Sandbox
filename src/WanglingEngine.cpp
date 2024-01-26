@@ -15,6 +15,14 @@ WanglingEngine::WanglingEngine () {
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
+	Mesh::createPipeline();
+	Mesh::createShadowmapPipeline();
+	Text::createPipeline();
+	Ocean::createComputePipeline();
+	Ocean::createGraphicsPipeline();
+	Terrain::createComputePipeline();
+	Terrain::createGraphicsPipeline();
+	ParticleSystem<GrassParticle>::createPipeline();
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
 //	genScene();
@@ -543,6 +551,7 @@ void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
 	}
 }
 
+
 void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifindex) {
 	self->ocean->recordCompute(fifindex);
 	self->ocean->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
@@ -643,6 +652,42 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
 	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.cameravp = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices;
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos;
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = testterrain->getNumLeaves();
+	// below is v redundant set
+	// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.phase = 0;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants);
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
+
+	// prob a mem leak
+	// unless we free after collection
+	VkBufferMemoryBarrier2* membar = new VkBufferMemoryBarrier2 {
+			VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			testterrain->getTreeBuffer(),
+			0u,
+			NODE_HEAP_SIZE * NODE_SIZE
+	};
+	recordingtasks.push(cbRecTask({
+										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+										  nullptr,
+										  0,
+										  0, nullptr,
+										  1, membar,
+										  0, nullptr}));
+
+
+	GraphicsHandler::vulkaninfo.terraingenpushconstants2 = GraphicsHandler::vulkaninfo.terraingenpushconstants;
+	GraphicsHandler::vulkaninfo.terraingenpushconstants2.phase = 1;
+	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants2);
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
 	// do we need those ds mutexes???
@@ -733,11 +778,13 @@ void WanglingEngine::enqueueRecordingTasks () {
 												 c);
 	}));
 
+
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.voxeltroubleshootingpipeline;
 	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terrainpushconstants);
 	tempdata.numtris = testterrain->getNumLeaves() * 2u;
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordTroubleshootDraw(tempdata, c);}));
+
 
 	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
@@ -829,6 +876,7 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 								 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 		} else if (secondarybuffers.front().type == cbCollectInfo::cbCollectInfoType::CB_COLLECT_INFO_TYPE_DEPENDENCY) {
 			if (secondarybuffers.front().data.di.imageMemoryBarrierCount) {
+				// TODO: make this work for storage buffer
 				if (inrp) {
 					vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
 					inrp = false;
@@ -881,6 +929,16 @@ void WanglingEngine::draw () {
 			1, &GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight],
 			VK_FALSE,
 			UINT64_MAX);
+	/*
+	Node * nodesarrptr = reinterpret_cast<Node *>(testterrain->getNodeHeapPtr());
+//	nodesarrptr++;
+//	while (nodesarrptr->children[0] != 0) {
+//		std::cout << "&p = " << nodesarrptr->parent << ", cidx = " << nodesarrptr->childidx << std::endl;
+//		nodesarrptr++;
+//	}
+	Node nodesarr[328];
+	memcpy(reinterpret_cast<void *>(&nodesarr[0]), reinterpret_cast<void *>(++nodesarrptr), 328 * 11 * sizeof(uint32_t));
+	*/
 	troubleshootingtext->setMessage(GraphicsHandler::troubleshootingsstrm.str(),
 									GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
@@ -1018,6 +1076,9 @@ void WanglingEngine::draw () {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	enqueueRecordingTasks();
+
+	//testterrain->updateNumLeaves();
+	testterrain->updateVoxels(primarycamera->getPosition());
 
 	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
 		recordingthreads[x] = std::thread(processRecordingTasks,

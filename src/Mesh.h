@@ -66,6 +66,10 @@ public:
 
 	virtual void rewriteTextureDescriptorSets ();
 
+	static void createPipeline ();
+
+	static void createShadowmapPipeline ();
+
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
 
 	static void recordShadowDraw (cbRecData data, VkCommandBuffer& cb);
