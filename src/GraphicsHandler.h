@@ -401,34 +401,22 @@ private:
 	/* Chain of initialization functions that set up the gritty inner workings of Vulkan and GLFW, including instance,
 	 * device, queue, swapchain, descriptor pool, command pool, and pipeline initialization. Public VKInit below calls
 	 * these in sequence.
+	 * TODO: create destructor functions
 	 */
 	static void VKSubInitWindow ();
-
 	static void VKSubInitInstance ();
-
 	static void VKSubInitDebug ();
-
 	static void VKSubInitDevices ();
-
 	static void VKSubInitQueues ();
-
 	static void VKSubInitSwapchain ();
-
 	static void VKSubInitRenderpasses ();
-
 	static void VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes);
-
 	static void VKSubInitFramebuffers ();
-
 	static void VKSubInitCommandPool ();
-
 	static void VKSubInitSemaphoresAndFences ();
-
 	static void VKSubInitSamplers ();
 
-	/*
-	 * TODO: add params/fix this function to remove janky ternaries
-	 */
+	// TODO: move the rest of the pipelines out of here to new system
 	static void VKSubInitPipeline (
 			PipelineInfo* pipelineinfo,
 			VkShaderStageFlags shaderstages,
@@ -591,6 +579,9 @@ public:
 	static void makeRectPrism (glm::vec3** dst, glm::vec3 min, glm::vec3 max);
 
 	static VkDeviceSize VKHelperGetPixelSize (VkFormat format);
+
+	
+	static void submitAndPresent();
 
 	/* Functions to handle Vulkan validation layers debugger creation, destruction, and behavior
 	 * TODO: reorder functions to reflect above comment's implied order

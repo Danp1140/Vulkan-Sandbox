@@ -1059,7 +1059,7 @@ void GraphicsHandler::VKSubInitSamplers () {
 			VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			0.0,
-			VK_FALSE,
+			VK_FALSE, // anisotropic filtering /could/ help with some diffuse texture issues...
 			1.0,
 			VK_FALSE,
 			VK_COMPARE_OP_LESS,
@@ -2383,6 +2383,33 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 		default:
 			return -1u;
 	}
+}
+
+void GraphicsHandler::submitAndPresent() {
+	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	VkSubmitInfo submitinfo {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		nullptr,
+		1, &vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight],
+		&pipelinestageflags,
+		1, &vulkaninfo.commandbuffers[vulkaninfo.currentframeinflight],
+		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight]
+	};
+	vkResetFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
+	vkQueueSubmit(vulkaninfo.graphicsqueue,
+				1,
+				&submitinfo,
+				vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
+	VkPresentInfoKHR presentinfo {
+		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		nullptr,
+		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight],
+		1,
+		&vulkaninfo.swapchain,
+		&swapchainimageindex,
+		nullptr
+	};
+	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
 }
 
 VKAPI_ATTR VkBool32

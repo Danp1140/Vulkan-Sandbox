@@ -25,6 +25,7 @@ WanglingEngine::WanglingEngine () {
 	ParticleSystem<GrassParticle>::createPipeline();
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
 //	genScene();
 
 	physicshandler = PhysicsHandler(primarycamera);
@@ -653,7 +654,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
 	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::vulkaninfo.terraingenpushconstants.cameravp = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices;
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos;
+	// GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos;
 	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = testterrain->getNumLeaves();
 	// below is v redundant set
 	// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
@@ -913,16 +914,20 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 	GraphicsHandler::changeflags[GraphicsHandler::vulkaninfo.currentframeinflight] = NO_CHANGE_FLAG_BIT;
 }
 
+// TODO: clean the fuck out of this function
+// move sync stuff to its own GH function and get rid of all the comments
+// probably move processing behavior to another function too
 void WanglingEngine::draw () {
 	std::chrono::time_point<std::chrono::high_resolution_clock> start;
 
-	vkAcquireNextImageKHR(
+	VkResult acquire = vkAcquireNextImageKHR(
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.swapchain,
-			UINT64_MAX,
+			3,
 			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
 			VK_NULL_HANDLE,
 			&GraphicsHandler::swapchainimageindex);
+	if (acquire == VK_TIMEOUT) exit(1);
 
 	vkWaitForFences(
 			GraphicsHandler::vulkaninfo.logicaldevice,
@@ -965,6 +970,7 @@ void WanglingEngine::draw () {
 
 		GraphicsHandler::vulkaninfo.grasspushconstants =
 				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+		GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
 	}
 
 	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
@@ -1073,57 +1079,27 @@ void WanglingEngine::draw () {
 										  << "\nchangeflags: " << std::bitset<8>(
 			GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]);
 
-	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	enqueueRecordingTasks();
 
-	//testterrain->updateNumLeaves();
 	testterrain->updateVoxels(primarycamera->getPosition());
 
 	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
-		recordingthreads[x] = std::thread(processRecordingTasks,
-										  &recordingtasks,
-										  &secondarybuffers,
-										  GraphicsHandler::vulkaninfo.currentframeinflight,
-										  x,
-										  GraphicsHandler::vulkaninfo.logicaldevice);
+		recordingthreads[x] = std::thread(
+			processRecordingTasks,
+			&recordingtasks,
+			&secondarybuffers,
+			GraphicsHandler::vulkaninfo.currentframeinflight,
+			x,
+			GraphicsHandler::vulkaninfo.logicaldevice
+		);
 	}
 
-	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
-		recordingthreads[i].join();
-	}
+	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) recordingthreads[i].join();
 
 	collectSecondaryCommandBuffers();
 
-	// TODO: move below to a GH submitandpresent func
-	VkSubmitInfo submitinfo {
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			nullptr,
-			1,
-			&GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
-			&pipelinestageflags,
-			1,
-			&GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-			1,
-			&GraphicsHandler::vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight]
-	};
-	vkResetFences(GraphicsHandler::vulkaninfo.logicaldevice, 1,
-				  &GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
-	vkQueueSubmit(GraphicsHandler::vulkaninfo.graphicsqueue,
-				  1,
-				  &submitinfo,
-				  GraphicsHandler::vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
-	VkPresentInfoKHR presentinfo {
-			VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-			nullptr,
-			1,
-			&GraphicsHandler::vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
-			1,
-			&GraphicsHandler::vulkaninfo.swapchain,
-			&GraphicsHandler::swapchainimageindex,
-			nullptr
-	};
-	vkQueuePresentKHR(GraphicsHandler::vulkaninfo.graphicsqueue, &presentinfo);
+	GraphicsHandler::submitAndPresent();
 
 	// which one would be more efficient, modulus or ternary bounds check?
 	GraphicsHandler::vulkaninfo.currentframeinflight =

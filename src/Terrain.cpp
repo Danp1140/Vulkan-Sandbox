@@ -16,18 +16,6 @@ Terrain::Terrain () : Mesh() {
 	// could be experiencing trouble w/ not rounding up padding correctly
 	// best course of action is likely to make VKSubInitStorageBuffer more general (dw, refator will be small cuz we
 	// only ever use it once lol)
-//	GraphicsHandler::VKHelperCreateAndAllocateBuffer(&treesb,
-//													 NODE_SIZE * numnodes,
-//													 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-//													 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-//													 &tsbmemory,
-//													 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-//	GraphicsHandler::VKHelperCreateAndAllocateBuffer(&voxelsb,
-//													 VOXEL_SIZE * numvoxels,
-//													 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-//													 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-//													 &vsbmemory,
-//													 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
 	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
 		layoutstemp[x] = GraphicsHandler::vulkaninfo.terraingencomputepipeline.objectdsl;
@@ -43,6 +31,7 @@ Terrain::Terrain () : Mesh() {
 							 &computedss[0]);
 	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 0, NODE_SIZE, numnodes, &treesb, &tsbmemory);
 	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 1, VOXEL_SIZE, numvoxels, &voxelsb, &vsbmemory);
+	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 2, sizeof(uint32_t), 3 + ALLOC_INFO_BUF_SIZE, &meminfosb, &msbmemory); 
 	VkDescriptorBufferInfo descbuffinfo;
 	VkWriteDescriptorSet writetemp {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 									nullptr,
@@ -70,8 +59,19 @@ Terrain::Terrain () : Mesh() {
 							   &writetemp,
 							   0,
 							   nullptr);
+		writetemp.dstBinding = 2;
+		descbuffinfo = {meminfosb, 0, sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE)};
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+				       1,
+				       &writetemp,
+				       0,
+				       nullptr);
 	}
 
+	setupHeap();
+}
+
+void Terrain::setupHeap() {
 	/* doubly-linked list heap setup
 	 * root's parent stores ptr to first free
 	 * free blocks are 8 nodes long, with only the first node containing information as follows
@@ -103,73 +103,101 @@ Terrain::Terrain () : Mesh() {
 }
 
 void Terrain::createComputePipeline () {
-	VkDescriptorSetLayoutBinding objdslbindings[2] {{
-															0,
-															VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-															1,
-															VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-															VK_SHADER_STAGE_FRAGMENT_BIT,
-															nullptr
-													}, {
-															1,
-															VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-															1,
-															VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-															VK_SHADER_STAGE_FRAGMENT_BIT,
-															nullptr
-													}};
+	VkDescriptorSetLayoutBinding objdslbindings[3] {{
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}, {
+		1,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}, {
+		2,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}};
 	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   0,
-															   nullptr
-													   }, {
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   2,
-															   &objdslbindings[0]
-													   }};
-
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		0,
+		nullptr
+	}, {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		3,
+		&objdslbindings[0]
+	}};
+	VkSpecializationMapEntry specmap [2] {{
+		0,
+		0,
+		sizeof(uint32_t)
+	}, {
+		1,
+		sizeof(uint32_t),
+		sizeof(uint32_t)
+	}};
+	uint32_t specdata[2] = {NODE_HEAP_SIZE, ALLOC_INFO_BUF_SIZE};
 
 	PipelineInitInfo pii = {};
 	pii.stages = VK_SHADER_STAGE_COMPUTE_BIT;
 	pii.shaderfilepathprefix = "tgvoxel";
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(TerrainGenPushConstants)};
+	pii.specinfo = {
+		2, &specmap[0],
+		2 * sizeof(uint32_t), reinterpret_cast<void*>(&specdata[0])
+	};
 
 	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.terraingencomputepipeline, pii);
 }
 
 void Terrain::createGraphicsPipeline () {
-	VkDescriptorSetLayoutBinding objdslbindings[2] {{0,
-													 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-													 1,
-													 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-													 VK_SHADER_STAGE_FRAGMENT_BIT,
-													 nullptr
-													}, {
-															1,
-															VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-															1,
-															VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-															VK_SHADER_STAGE_FRAGMENT_BIT,
-															nullptr
-													}};
+	VkDescriptorSetLayoutBinding objdslbindings[3] {{
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}, {
+		1,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}, {
+		2,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	}};
 	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   0,
-															   nullptr
-													   }, {
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   2,
-															   &objdslbindings[0]
-													   }};
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		0,
+		nullptr
+	}, {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		3,
+		&objdslbindings[0]
+	}};
 
 	PipelineInitInfo pii = {};
 	pii.stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -223,31 +251,31 @@ void Terrain::recordCompute (cbRecData data, VkCommandBuffer& cb) {
 void Terrain::recordTroubleshootDraw (cbRecData data, VkCommandBuffer& cb) {
 
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			data.renderpass,
-			0,
-			data.framebuffer,
-			VK_FALSE,
-			0,
-			0
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		data.renderpass,
+		0,
+		data.framebuffer,
+		VK_FALSE,
+		0,
+		0
 	};
 	VkCommandBufferBeginInfo cmdbufbegininfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-			&cmdbufinherinfo
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+		&cmdbufinherinfo
 	};
 	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
 	vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline.pipeline);
 	vkCmdBindDescriptorSets(cb,
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							data.pipeline.pipelinelayout,
-							0,
-							1,
-							&data.descriptorset,
-							0,
-							nullptr);
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		data.pipeline.pipelinelayout,
+		0,
+		1,
+		&data.descriptorset,
+		0,
+		nullptr);
 	vkCmdPushConstants(cb,
 					   data.pipeline.pipelinelayout,
 					   VK_SHADER_STAGE_VERTEX_BIT,
@@ -258,6 +286,7 @@ void Terrain::recordTroubleshootDraw (cbRecData data, VkCommandBuffer& cb) {
 	vkEndCommandBuffer(cb);
 }
 
+// TODO: delete this function
 void* Terrain::getNodeHeapPtr () {
 	void* ptr;
 	vkMapMemory(
@@ -344,7 +373,8 @@ glm::vec3 Terrain::getLeafPos (uint32_t leafidx, uint32_t& nodeidx, Node* heap) 
 }
 
 void Terrain::subdivide (uint32_t idx, Node* heap) {
-	uint32_t freeptr = heap[0].parent, nextfree = heap[freeptr].parent;
+	uint32_t freeptr = allocVoxel(heap);
+	// uint32_t freeptr = heap[0].parent, nextfree = heap[freeptr].parent;
 	for (uint8_t i = 0; i < 8; i++) {
 		heap[idx].children[i] = freeptr + i;
 		heap[freeptr + i].parent = idx;
@@ -355,9 +385,11 @@ void Terrain::subdivide (uint32_t idx, Node* heap) {
 	}
 	numleaves += 7;
 	// updating first free record, and updating that block to have no previous and ensure it is marked free
+	/*
 	heap[0].parent = nextfree;
 	heap[nextfree].childidx = -1u;
 	heap[nextfree].voxel = -1u; // necessary??
+				    // */
 }
 
 void Terrain::collapse (uint32_t parentidx, Node* heap) {
@@ -374,8 +406,71 @@ void Terrain::collapse (uint32_t parentidx, Node* heap) {
 	heap[heap[parentidx].children[0]].children[1] = 1u;
 }
 
+void Terrain::freeVoxel(uint32_t ptr, Node* heap) {
+	uint32_t freeptr = heap[0].parent;
+	while (freeptr < heap[ptr].children[0]) {
+		freeptr = heap[freeptr].parent;
+	}
+	heap[heap[ptr].children[0]].parent = heap[freeptr].parent;
+	heap[heap[ptr].children[0]].childidx = freeptr;
+	heap[heap[ptr].children[0]].voxel = -1u;
+}
+
+uint32_t Terrain::allocVoxel(Node* heap) {
+	uint32_t freeptr = heap[0].parent, nextfree = heap[freeptr].parent;
+	// updating first free record, and updating that block to have no previous and ensure it is marked free
+	heap[0].parent = nextfree;
+	heap[nextfree].childidx = -1u;
+	heap[nextfree].voxel = -1u; // necessary??
+	std::cout << "allocd block @" << freeptr << std::endl;
+	std::cout << "nextfree @ " << nextfree << std::endl;
+	return freeptr;
+}
+
 void Terrain::updateVoxels (glm::vec3 camerapos) {
-	void* heap;
+	// dont forget to reset relevent counters!!
+	// ideally we find some way to complete this function while gpu is not using these buffers
+	// should be possible time-wise, perhaps difficult tho
+	// also get rid of camerapos arg
+	//
+	// if we were getting really silly with it we could add a dynamic resizing here too lol
+	void* tempptr, * heap;
+	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
+		    msbmemory,
+		    0u,
+		    sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE),
+		    0,
+		    &tempptr);
+	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
+		    tsbmemory,
+		    0u,
+		    numnodes * NODE_SIZE,
+		    0,
+		    &heap);
+
+	Node* nodeheap = reinterpret_cast<Node*>(heap);
+	uint32_t* meminfo = reinterpret_cast<uint32_t*>(tempptr);
+
+	uint32_t numtofree = *(meminfo + 1), numtoalloc = *(meminfo + 2);
+	if (numtofree != 0 || numtoalloc != 0) {
+		std::cout << "freeing " << numtofree << ", allocing " << numtoalloc << std::endl;
+	}
+
+	uint32_t ptr;
+	for (ptr = ALLOC_INFO_BUF_SIZE / 2; ptr < numtofree; ptr++) {
+		freeVoxel(meminfo[ptr], nodeheap);
+	}
+	for (ptr = 0; ptr < numtoalloc; ptr++) {
+		meminfo[ptr] = allocVoxel(nodeheap);
+	}
+	if (numtoalloc != ALLOC_INFO_BUF_SIZE / 2 - 1) meminfo[ptr + 1] = -1u;
+
+	*meminfo = 0; *(meminfo + 1) = 0; *(meminfo + 2) = 0;
+
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, msbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+
+	/*void* heap;
 	vkMapMemory(
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			tsbmemory,
@@ -385,7 +480,7 @@ void Terrain::updateVoxels (glm::vec3 camerapos) {
 			&heap);
 	Node* nodeheap = reinterpret_cast<Node*>(heap);
 
-	uint32_t dist, nodeidx, depth, tempptr;
+	// uint32_t dist, nodeidx, depth, tempptr;
 	// std::cout << numleaves << std::endl;
 	for (uint32_t leafidx = 0; leafidx < numleaves; leafidx++) {
 		dist = glm::distance(camerapos, getLeafPos(leafidx, nodeidx, nodeheap));
@@ -401,5 +496,5 @@ void Terrain::updateVoxels (glm::vec3 camerapos) {
 			if (depth < 4) subdivide(nodeidx, nodeheap);
 		}
 	}
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);*/
 }

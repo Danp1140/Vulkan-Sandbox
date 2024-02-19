@@ -113,42 +113,6 @@ void main() {
     uint currentnode = 0u;
     uint tempnode;
 
-    /*
-    currentnode = bottomLeftMost(0u);           // start by going all the way to the bottom left
-    while (traversalidx != destinationidx) {
-        tempnode = siblingToRight(currentnode);
-        if (tempnode != -1u) {  // if theres a sibling to the right:
-            traversalposition -= childDirection(tree.nodes[currentnode].childidx) * pow(0.5, traversaldepth);
-            traversalposition += childDirection(tree.nodes[tempnode].childidx) * pow(0.5, traversaldepth);
-            currentnode = tempnode; // traverse to that sibling
-        }
-        else {  // if theres no sibling to the right
-            if (currentnode != 0u) {    // if we're not at the root
-                tempnode = parentToRight(currentnode);  // go up and to the right searching for the next parent
-                if (tempnode == -1u) break; // if that takes us to the root, we're done
-		// below is new code in an attempt to avoid infinite loop
-		// so i had to disable this to make anything more than quad 1 work, im guessing itll crash again when i dont have a perfect square tessellation
-		// ^^^ lmaoooooo it immediately started crashing again
-		// it is clear though that this fix does not address the actual problem
-		// the issue is an infinie loop (what distinugishes a GPU timeout from an OS crash is a mystery to me though)
-		// one starting point is modifying functions to conform to our all-or-nothing subdiv strategy
-		// alr nvm it keeps crashing even after i re-added it, maybe the issue is elsewhere...i dont remember editing the compute tho...
-		// crashes looked like a hang, but also vram out of range, indicating that loop is running out of control, could be affected by heap size tho
-		// could try a 0-depth tree just to see what happens
-		// setupTree(0u) and setupTree(1u) (w/ 64 leaves in c++ & 512 nodes) didn't crash)
-		/*
-		else {
-			traversalposition = vec3(0., 0.5, 0.);
-			break;
-		}
-		*/
-            /*{
-        }
-        currentnode = bottomLeftMost(tempnode); // go to the bottom left no matter what
-        traversalidx++;
-    }
-*/
-
     getLeafPos(destinationidx, traversalposition, currentnode);
     voxelid = tree.nodes[currentnode].voxel;
     nodeid = currentnode;

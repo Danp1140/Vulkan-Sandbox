@@ -23,10 +23,12 @@ typedef struct Node {
  */
 class Terrain : private Mesh {
 private:
-	VkBuffer treesb = VK_NULL_HANDLE, voxelsb = VK_NULL_HANDLE;
-	VkDeviceMemory tsbmemory = VK_NULL_HANDLE, vsbmemory = VK_NULL_HANDLE;
+	VkBuffer treesb = VK_NULL_HANDLE, voxelsb = VK_NULL_HANDLE, meminfosb = VK_NULL_HANDLE;
+	VkDeviceMemory tsbmemory = VK_NULL_HANDLE, vsbmemory = VK_NULL_HANDLE, msbmemory;
 	uint32_t numnodes, numleaves, numvoxels;
 	VkDescriptorSet* computedss;
+
+	void setupHeap();
 public:
 	Terrain ();
 
@@ -49,6 +51,10 @@ public:
 	void subdivide (uint32_t idx, Node* heap);
 
 	void collapse (uint32_t parentidx, Node* heap);
+
+	void freeVoxel(uint32_t ptr, Node* heap);
+
+	uint32_t allocVoxel(Node* heap);
 
 	void updateVoxels (glm::vec3 camerapos);
 
