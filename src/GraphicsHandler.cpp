@@ -76,129 +76,6 @@ void GraphicsHandler::VKInit (uint32_t nummeshes) {
 }
 
 void GraphicsHandler::VKInitPipelines () {
-	//default
-	{
-		VkDescriptorSetLayoutBinding objecttexdslbindings[5] {
-				{
-						0,
-						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-						1,
-						VK_SHADER_STAGE_VERTEX_BIT,
-						nullptr
-				},
-				{
-						1,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						2,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						3,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						4,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						MAX_LIGHTS,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				}};
-		VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[3] {
-				scenedslcreateinfo,
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						5,
-						&objecttexdslbindings[0]
-				}};
-		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-		VkVertexInputAttributeDescription vertinattribdesc[3] {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-																										   position)},
-															   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-																										   normal)},
-															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
-																										uv)}};
-		const char* shaderfilepathstemp[4] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/defaultvert.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaulttesc.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaulttese.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/defaultfrag.spv"};
-		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT
-						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-						  | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-						  | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepathstemp[0],
-						  &descsetlayoutcreateinfos[0],
-						  {VK_SHADER_STAGE_VERTEX_BIT
-						   | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-						   | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-						   | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  1,
-								  &vertinbindingdesc,
-								  3,
-								  &vertinattribdesc[0]
-						  },
-						  true,
-						  GraphicsHandler::vulkaninfo.primaryrenderpass);
-	}
-	//text
-	{
-		VkDescriptorSetLayoutBinding objectdslbinding {
-				0,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				nullptr
-		};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   0,
-																   nullptr
-														   },
-														   {
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   1,
-																   &objectdslbinding
-														   }};
-		const char* shaderfilepathstemp[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/textvert.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/textfrag.spv"};
-		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepathstemp[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TextPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false,
-						  GraphicsHandler::vulkaninfo.compositingrenderpass);
-	}
 	//skybox
 	{
 		VkDescriptorSetLayoutBinding binding[1] {{
@@ -239,253 +116,8 @@ void GraphicsHandler::VKInitPipelines () {
 								  0,
 								  nullptr
 						  },
-						  false,
-						  GraphicsHandler::vulkaninfo.primaryrenderpass);
-	}
-	//ocean graph
-	{
-		VkDescriptorSetLayoutBinding objectdslbindings[4] {{
-																   0,
-																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																   1,
-																   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-																   nullptr
-														   },
-														   {
-																   1,
-																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																   1,
-																   VK_SHADER_STAGE_FRAGMENT_BIT,
-																   nullptr
-														   },
-														   {
-																   2,
-																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																   1,
-																   VK_SHADER_STAGE_FRAGMENT_BIT,
-																   nullptr
-														   },
-														   {
-																   3,
-																   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																   1,
-																   VK_SHADER_STAGE_FRAGMENT_BIT,
-																   nullptr
-														   }};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
-				scenedslcreateinfo,
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						4, &objectdslbindings[0]
-				}};
-		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-		VkVertexInputAttributeDescription vertinattribdesc[3] {{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-																										   position)},
-															   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex,
-																										   normal)},
-															   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex,
-																										uv)}};
-		const char* shaderfilepathstemp[4] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/oceanvert.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceantesc.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceantese.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/oceanfrag.spv"};
-		VKSubInitPipeline(&vulkaninfo.oceangraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT
-						  | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-						  | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-						  | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepathstemp[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-						   | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-						   | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OceanPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  1,
-								  &vertinbindingdesc,
-								  3,
-								  &vertinattribdesc[0]
-						  },
 						  true,
-						  GraphicsHandler::vulkaninfo.ssrrrenderpass);
-	}
-	//ocean comp
-	{
-		VkDescriptorSetLayoutBinding objdslbindings[2] {{
-																0,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														},
-														{
-																1,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														}};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   0,
-																   nullptr
-														   },
-														   {
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   2,
-																   &objdslbindings[0]
-														   }};
-		const char* shaderfilepaths[1] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/oceancomp.spv"};
-		VKSubInitPipeline(&vulkaninfo.oceancomputepipeline,
-						  VK_SHADER_STAGE_COMPUTE_BIT,
-						  &shaderfilepaths[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false, nullptr);
-	}
-	//grass (more like gross lol)
-	{
-		VkDescriptorSetLayoutBinding objectbinding {
-				0,
-				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				1,
-				VK_SHADER_STAGE_VERTEX_BIT,
-				nullptr
-		};
-		VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2] {
-//			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-//			nullptr,
-//			0,
-//			0,
-//			nullptr
-//		}, {
-				scenedslcreateinfo, {
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&objectbinding
-				}};
-		VkVertexInputBindingDescription vertinbindingdescs {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-		VkVertexInputAttributeDescription vertinattribdescs[2] {
-				{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
-				{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)}};
-		const char* shaderfilepaths[4] {WORKING_DIRECTORY "/resources/shaders/SPIRV/grassvert.spv",
-										WORKING_DIRECTORY "/resources/shaders/SPIRV/grasstesc.spv",
-										WORKING_DIRECTORY "/resources/shaders/SPIRV/grasstese.spv",
-										WORKING_DIRECTORY "/resources/shaders/SPIRV/grassfrag.spv"};
-		VKSubInitPipeline(
-				&vulkaninfo.grassgraphicspipeline,
-				VK_SHADER_STAGE_VERTEX_BIT
-				| VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-				| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-				| VK_SHADER_STAGE_FRAGMENT_BIT,
-				&shaderfilepaths[0],
-				&descsetlayoutcreateinfos[0],
-				{
-						VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-						0,
-						sizeof(glm::mat4)
-				},
-				{
-						VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&vertinbindingdescs,
-						2,
-						&vertinattribdescs[0]
-				},
-				true,
-				GraphicsHandler::vulkaninfo.primaryrenderpass);
-	}
-	//shadowmap
-	{
-		VkDescriptorSetLayoutBinding objecttexdslbindings[5] {
-				{
-						0,
-						VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-						1,
-						VK_SHADER_STAGE_VERTEX_BIT,
-						nullptr
-				},
-				{
-						1,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						2,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						3,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						1,
-						VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				},
-				{
-						4,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						MAX_LIGHTS,
-						VK_SHADER_STAGE_FRAGMENT_BIT,
-						nullptr
-				}};
-		VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {  //perhaps this much superfluous info is inefficient???
-				scenedslcreateinfo,
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						5,
-						&objecttexdslbindings[0]
-				}
-		};
-		VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-		VkVertexInputAttributeDescription vertinattribdesc {0, 0, VK_FORMAT_R32G32B32_SFLOAT,
-															offsetof(Vertex, position)};
-		const char* shaderfilepaths[2] {WORKING_DIRECTORY "/resources/shaders/SPIRV/shadowmapvert.spv",
-										WORKING_DIRECTORY "/resources/shaders/SPIRV/shadowmapfrag.spv"};
-		VKSubInitPipeline(
-				&vulkaninfo.shadowmapgraphicspipeline,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				&shaderfilepaths[0],
-				&descriptorsetlayoutcreateinfos[0],
-				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowmapPushConstants)},
-				{
-						VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&vertinbindingdesc,
-						1,
-						&vertinattribdesc
-				},
-				true,
-				GraphicsHandler::vulkaninfo.templateshadowrenderpass);
+                          GraphicsHandler::vulkaninfo.templateshadowrenderpass);
 	}
 	//texmon
 	{
@@ -574,230 +206,135 @@ void GraphicsHandler::VKInitPipelines () {
 				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
 				pvisci,
 				false,
-				GraphicsHandler::vulkaninfo.primaryrenderpass);
+                GraphicsHandler::vulkaninfo.primaryrenderpass);
 	}
-	//terrain gen
-	{
-		VkDescriptorSetLayoutBinding objdslbindings[2] {{0,
-														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														 1,
-														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-														 VK_SHADER_STAGE_FRAGMENT_BIT,
-														 nullptr},
-														{1,
-														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														 1,
-														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-														 VK_SHADER_STAGE_FRAGMENT_BIT,
-														 nullptr}};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr
-				},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						2,
-						&objdslbindings[0]
-				}
-		};
-		const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/tgvoxelcomp.spv";
-		VKSubInitPipeline(&vulkaninfo.terraingencomputepipeline,
-						  VK_SHADER_STAGE_COMPUTE_BIT,
-						  &shaderfilepaths,
-						  &dslcreateinfos[0],
-						  {},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false, nullptr);
-	}
-	// voxel troubleshooting
-	{
-		VkDescriptorSetLayoutBinding objdslbindings[2] {{0,
-														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														 1,
-														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-														 VK_SHADER_STAGE_FRAGMENT_BIT,
-														 nullptr},
-														{1,
-														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														 1,
-														 VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT |
-														 VK_SHADER_STAGE_FRAGMENT_BIT,
-														 nullptr}};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr
-				},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						2,
-						&objdslbindings[0]
-				}
-		};
-		const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/voxeltroubleshootingvert.spv",
-										  WORKING_DIRECTORY "/resources/shaders/SPIRV/voxeltroubleshootingfrag.spv"};
-		VKSubInitPipeline(&vulkaninfo.voxeltroubleshootingpipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepaths[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false,
-						  GraphicsHandler::vulkaninfo.primaryrenderpass);
-	}
-	// post-proc
-	{
-		VkDescriptorSetLayoutBinding objdslbindings[4] {{
-																0,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT |
-																VK_SHADER_STAGE_FRAGMENT_BIT,
-																nullptr
-														}, {
-																1,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT |
-																VK_SHADER_STAGE_FRAGMENT_BIT,
-																nullptr
-														}, {
-																2,
-																VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT |
-																VK_SHADER_STAGE_FRAGMENT_BIT,
-																nullptr
-														}, {
-																3,
-																VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																1,
-																VK_SHADER_STAGE_COMPUTE_BIT |
-																VK_SHADER_STAGE_FRAGMENT_BIT,
-																nullptr
-														}};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   0,
-																   nullptr
-														   }, {
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   4,
-																   &objdslbindings[0]
-														   }};
-		const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/postproccomp.spv";
-		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocpipeline,
-						  VK_SHADER_STAGE_COMPUTE_BIT,
-						  &shaderfilepaths,
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(PostProcPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false,
-						  nullptr);
-	}
-	// post-proc graphics
-	{
-		VkDescriptorSetLayoutBinding objdslbindings[4] {{
-																0,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_FRAGMENT_BIT |
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														}, {
-																1,
-																VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-																1,
-																VK_SHADER_STAGE_FRAGMENT_BIT |
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														}, {
-																2,
-																VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																1,
-																VK_SHADER_STAGE_FRAGMENT_BIT |
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														}, {
-																3,
-																VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																1,
-																VK_SHADER_STAGE_FRAGMENT_BIT |
-																VK_SHADER_STAGE_COMPUTE_BIT,
-																nullptr
-														}};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   0,
-																   nullptr
-														   }, {
-																   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-																   nullptr,
-																   0,
-																   4,
-																   &objdslbindings[0]
-														   }};
-		// note: this shares dslayout w/ compute, and current impl shares ds's too
-		const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocvert.spv",
+    // post-proc
+    {
+        VkDescriptorSetLayoutBinding objdslbindings[4] {{
+            0,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            1,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            2,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            3,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }};
+        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            0,
+            nullptr
+        }, {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            4,
+            &objdslbindings[0]
+        }};
+        const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/postproccomp.spv";
+        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocpipeline,
+                          VK_SHADER_STAGE_COMPUTE_BIT,
+                          &shaderfilepaths,
+                          &dslcreateinfos[0],
+                          {VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(PostProcPushConstants)},
+                          {
+                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                              nullptr,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              nullptr
+                          },
+                          false,
+                          nullptr);
+    }
+    // post-proc graphics
+    {
+        VkDescriptorSetLayoutBinding objdslbindings[4] {{
+            0,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            1,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            2,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            3,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }};
+        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            0,
+            nullptr
+        }, {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            4,
+            &objdslbindings[0]
+        }};
+        // note: this shares dslayout w/ compute, and current impl shares ds's too
+        const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocvert.spv",
 										  WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocfrag.spv"};
-		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocgraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepaths[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  false,
-						  GraphicsHandler::vulkaninfo.compositingrenderpass);
-	}
+        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocgraphicspipeline,
+                          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                          &shaderfilepaths[0],
+                          &dslcreateinfos[0],
+                          {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)},
+                          {
+                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                              nullptr,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              nullptr
+                          },
+                          false,
+                          GraphicsHandler::vulkaninfo.compositingrenderpass);
+    }
+
 }
 
 void GraphicsHandler::VKSubInitWindow () {
@@ -1642,7 +1179,8 @@ void GraphicsHandler::VKSubInitStorageBuffer (
 			roundedupsize * elementcount,
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			&memories[0],
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+//			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	//unneccesary, clean up later
 	VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
 	for (uint32_t y = 0; y < elementcount; y++) {
@@ -1791,7 +1329,7 @@ void GraphicsHandler::VKSubInitSamplers () {
 			VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			0.0,
-			VK_FALSE,
+			VK_FALSE, // anisotropic filtering /could/ help with some diffuse texture issues...
 			1.0,
 			VK_FALSE,
 			VK_COMPARE_OP_LESS,
@@ -2121,6 +1659,277 @@ void GraphicsHandler::VKSubInitShaders (
 			stagecounter++;
 		}
 	}
+}
+
+/* remaining VKSubInitPipeline issues:
+ *  - pipelineinfo should be pass-by-reference, not a pointer
+ *  - descriptorsetlayout creation wierdness
+ *  - shadowmapping tech is mostly hard-coded
+ *
+ */
+void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineInitInfo pii) {
+	if (pii.stages & VK_SHADER_STAGE_COMPUTE_BIT) {
+		vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+									&pii.descsetlayoutcreateinfos[0],
+									nullptr,
+									&pipelineinfo->scenedsl);
+		vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+									&pii.descsetlayoutcreateinfos[1],
+									nullptr,
+									&pipelineinfo->objectdsl);
+		VkDescriptorSetLayout descsetlayoutstemp[2] = {pipelineinfo->scenedsl, pipelineinfo->objectdsl};
+		bool scenedslexists = pii.descsetlayoutcreateinfos[0].bindingCount != 0u, objectdslexists =
+				pii.descsetlayoutcreateinfos[1].bindingCount != 0u;
+		VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo {
+				VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				nullptr,
+				0,
+				(uint32_t)scenedslexists + (uint32_t)objectdslexists,
+				(scenedslexists | objectdslexists) ? &descsetlayoutstemp[scenedslexists ? 0 : 1] : nullptr,
+				pii.pushconstantrange.size == 0 ? 0u : 1u,
+				&pii.pushconstantrange
+		};
+		vkCreatePipelineLayout(vulkaninfo.logicaldevice,
+							   &pipelinelayoutcreateinfo,
+							   nullptr,
+							   &pipelineinfo->pipelinelayout);
+
+		VkShaderModule* shadermodule = new VkShaderModule;
+		VkPipelineShaderStageCreateInfo* shaderstagecreateinfo = new VkPipelineShaderStageCreateInfo;
+		std::string tempstr = std::string(WORKING_DIRECTORY "resources/shaders/SPIRV/").append(pii.shaderfilepathprefix).append(
+				"comp.spv");
+		const char* filepath = tempstr.c_str();
+		std::cout << filepath << std::endl;
+		VKSubInitShaders(VK_SHADER_STAGE_COMPUTE_BIT,
+						 &filepath,
+						 &shadermodule,
+						 &shaderstagecreateinfo,
+						 nullptr);
+		VkComputePipelineCreateInfo pipelinecreateinfo {
+				VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				nullptr,
+				0,
+				*shaderstagecreateinfo,
+				pipelineinfo->pipelinelayout,
+				VK_NULL_HANDLE,
+				-1
+		};
+		vkCreateComputePipelines(vulkaninfo.logicaldevice,
+								 VK_NULL_HANDLE,
+								 1,
+								 &pipelinecreateinfo,
+								 nullptr,
+								 &pipelineinfo->pipeline);
+		delete shaderstagecreateinfo;
+		vkDestroyShaderModule(vulkaninfo.logicaldevice, *shadermodule, nullptr);
+		delete shadermodule;
+		return;
+	}
+
+	uint32_t numshaderstages = 0;
+	char* shaderfilepaths[NUM_SHADER_STAGES_SUPPORTED];
+	std::string temp;
+	for (uint8_t i = 0; i < NUM_SHADER_STAGES_SUPPORTED; i++) {
+		if (supportedshaderstages[i] & pii.stages) {
+			temp = std::string(WORKING_DIRECTORY "resources/shaders/SPIRV/")
+					.append(pii.shaderfilepathprefix)
+					.append(shaderstagestrs[i])
+					.append(".spv");
+			shaderfilepaths[numshaderstages] = new char[temp.length() + 1]; // adding 1 for null terminator
+			temp.copy(shaderfilepaths[numshaderstages], temp.length());
+			shaderfilepaths[numshaderstages][temp.length()] = '\0';
+			numshaderstages++;
+		}
+	}
+	VkShaderModule* shadermodules = new VkShaderModule[numshaderstages];
+	VkPipelineShaderStageCreateInfo* shaderstagecreateinfos = new VkPipelineShaderStageCreateInfo[numshaderstages];
+	VKSubInitShaders(pii.stages,
+					 const_cast<const char**>(&shaderfilepaths[0]),
+					 &shadermodules,
+					 &shaderstagecreateinfos,
+					 nullptr);
+
+	/* currently, this is redundant with some earlier code. fix this asap. figure out a good elegant system for creating
+	 * and storing dsl's. what we had before seemed fine (although adding stuff to a dsl was a little clunky). */
+
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+								&pii.descsetlayoutcreateinfos[0],
+								nullptr,
+								&pipelineinfo->scenedsl);
+	vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
+								&pii.descsetlayoutcreateinfos[1],
+								nullptr,
+								&pipelineinfo->objectdsl);
+	VkDescriptorSetLayout descsetlayoutstemp[2] = {pipelineinfo->scenedsl, pipelineinfo->objectdsl};
+	bool scenedslexists = pii.descsetlayoutcreateinfos[0].bindingCount != 0u,
+			objectdslexists = pii.descsetlayoutcreateinfos[1].bindingCount != 0u;
+	VkPipelineLayoutCreateInfo pipelinelayoutcreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			(uint32_t)scenedslexists + (uint32_t)objectdslexists,
+			(scenedslexists | objectdslexists) ? &descsetlayoutstemp[scenedslexists ? 0 : 1] : nullptr,
+			pii.pushconstantrange.size == 0 ? 0u : 1u,
+			&pii.pushconstantrange
+	};
+	vkCreatePipelineLayout(vulkaninfo.logicaldevice,
+						   &pipelinelayoutcreateinfo,
+						   nullptr,
+						   &pipelineinfo->pipelinelayout);
+
+	VkPipelineInputAssemblyStateCreateInfo inputassemblystatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			(pii.stages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) ?
+			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST :
+			((pipelineinfo == &GraphicsHandler::vulkaninfo.linegraphicspipeline) ?
+			 VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+			VK_FALSE
+	};
+	VkPipelineTessellationStateCreateInfo tessstatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			3
+	};
+	bool issm = pipelineinfo == &GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline;
+	VkViewport viewporttemp {
+			0.0f,
+			0.0f,
+			issm ? 4096 : (float)vulkaninfo.swapchainextent.width,
+			issm ? 4096 : (float)vulkaninfo.swapchainextent.height,
+			0.0f,               // TODO: try changing this to -1.f!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			1.0f
+	};
+	VkExtent2D tempext {4096, 4096};
+	VkRect2D scissortemp {
+			{0, 0},
+			issm ? tempext : vulkaninfo.swapchainextent
+	};
+	VkPipelineViewportStateCreateInfo viewportstatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&viewporttemp,
+			1,
+			&scissortemp
+	};
+	VkPipelineRasterizationStateCreateInfo rasterizationstatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			VK_FALSE,
+			VK_FALSE,
+			VK_POLYGON_MODE_FILL,
+			issm ? VK_CULL_MODE_FRONT_BIT : (pipelineinfo == &GraphicsHandler::vulkaninfo.grassgraphicspipeline
+											 ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT),
+			VK_FRONT_FACE_COUNTER_CLOCKWISE,
+			VK_FALSE,                       // TODO: try enabling this for shadowmap someday
+			0.0f,
+			0.0f,
+			0.0f,
+			1.0f
+	};
+	VkPipelineMultisampleStateCreateInfo multisamplestatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			VK_SAMPLE_COUNT_1_BIT,              // TODO: try messing with this
+			VK_FALSE,
+			1.0f,
+			nullptr,
+			VK_FALSE,
+			VK_FALSE
+	};
+	VkPipelineDepthStencilStateCreateInfo depthstencilstatecreateinfo;
+	if (pii.depthtest) {
+		depthstencilstatecreateinfo = {
+				VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+				nullptr,
+				0,
+				VK_TRUE,
+				VK_TRUE,
+				VK_COMPARE_OP_LESS,
+				VK_FALSE,
+				VK_FALSE,
+				{},
+				{},
+				0.0f,                   // TODO: try changing this to -1.f
+				1.0f
+		};
+	} else {
+		depthstencilstatecreateinfo = {
+				VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+				nullptr,
+				0,
+				VK_FALSE,
+				VK_FALSE,
+				VK_COMPARE_OP_NEVER,
+				VK_FALSE,
+				VK_FALSE,
+				{},
+				{},
+				0.0f,
+				1.0f
+		};
+	}
+	VkPipelineColorBlendAttachmentState colorblendattachmentstate {
+			VK_TRUE,
+			VK_BLEND_FACTOR_SRC_ALPHA,
+			VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+			VK_BLEND_OP_ADD,
+			VK_BLEND_FACTOR_SRC_ALPHA,
+			VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+			VK_BLEND_OP_SUBTRACT,
+			VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+			VK_COLOR_COMPONENT_A_BIT
+	};
+	VkPipelineColorBlendStateCreateInfo colorblendstatecreateinfo {
+			VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			VK_FALSE,
+			VK_LOGIC_OP_AND,
+			1, &colorblendattachmentstate,
+			{0.0f, 0.0f, 0.0f, 0.0f}
+	};
+	VkGraphicsPipelineCreateInfo pipelinecreateinfo = {
+			VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			nullptr,
+			0,
+			numshaderstages,
+			shaderstagecreateinfos,
+			&pii.vertexinputstatecreateinfo,
+			&inputassemblystatecreateinfo,
+			pii.stages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ? &tessstatecreateinfo : nullptr,
+			&viewportstatecreateinfo,
+			&rasterizationstatecreateinfo,
+			&multisamplestatecreateinfo,
+			&depthstencilstatecreateinfo,
+			&colorblendstatecreateinfo,
+			nullptr,
+			pipelineinfo->pipelinelayout,
+			issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass,  // TODO: add renderpass arg
+			0,
+			VK_NULL_HANDLE,
+			-1
+	};
+	vkCreateGraphicsPipelines(vulkaninfo.logicaldevice,
+							  VK_NULL_HANDLE,
+							  1,
+							  &pipelinecreateinfo,
+							  nullptr,
+							  &pipelineinfo->pipeline);
+
+	delete[] shaderstagecreateinfos;
+	for (unsigned char x = 0; x < numshaderstages; x++) {
+		delete shaderfilepaths[x];
+		vkDestroyShaderModule(vulkaninfo.logicaldevice, shadermodules[x], nullptr);
+	}
+	delete[] shadermodules;
+
 }
 
 void GraphicsHandler::VKSubInitDepthBuffer () {
@@ -3115,6 +2924,33 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 		default:
 			return -1u;
 	}
+}
+
+void GraphicsHandler::submitAndPresent() {
+	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	VkSubmitInfo submitinfo {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		nullptr,
+		1, &vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight],
+		&pipelinestageflags,
+		1, &vulkaninfo.commandbuffers[vulkaninfo.currentframeinflight],
+		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight]
+	};
+	vkResetFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
+	vkQueueSubmit(vulkaninfo.graphicsqueue,
+				1,
+				&submitinfo,
+				vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
+	VkPresentInfoKHR presentinfo {
+		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		nullptr,
+		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight],
+		1,
+		&vulkaninfo.swapchain,
+		&swapchainimageindex,
+		nullptr
+	};
+	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
 }
 
 VKAPI_ATTR VkBool32

@@ -20,6 +20,7 @@
 #include <iostream>
 #include <random>
 #include <cstdarg>
+#include <string>
 
 #define VK_ENABLE_BETA_EXTENSIONS
 
@@ -59,6 +60,13 @@ const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] =
 		VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 		VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
 		VK_SHADER_STAGE_FRAGMENT_BIT};
+
+const char* const shaderstagestrs[NUM_SHADER_STAGES_SUPPORTED] = {
+		"comp",
+		"vert",
+		"tesc",
+		"tese",
+		"frag"};
 
 typedef enum ChangeFlagBits {
 	NO_CHANGE_FLAG_BIT = 0x00000000,
@@ -144,13 +152,6 @@ public:
 	}
 } TextureInfo;
 
-typedef struct PrimaryGraphicsPushConstants {
-	glm::mat4 cameravpmatrices;
-	alignas(16) glm::vec3 camerapos;
-	alignas(16) glm::vec2 standinguv;
-	uint32_t numlights;
-} PrimaryGraphicsPushConstants;
-
 typedef struct TextPushConstants {
 	glm::vec2 position, scale;
 	float rotation;
@@ -177,6 +178,12 @@ typedef struct PostProcPushConstants {
 	glm::uvec2 numinvocs, scext;
 	uint32_t dfdepth; // would like to make this a uint8_t if possible
 } PostProcPushConstants;
+
+typedef struct TerrainGenPushConstants {
+	uint32_t numleaves, heapsize, phase;
+	glm::mat4 cameravp;
+	alignas(16) glm::vec3 camerapos;
+} TerrainGenPushConstants;
 
 typedef struct LightUniformBuffer {
 	glm::mat4 vpmatrix, lspmatrix;
@@ -339,13 +346,11 @@ typedef struct VulkanInfo {
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
 	// figure a better way to handle these tbh
-	PrimaryGraphicsPushConstants primarygraphicspushconstants;
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
-	// theres probably better than having multiple of these, one per post-proc op/stage
-	std::vector<PostProcPushConstants> pppc;
+	TerrainGenPushConstants terraingenpushconstants, terraingenpushconstants2;
 } VulkanInfo;
 
 typedef struct Vertex {
@@ -363,6 +368,16 @@ typedef struct Tri {
 	std::vector<Tri*> adjacencies;
 	glm::vec3 algebraicnormal;
 } Tri;
+
+typedef struct PipelineInitInfo {
+	VkShaderStageFlags stages = 0u;
+	const char* shaderfilepathprefix = nullptr;
+	VkDescriptorSetLayoutCreateInfo* descsetlayoutcreateinfos = nullptr;
+	VkPushConstantRange pushconstantrange = {};
+	VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+	bool depthtest = false;
+	VkSpecializationInfo specinfo = {};
+} PipelineInitInfo;
 
 const VkCommandBufferBeginInfo cmdbufferbegininfo {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -399,34 +414,22 @@ private:
 	/* Chain of initialization functions that set up the gritty inner workings of Vulkan and GLFW, including instance,
 	 * device, queue, swapchain, descriptor pool, command pool, and pipeline initialization. Public VKInit below calls
 	 * these in sequence.
+	 * TODO: create destructor functions
 	 */
 	static void VKSubInitWindow ();
-
 	static void VKSubInitInstance ();
-
 	static void VKSubInitDebug ();
-
 	static void VKSubInitDevices ();
-
 	static void VKSubInitQueues ();
-
 	static void VKSubInitSwapchain ();
-
 	static void VKSubInitRenderpasses ();
-
 	static void VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes);
-
 	static void VKSubInitFramebuffers ();
-
 	static void VKSubInitCommandPool ();
-
 	static void VKSubInitSemaphoresAndFences ();
-
 	static void VKSubInitSamplers ();
 
-	/*
-	 * TODO: add params/fix this function to remove janky ternaries
-	 */
+	// TODO: move the rest of the pipelines out of here to new system
 	static void VKSubInitPipeline (
 			PipelineInfo* pipelineinfo,
 			VkShaderStageFlags shaderstages,
@@ -474,6 +477,9 @@ public:
 	static void VKInit (uint32_t nummeshes);
 
 	static void VKInitPipelines ();
+
+	// after u get this working, refactor pipelineinfo as a reference, not a ptr
+	static void VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineInitInfo pii);
 
 	/* Below are several helper functions that serve to make processes dealing with ugly Vulkan stuff easier and
 	 * prettier.

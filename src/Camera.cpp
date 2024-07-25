@@ -24,7 +24,7 @@ Camera::Camera () {
 }
 
 Camera::Camera (GLFWwindow* w, int hres, int vres) {
-	position = glm::vec3(0, 5, 0);
+	position = glm::vec3(5, 5, 5);
 	forward = glm::vec3(-1, -1, -1);
 	up = glm::vec3(0, 1, 0);
 	fovy = 0.785f;

@@ -55,6 +55,37 @@ Text::~Text () {
 	delete[] textures;
 }
 
+void Text::createPipeline() {
+	VkDescriptorSetLayoutBinding objectdslbinding {
+		0,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	};
+	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			0,
+			nullptr
+		}, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&objectdslbinding
+	}};
+
+	PipelineInitInfo pii = {};
+	pii.stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pii.shaderfilepathprefix = "text";
+	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
+	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TextPushConstants)};
+
+	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline, pii);
+}
+
 // TODO: get rid of index lmao
 void Text::setMessage (std::string m, uint32_t index) {
 	// kinda feel like this func should be able to handle changing for all fif...

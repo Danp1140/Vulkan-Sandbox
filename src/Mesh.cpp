@@ -262,6 +262,147 @@ void Mesh::rewriteTextureDescriptorSets () {
 	}
 }
 
+void Mesh::createPipeline () {
+	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
+																  0,
+																  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+																  1,
+																  VK_SHADER_STAGE_VERTEX_BIT,
+																  nullptr
+														  }, {
+																  1,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  2,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  3,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  4,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  MAX_LIGHTS,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }};
+	VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2] {
+			scenedslcreateinfo,
+			{
+					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+					nullptr,
+					0,
+					5,
+					&objecttexdslbindings[0]
+			}};
+	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+	VkVertexInputAttributeDescription vertinattribdesc[3] {{0,
+															0,
+															VK_FORMAT_R32G32B32_SFLOAT,
+															offsetof(Vertex, position)},
+														   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+														   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
+
+
+	PipelineInitInfo pii = {};
+	pii.stages = VK_SHADER_STAGE_VERTEX_BIT
+				 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+				 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+				 | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pii.shaderfilepathprefix = "default";
+	pii.descsetlayoutcreateinfos = &descsetlayoutcreateinfos[0];
+	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT
+							 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+							 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+							 | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)};
+	pii.vertexinputstatecreateinfo = {
+			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&vertinbindingdesc,
+			3,
+			&vertinattribdesc[0]
+	};
+	pii.depthtest = true;
+
+	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline, pii);
+}
+
+void Mesh::createShadowmapPipeline () {
+	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
+																  0,
+																  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+																  1,
+																  VK_SHADER_STAGE_VERTEX_BIT,
+																  nullptr
+														  }, {
+																  1,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  2,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  3,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  1,
+																  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }, {
+																  4,
+																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																  MAX_LIGHTS,
+																  VK_SHADER_STAGE_FRAGMENT_BIT,
+																  nullptr
+														  }};
+	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {  //perhaps this much superfluous info is inefficient???
+			scenedslcreateinfo,
+			{
+					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+					nullptr,
+					0,
+					5,
+					&objecttexdslbindings[0]
+			}
+	};
+	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+	VkVertexInputAttributeDescription vertinattribdesc {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)};
+
+	PipelineInitInfo pii = {};
+	pii.stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pii.shaderfilepathprefix = "shadowmap";
+	pii.descsetlayoutcreateinfos = &descriptorsetlayoutcreateinfos[0];
+	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowmapPushConstants)};
+	pii.vertexinputstatecreateinfo = {
+			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+			nullptr,
+			0,
+			1,
+			&vertinbindingdesc,
+			1,
+			&vertinattribdesc
+	};
+	pii.depthtest = true;
+
+	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline, pii);
+}
+
 void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,

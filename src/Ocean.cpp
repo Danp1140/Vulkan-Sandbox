@@ -151,6 +151,103 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 												   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
+void Ocean::createComputePipeline () {
+	VkDescriptorSetLayoutBinding objdslbindings[2] {{
+															0,
+															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+															1,
+															VK_SHADER_STAGE_COMPUTE_BIT,
+															nullptr
+													}, {
+															1,
+															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+															1,
+															VK_SHADER_STAGE_COMPUTE_BIT,
+															nullptr
+													}};
+	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+															   nullptr,
+															   0,
+															   0,
+															   nullptr
+													   }, {
+															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+															   nullptr,
+															   0,
+															   2,
+															   &objdslbindings[0]
+													   }};
+
+	PipelineInitInfo pii = {};
+	pii.stages = VK_SHADER_STAGE_COMPUTE_BIT;
+	pii.shaderfilepathprefix = "ocean";
+	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
+	pii.pushconstantrange = {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)};
+
+	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceancomputepipeline, pii);
+}
+
+void Ocean::createGraphicsPipeline () {
+	VkDescriptorSetLayoutBinding objectdslbindings[3] {{
+															   0,
+															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+															   1,
+															   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+															   nullptr
+													   }, {
+															   1,
+															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+															   1,
+															   VK_SHADER_STAGE_FRAGMENT_BIT,
+															   nullptr
+													   }, {
+															   2,
+															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+															   1,
+															   VK_SHADER_STAGE_FRAGMENT_BIT,
+															   nullptr
+													   }};
+	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
+			scenedslcreateinfo,
+			{
+					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+					nullptr,
+					0,
+					3, &objectdslbindings[0]
+			}};
+	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
+	VkVertexInputAttributeDescription vertinattribdesc[3] {{0,
+															0,
+															VK_FORMAT_R32G32B32_SFLOAT,
+															offsetof(Vertex, position)},
+														   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+														   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
+
+	PipelineInitInfo pii = {};
+	pii.stages = VK_SHADER_STAGE_VERTEX_BIT
+				 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+				 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+				 | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pii.shaderfilepathprefix = "ocean";
+	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
+	pii.pushconstantrange = {VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+							 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+							 | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OceanPushConstants)},
+			pii.vertexinputstatecreateinfo = {
+					VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+					nullptr,
+					0,
+					1,
+					&vertinbindingdesc,
+					3,
+					&vertinattribdesc[0]
+			};
+	pii.depthtest = true;
+
+	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceangraphicspipeline, pii);
+}
+
 void Ocean::initDescriptorSets () {
 	// note that the top part of this init is gonna be redundant with the mesh-side init
 	// so this looks like a double-init with the Mesh constructor, which could be causing the issues we're seeing
