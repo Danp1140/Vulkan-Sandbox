@@ -27,6 +27,9 @@ private:
 	VkDeviceMemory tsbmemory = VK_NULL_HANDLE, vsbmemory = VK_NULL_HANDLE, msbmemory;
 	uint32_t numnodes, numleaves, numvoxels;
 	VkDescriptorSet* computedss;
+	bool memoryavailable; // flag to coordinate CPU node heap realloc & GPU memory use
+	uint8_t compfif; // fif compute was submitted on, to track when memavail should be reset
+	VkDeviceSize nodeheapfreesize; // troubleshooting measure to make sure heap is safe
 
 	void setupHeap();
 public:
@@ -58,10 +61,19 @@ public:
 
 	void updateVoxels (glm::vec3 camerapos);
 
+	void dumpHeap (Node* heap, uint32_t n);
+
 	VkDescriptorSet getDS (uint8_t scii) {return computedss[scii];}
 
 	VkBuffer getTreeBuffer () {return treesb;}
 
+	bool isMemoryAvailable() {return memoryavailable;}
+	void setMemoryAvailable(bool ma) {memoryavailable = ma;}
+
+	uint8_t getCompFIF() {return compfif;}
+	void setCompFIF(uint8_t cf) {compfif = cf;}
+
+	VkDeviceSize getNodeHeapFreeness() {return nodeheapfreesize;}
 };
 
 

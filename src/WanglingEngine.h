@@ -72,25 +72,15 @@ private:
 	 * troubleshooting texture monitor and line drawer).
 	 */
 	void initSceneData ();
-
 	void initSkybox ();
-
 	void initTroubleshootingLines ();
-
 	void updateSkyboxDescriptorSets ();
-
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-
 	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-
 	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-
 	void updateTexMonDescriptorSets (TextureInfo tex);
-
 	static void recordCommandBuffer (WanglingEngine* self, uint32_t fifindex);
-
 	void enqueueRecordingTasks ();
-
 	static void processRecordingTasks (
 			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference
 			std::queue<cbCollectInfo>* resultcbs,
@@ -105,10 +95,9 @@ private:
 	 * that GraphicsHandler can know how many meshes and lights to make space for before they are actually created.
 	 */
 	void countSceneObjects (const char* scenefilepath, uint8_t* nummeshes, uint8_t* numlights);
-
 	void loadScene (const char* scenefilepath);
-
 	void genScene ();
+	void updatePCsAndBuffers();
 
 public:
 	WanglingEngine ();

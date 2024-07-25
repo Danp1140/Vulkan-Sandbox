@@ -126,13 +126,17 @@ void getLeafPos(in uint leafidx, out vec3 position, out uint nodeidx) {
 
 // for now just takes voxel value directly from parent
 void subdivide (uint ptr) {
-	// signal that we're gonna need more memory
-	atomicAdd(meminfo.numtoalloc, 1);
-	if (meminfo.addrs[meminfo.allocptr] == -1u || meminfo.allocptr == ALLOC_INFO_BUF_SIZE/2 - 1) return;
+	// if we're out of memory, signal that we're gonna need more memory
+	if (meminfo.addrs[meminfo.allocptr] == -1u || meminfo.allocptr == ALLOC_INFO_BUF_SIZE/2 - 1) {
+		atomicAdd(meminfo.numtoalloc, 1);
+		return;
+	}
 
 	// if we still have some for this frame, use it
 	// should p consider what happens if we end up with excess memory
-	uint freeblock = atomicAdd(meminfo.allocptr, 1);
+	// if, by the time we get back to CPU alloc, meminfo.addrs[meminfo.allocptr] != -1u, we have spare
+	// memory we should reclaim
+	uint freeblock = meminfo.addrs[atomicAdd(meminfo.allocptr, 1)];
 	uint tempptr;
 	
 	for (uint i = 0; i < 8; i++) {
@@ -146,39 +150,31 @@ void subdivide (uint ptr) {
 	atomicAdd(DEREF(0).childidx, 7u);
 }
 
-void main () {
-// if we move ahead with phase system init could be its own phase, would be a much safer way to do things
-	// since we started setup on the CPU, i dont think we even need this anymore??
-	if (tree.nodes[0].parent == 0u) {
-		voxelbuffer.voxels[0].material = AIR;
-		voxelbuffer.voxels[1].material = WATER;
-		voxelbuffer.voxels[2].material = ROCK;
-		//DEREF(0).parent = -1u;
-		//DEREF(0).childidx = 1u;
-		//DEREF(0).voxel = AIR;
-		//for (uint i = 0; i < 8; i++) DEREF(0).children[i] = -1u;
-		meminfo.allocptr = 0u;
-		meminfo.numtoalloc = 0u;
-		meminfo.freeptr = 0u;
+void collapse (uint ptr) {
+	uint tobefreedptr = atomicAdd(meminfo.freeptr, 1);
+	// parent modifications must be done on CPU, as it must still read child addrs for freeing
+	meminfo.addrs[tobefreedptr] = DEREF(ptr).children[0];
+	for (uint i = 0; i < 8; i++) DEREF(ptr).children[i] = -1u;
+	atomicAdd(DEREF(0).childidx, -7);
+}
 
+void main () {
+	vec3 leafpos;
+	uint leafidx;
+	getLeafPos(gl_GlobalInvocationID.x, leafpos, leafidx);
+	uint depth = 0u;
+	uint tempptr = leafidx;
+	while (tempptr != 0u) {
+		depth++;
+		tempptr = DEREF(tempptr).parent;
 	}
-	else {
-		vec3 leafpos;
-		uint leafidx;
-		getLeafPos(gl_GlobalInvocationID.x, leafpos, leafidx);
-		uint depth = 0u;
-		uint tempptr = leafidx;
-		while (tempptr != 0u) {
-			depth++;
-			tempptr = DEREF(tempptr).parent;
-		}
-		float dist = distance(constants.camerapos, leafpos);
-		if (dist < 2. && depth < 2) {
-			DEREF(leafidx).voxel = 3;
-			subdivide(leafidx);
-		}
-		else if (dist > 3.) {
-			DEREF(leafidx).voxel = 0;
-		}
+	float dist = distance(constants.camerapos, leafpos);
+	if (dist < 2.) {
+		DEREF(leafidx).voxel = 3;
+		if (depth < 2) subdivide(leafidx);
+	}
+	else if (dist > 3.) {
+		DEREF(leafidx).voxel = 0;
+		if (depth > 1 && DEREF(leafidx).childidx == 0) collapse(DEREF(leafidx).parent);
 	}
 }

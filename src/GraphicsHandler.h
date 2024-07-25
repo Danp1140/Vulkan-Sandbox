@@ -142,13 +142,6 @@ public:
 	}
 } TextureInfo;
 
-typedef struct PrimaryGraphicsPushConstants {
-	glm::mat4 cameravpmatrices;
-	alignas(16) glm::vec3 camerapos;
-	alignas(16) glm::vec2 standinguv;
-	uint32_t numlights;
-} PrimaryGraphicsPushConstants;
-
 typedef struct TextPushConstants {
 	glm::vec2 position, scale;
 	float rotation;
@@ -332,7 +325,6 @@ typedef struct VulkanInfo {
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
 	// figure a better way to handle these tbh
-	PrimaryGraphicsPushConstants primarygraphicspushconstants;
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;

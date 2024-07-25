@@ -15,6 +15,13 @@ typedef enum RockType {
 	ROCK_TYPE_GRANITE
 } RockType;
 
+typedef struct PrimaryGraphicsPushConstants {
+	glm::mat4 cameravpmatrices;
+	alignas(16) glm::vec3 camerapos;
+	alignas(16) glm::vec2 standinguv;
+	uint32_t numlights;
+} PrimaryGraphicsPushConstants;
+
 class Mesh {
 private:
 	TextureInfo diffusetexture, normaltexture, heighttexture;
@@ -44,6 +51,8 @@ protected:
 	void generateSmoothVertexNormals ();
 
 public:
+	PrimaryGraphicsPushConstants pcdata;
+
 	Mesh (
 			glm::vec3 p = glm::vec3(0.f),
 			glm::vec3 s = glm::vec3(1.f),
@@ -65,39 +74,22 @@ public:
 	~Mesh ();
 
 	virtual void rewriteTextureDescriptorSets ();
-
 	static void createPipeline ();
-
 	static void createShadowmapPipeline ();
-
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
-
 	static void recordShadowDraw (cbRecData data, VkCommandBuffer& cb);
-
 	void generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed);
-
 	glm::vec3 getPosition () {return position;}
-
 	void setPosition (glm::vec3 p);
-
 	glm::quat getRotation () {return rotation;}
-
 	void setRotation (glm::quat r);
-
 	glm::vec3 getScale () {return scale;}
-
 	void setScale (glm::vec3 s);
-
 	std::vector<Vertex> getVertices () {return vertices;}
-
 	const std::vector<Tri>& getTris () const {return tris;}
-
 	std::vector<Tri>* getTrisPtr () {return &tris;}
-
 	glm::vec3 getMin () {return min;}
-
 	glm::vec3 getMax () {return max;}
-
 	// TODO: don't give out pointers unless /absolutely/ neccesary, its unsafe and lame
 	VkDescriptorSet* getDescriptorSets () const {return descriptorsets;}
 

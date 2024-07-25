@@ -131,7 +131,7 @@ WanglingEngine::WanglingEngine () {
 				sizeof(LightUniformBuffer),
 				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
 				&lightuniformbuffertemp[0]);
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
+		for (auto& m : meshes) m->pcdata.numlights = lights.size();
 		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
 	}
 	GraphicsHandler::swapchainimageindex = 0;
@@ -259,6 +259,130 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 
 void WanglingEngine::genScene () {
 	meshes.push_back(Mesh::generateBoulder(ROCK_TYPE_GRANITE, glm::vec3(1.f), 0u));
+}
+
+void WanglingEngine::updatePCsAndBuffers() {
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.cameravp = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix(); 
+	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = testterrain->getNumLeaves();
+
+	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
+		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
+		for (auto& m : meshes) {
+			m->pcdata.cameravpmatrices = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+			m->pcdata.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+			m->pcdata.standinguv = physicshandler.getStandingUV();
+		}
+
+		GraphicsHandler::vulkaninfo.oceanpushconstants.cameravpmatrices =
+				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+		GraphicsHandler::vulkaninfo.oceanpushconstants.cameraposition =
+				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+
+		GraphicsHandler::vulkaninfo.grasspushconstants =
+				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+		GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+	}
+
+	// wtf why does commenting out this lock on cause a val err & crash???
+	// TODO: what the hell is going on here??
+	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
+	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
+		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
+		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
+				primarycamera->getProjectionMatrix() * primarycamera->calcAndGetSkyboxViewMatrix(),
+				lights[0]->getPosition()
+		};
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE ||
+//				lights[i]->getShadowType() == SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE) {  // this is a lie
+//				glm::vec3* tempb = new glm::vec3[8];
+//				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
+//				lights[i]->updateMatrices(primarycamera->getForward(),
+//										  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
+//				delete[] tempb;
+//				lightuniformbuffertemp[i] = {
+//						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//						lights[i]->getPosition(),
+//						lights[i]->getIntensity(),
+//						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//						lights[i]->getType(),
+//						lights[i]->getColor()
+//				};
+//				GraphicsHandler::VKHelperUpdateUniformBuffer(   // feels like this could be moved a level down, watch out for swapping if and for
+//						MAX_LIGHTS,
+//						sizeof(LightUniformBuffer),
+//						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//						&lightuniformbuffertemp[0]);
+//			}
+//		}
+	}
+
+	GraphicsHandler::vulkaninfo.terrainpushconstants =
+			primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+
+	// how is this not redundant w/ the above??
+//	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
+//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
+//		for (uint8_t i = 0; i < lights.size(); i++) {
+//			lightuniformbuffertemp[i] = {
+//					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+//					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+//					lights[i]->getPosition(),
+//					lights[i]->getIntensity(),
+//					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+//					lights[i]->getType(),
+//					lights[i]->getColor()
+//			};
+//			GraphicsHandler::VKHelperUpdateUniformBuffer(
+//					MAX_LIGHTS,
+//					sizeof(LightUniformBuffer),
+//					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+//					&lightuniformbuffertemp[0]);
+//		}
+//		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
+//		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+//	}
+
+	// making this block execute no matter what for shadowmap troubleshooting
+	{
+		LightUniformBuffer lightuniformbuffertemp[lights.size()];
+		for (uint8_t i = 0; i < lights.size(); i++) {
+			glm::vec3 tempb[8], * tempbp = &tempb[0];
+			GraphicsHandler::makeRectPrism(&tempbp, meshes[0]->getMin(), meshes[0]->getMax());
+			lights[i]->updateMatrices(primarycamera->getForward(),
+									  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.),
+									  tempbp,
+									  8);
+			lightuniformbuffertemp[i] = {
+					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
+					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
+					lights[i]->getPosition(),
+					lights[i]->getIntensity(),
+					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+					lights[i]->getType(),
+					lights[i]->getColor()
+			};
+		}
+		GraphicsHandler::VKHelperUpdateUniformBuffer(
+				lights.size(),
+				sizeof(LightUniformBuffer),
+				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
+				&lightuniformbuffertemp[0]);
+	}
+
+	MeshUniformBuffer temp;
+	for (auto& m: meshes) {
+		temp = m->getUniformBufferData();
+		GraphicsHandler::VKHelperUpdateUniformBuffer(
+				1,
+				sizeof(MeshUniformBuffer),
+				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
+				reinterpret_cast<void*>(&temp));
+	}
+
+
 }
 
 void WanglingEngine::initSceneData () {
@@ -552,7 +676,6 @@ void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
 	}
 }
 
-
 void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifindex) {
 	self->ocean->recordCompute(fifindex);
 	self->ocean->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
@@ -640,6 +763,7 @@ void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifinde
 }
 
 // TODO: figure out which buffer recording setup structs can be made static const for efficiency
+// you know, we only have to re-enqueue if the tasks change...
 void WanglingEngine::enqueueRecordingTasks () {
 	cbRecData tempdata {VK_NULL_HANDLE,
 						VK_NULL_HANDLE,
@@ -651,45 +775,56 @@ void WanglingEngine::enqueueRecordingTasks () {
 						VK_NULL_HANDLE, VK_NULL_HANDLE, 0u};
 	// hey so im not even certain that i have to sync ds access, maybe just alloc/free
 
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
-	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.cameravp = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices;
-	// GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos;
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = testterrain->getNumLeaves();
-	// below is v redundant set
-	// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.phase = 0;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants);
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
+	// only recompute voxels if we've had time to realloc memory
+	if (testterrain->getCompFIF() == MAX_FRAMES_IN_FLIGHT + 1
+		&& testterrain->isMemoryAvailable() 
+		&& (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & (CAMERA_LOOK_CHANGE_FLAG_BIT | CAMERA_POSITION_CHANGE_FLAG_BIT))) {
+		testterrain->setCompFIF(GraphicsHandler::vulkaninfo.currentframeinflight);
+		// code in this block seems very wrong... why are we doing a phase 0 and a phase 1 every loop???
+		tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
+		tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+			// below is v redundant set
+		// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
+		GraphicsHandler::vulkaninfo.terraingenpushconstants.phase = 0;
+		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants);
+		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
-	// prob a mem leak
-	// unless we free after collection
-	VkBufferMemoryBarrier2* membar = new VkBufferMemoryBarrier2 {
-			VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-			nullptr,
-			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			VK_ACCESS_SHADER_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			testterrain->getTreeBuffer(),
-			0u,
-			NODE_HEAP_SIZE * NODE_SIZE
-	};
-	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-										  nullptr,
-										  0,
-										  0, nullptr,
-										  1, membar,
-										  0, nullptr}));
+		/*
+			// prob a mem leak
+			// unless we free after collection
+		VkBufferMemoryBarrier2* membar = new VkBufferMemoryBarrier2 {
+				VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+				nullptr,
+				VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				VK_ACCESS_SHADER_WRITE_BIT,
+				VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_QUEUE_FAMILY_IGNORED,
+				VK_QUEUE_FAMILY_IGNORED,
+				testterrain->getTreeBuffer(),
+				0u,
+				NODE_HEAP_SIZE * NODE_SIZE
+		};
+		recordingtasks.push(cbRecTask({
+											  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+											  nullptr,
+											  0,
+											  0, nullptr,
+											  1, membar,
+											  0, nullptr}));
 
 
-	GraphicsHandler::vulkaninfo.terraingenpushconstants2 = GraphicsHandler::vulkaninfo.terraingenpushconstants;
-	GraphicsHandler::vulkaninfo.terraingenpushconstants2.phase = 1;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants2);
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
+		GraphicsHandler::vulkaninfo.terraingenpushconstants2 = GraphicsHandler::vulkaninfo.terraingenpushconstants;
+		GraphicsHandler::vulkaninfo.terraingenpushconstants2.phase = 1;
+		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants2);
+		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
+		*/
+	}
+	/*
+	else if (!testterrain->isMemoryAvailable()) std::cout << "no memory available" << std::endl;
+	else if (testterrain->getCompFIF() != MAX_FRAMES_IN_FLIGHT + 1) std::cout << "TG invoc already in flight" << std::endl;
+	else std::cout << "no movement" << std::endl;
+	*/
 
 	// do we need those ds mutexes???
 	// try removing them from draws once we have both mesh draws in and are stress testing
@@ -762,8 +897,8 @@ void WanglingEngine::enqueueRecordingTasks () {
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordSkyboxCommandBuffers(tempdata, c);}));
 
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.primarygraphicspipeline;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.primarygraphicspushconstants);
 	for (auto& m: meshes) {
+		tempdata.pushconstantdata = reinterpret_cast<void*>(&m->pcdata);
 		tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
 		tempdata.dsmutex = m->getDSMutexPtr();
 		tempdata.vertexbuffer = m->getVertexBuffer();
@@ -923,7 +1058,7 @@ void WanglingEngine::draw () {
 	VkResult acquire = vkAcquireNextImageKHR(
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.swapchain,
-			3,
+			1000000,
 			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
 			VK_NULL_HANDLE,
 			&GraphicsHandler::swapchainimageindex);
@@ -948,6 +1083,7 @@ void WanglingEngine::draw () {
 									GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
+	updatePCsAndBuffers();
 
 	glfwPollEvents();
 
@@ -955,134 +1091,18 @@ void WanglingEngine::draw () {
 
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
 	physicshandler.update(meshes[0]->getTris());
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
-		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos =
-				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.standinguv = physicshandler.getStandingUV();
-
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameravpmatrices =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameraposition =
-				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-
-		GraphicsHandler::vulkaninfo.grasspushconstants =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-	}
-
-	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
-		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
-				primarycamera->getProjectionMatrix() * primarycamera->calcAndGetSkyboxViewMatrix(),
-				lights[0]->getPosition()
-		};
-//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-//		for (uint8_t i = 0; i < lights.size(); i++) {
-//			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE ||
-//				lights[i]->getShadowType() == SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE) {  // this is a lie
-//				glm::vec3* tempb = new glm::vec3[8];
-//				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
-//				lights[i]->updateMatrices(primarycamera->getForward(),
-//										  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
-//				delete[] tempb;
-//				lightuniformbuffertemp[i] = {
-//						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-//						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-//						lights[i]->getPosition(),
-//						lights[i]->getIntensity(),
-//						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-//						lights[i]->getType(),
-//						lights[i]->getColor()
-//				};
-//				GraphicsHandler::VKHelperUpdateUniformBuffer(   // feels like this could be moved a level down, watch out for swapping if and for
-//						MAX_LIGHTS,
-//						sizeof(LightUniformBuffer),
-//						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-//						&lightuniformbuffertemp[0]);
-//			}
-//		}
-	}
-
-	GraphicsHandler::vulkaninfo.terrainpushconstants =
-			primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-
-	// how is this not redundant w/ the above??
-//	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-//		for (uint8_t i = 0; i < lights.size(); i++) {
-//			lightuniformbuffertemp[i] = {
-//					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-//					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-//					lights[i]->getPosition(),
-//					lights[i]->getIntensity(),
-//					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-//					lights[i]->getType(),
-//					lights[i]->getColor()
-//			};
-//			GraphicsHandler::VKHelperUpdateUniformBuffer(
-//					MAX_LIGHTS,
-//					sizeof(LightUniformBuffer),
-//					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-//					&lightuniformbuffertemp[0]);
-//		}
-//		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
-//		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
-//	}
-
-	// making this block execute no matter what for shadowmap troubleshooting
-	{
-		LightUniformBuffer lightuniformbuffertemp[lights.size()];
-		for (uint8_t i = 0; i < lights.size(); i++) {
-			glm::vec3 tempb[8], * tempbp = &tempb[0];
-			GraphicsHandler::makeRectPrism(&tempbp, meshes[0]->getMin(), meshes[0]->getMax());
-			lights[i]->updateMatrices(primarycamera->getForward(),
-									  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.),
-									  tempbp,
-									  8);
-			lightuniformbuffertemp[i] = {
-					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-					lights[i]->getPosition(),
-					lights[i]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-					lights[i]->getType(),
-					lights[i]->getColor()
-			};
-		}
-		GraphicsHandler::VKHelperUpdateUniformBuffer(
-				lights.size(),
-				sizeof(LightUniformBuffer),
-				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-				&lightuniformbuffertemp[0]);
-	}
-
-	MeshUniformBuffer temp;
-	for (auto& m: meshes) {
-		temp = m->getUniformBufferData();
-		GraphicsHandler::VKHelperUpdateUniformBuffer(
-				1,
-				sizeof(MeshUniformBuffer),
-				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
-				reinterpret_cast<void*>(&temp));
-	}
-
-	GraphicsHandler::troubleshootingsstrm << "calculation time: " << (std::chrono::duration<double>(
+		GraphicsHandler::troubleshootingsstrm << "calculation time: " << (std::chrono::duration<double>(
 			std::chrono::high_resolution_clock::now() - start).count());
 	GraphicsHandler::troubleshootingsstrm << '\n' << (1.0f / (*physicshandler.getDtPtr())) << " fps"
-										  << "\nswapchain image: " << GraphicsHandler::swapchainimageindex
-										  << " frame in flight: "
-										  << GraphicsHandler::vulkaninfo.currentframeinflight
-										  << "\nchangeflags: " << std::bitset<8>(
-			GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex]);
+		<< "\nswapchain image: " << GraphicsHandler::swapchainimageindex
+		<< " frame in flight: " << GraphicsHandler::vulkaninfo.currentframeinflight
+		<< "\nchangeflags: " << std::bitset<8>(GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex])
+		<< "\nnode heap freeness: " << testterrain->getNodeHeapFreeness();
 
+	if (vkGetFenceStatus(GraphicsHandler::vulkaninfo.logicaldevice, GraphicsHandler::vulkaninfo.submitfinishedfences[testterrain->getCompFIF()]) == VK_SUCCESS) testterrain->setMemoryAvailable(false);
+	testterrain->updateVoxels(primarycamera->getPosition());
 
 	enqueueRecordingTasks();
-
-	testterrain->updateVoxels(primarycamera->getPosition());
 
 	for (uint8_t x = 0; x < NUM_RECORDING_THREADS; x++) {
 		recordingthreads[x] = std::thread(
@@ -1094,6 +1114,8 @@ void WanglingEngine::draw () {
 			GraphicsHandler::vulkaninfo.logicaldevice
 		);
 	}
+
+	// TODO: figure out how many ops we can put in here to maximize multithreading benefit
 
 	for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) recordingthreads[i].join();
 

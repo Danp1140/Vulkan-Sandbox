@@ -9,6 +9,9 @@ Terrain::Terrain () : Mesh() {
 	numleaves = 1u;
 	numvoxels = 3u;
 
+	memoryavailable = false;
+	// unsure of default compfif value
+
 	GraphicsHandler::vulkaninfo.terraingenpushconstants.heapsize = numnodes;
 
 //	GraphicsHandler::VKSubInitStorageBuffer()
@@ -98,8 +101,21 @@ void Terrain::setupHeap() {
 	nodeheap[8].childidx = -1u;
 	nodeheap[i - 8].parent = -1u;
 	nodeheap[0].parent = 1u;
+	nodeheap[0].childidx = 1u;
 	subdivide(0u, nodeheap);
 	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	void *tmp;
+	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
+		msbmemory,
+		0u,
+		sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE),
+		0,
+		&tmp);
+	uint32_t* meminfo = reinterpret_cast<uint32_t*>(tmp);
+	*meminfo = 0u; *(meminfo + 1) = 0u; *(meminfo + 2) = 0u;
+	*(meminfo + 3) = -1u;
+	*(meminfo + 3 + ALLOC_INFO_BUF_SIZE / 2) = -1u;
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, msbmemory);
 }
 
 void Terrain::createComputePipeline () {
@@ -244,7 +260,8 @@ void Terrain::recordCompute (cbRecData data, VkCommandBuffer& cb) {
 			data.pushconstantdata);
 	TerrainGenPushConstants* pctemp = reinterpret_cast<TerrainGenPushConstants*>(data.pushconstantdata);
 	if (pctemp->phase == 0) vkCmdDispatch(cb, pctemp->numleaves, 1, 1);
-	else if (pctemp->phase == 1) vkCmdDispatch(cb, pctemp->numleaves / 8, 1, 1);
+	else if (pctemp->phase == 1) vkCmdDispatch(cb, pctemp->numleaves / 8, 1, 1);	
+	// std::cout << "recording TG compute with " << pctemp->numleaves << " invocs" << std::endl;
 	vkEndCommandBuffer(cb);
 }
 
@@ -305,7 +322,6 @@ void Terrain::updateNumLeaves () {
 	if (root->childidx == 0) return;
 	numleaves = root->childidx;
 	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = numleaves;
-	std::cout << numleaves << std::endl;
 }
 
 glm::vec3 childDirection (uint8_t childidx) {
@@ -383,6 +399,7 @@ void Terrain::subdivide (uint32_t idx, Node* heap) {
 		heap[freeptr + i].children[0] = -1u; // necessary??
 		heap[freeptr + i].children[1] = 0u;
 	}
+	heap[0].childidx += 7;
 	numleaves += 7;
 	// updating first free record, and updating that block to have no previous and ensure it is marked free
 	/*
@@ -407,13 +424,26 @@ void Terrain::collapse (uint32_t parentidx, Node* heap) {
 }
 
 void Terrain::freeVoxel(uint32_t ptr, Node* heap) {
+	// std::cout << "freeing block @ " << ptr << std::endl;
+	// WE ARE NOT PROPERLY FREEING....SOMEHOW....
+	// may have to do with the switch we made to passing in a ptr to the first in the block rather than its parent
+	// or perhaps we're not inserting into the DLL correctly...
 	uint32_t freeptr = heap[0].parent;
-	while (freeptr < heap[ptr].children[0]) {
+	while (freeptr < ptr) {
 		freeptr = heap[freeptr].parent;
 	}
-	heap[heap[ptr].children[0]].parent = heap[freeptr].parent;
-	heap[heap[ptr].children[0]].childidx = freeptr;
-	heap[heap[ptr].children[0]].voxel = -1u;
+	// std::cout << "bottom of loop @ " << ptr << std::endl;
+	// technically the below two conditions should be equal, but i never trust my homebrew heap
+	if (heap[0].parent == freeptr) heap[0].parent = ptr;
+	if (heap[freeptr].childidx != -1u) heap[heap[freeptr].childidx].parent = ptr;
+	heap[ptr].parent = freeptr;
+	heap[ptr].childidx = heap[freeptr].childidx;
+	heap[freeptr].childidx = ptr;
+	/*
+	heap[ptr].parent = heap[freeptr].parent;
+	heap[ptr].childidx = freeptr;
+	*/
+	heap[ptr].voxel = -1u;
 }
 
 uint32_t Terrain::allocVoxel(Node* heap) {
@@ -422,12 +452,18 @@ uint32_t Terrain::allocVoxel(Node* heap) {
 	heap[0].parent = nextfree;
 	heap[nextfree].childidx = -1u;
 	heap[nextfree].voxel = -1u; // necessary??
-	std::cout << "allocd block @" << freeptr << std::endl;
-	std::cout << "nextfree @ " << nextfree << std::endl;
+	// std::cout << "allocd block @" << freeptr << std::endl;
+	// std::cout << "nextfree @ " << nextfree << std::endl;
 	return freeptr;
 }
 
 void Terrain::updateVoxels (glm::vec3 camerapos) {
+	// no need to do anything if memory hasn't been used yet
+	if (memoryavailable) return;
+
+	setCompFIF(MAX_FRAMES_IN_FLIGHT + 1);
+
+	updateNumLeaves();
 	// dont forget to reset relevent counters!!
 	// ideally we find some way to complete this function while gpu is not using these buffers
 	// should be possible time-wise, perhaps difficult tho
@@ -451,50 +487,68 @@ void Terrain::updateVoxels (glm::vec3 camerapos) {
 	Node* nodeheap = reinterpret_cast<Node*>(heap);
 	uint32_t* meminfo = reinterpret_cast<uint32_t*>(tempptr);
 
-	uint32_t numtofree = *(meminfo + 1), numtoalloc = *(meminfo + 2);
+	if (meminfo[3 + *meminfo] != -1u) std::cout << "excess memory should be reclaimed" << std::endl;
+
+	uint32_t numtofree = *(meminfo + 1) - ALLOC_INFO_BUF_SIZE / 2, numtoalloc = *(meminfo + 2);
 	if (numtofree != 0 || numtoalloc != 0) {
-		std::cout << "freeing " << numtofree << ", allocing " << numtoalloc << std::endl;
+		std::cout << "freeing " << numtofree 
+			<< ", allocing " << numtoalloc 
+			<< " (out of " << numleaves << " total leaves)" << std::endl;
 	}
 
 	uint32_t ptr;
-	for (ptr = ALLOC_INFO_BUF_SIZE / 2; ptr < numtofree; ptr++) {
+	for (ptr = 3 + ALLOC_INFO_BUF_SIZE / 2; ptr < numtofree + 3 + ALLOC_INFO_BUF_SIZE / 2; ptr++) {
 		freeVoxel(meminfo[ptr], nodeheap);
+		// meminfo[ptr] = -1u;
 	}
-	for (ptr = 0; ptr < numtoalloc; ptr++) {
+	for (ptr = 3; ptr < numtoalloc + 3; ptr++) {
 		meminfo[ptr] = allocVoxel(nodeheap);
 	}
-	if (numtoalloc != ALLOC_INFO_BUF_SIZE / 2 - 1) meminfo[ptr + 1] = -1u;
+	if (numtoalloc != ALLOC_INFO_BUF_SIZE / 2 - 1) meminfo[ptr] = -1u;
+	// dumpHeap(nodeheap, 9);
 
-	*meminfo = 0; *(meminfo + 1) = 0; *(meminfo + 2) = 0;
+	*meminfo = 0; *(meminfo + 1) = ALLOC_INFO_BUF_SIZE / 2; *(meminfo + 2) = 0;
+
+	// recalculating by iterating through DLL until we're sure its safe
+	ptr = nodeheap[0].parent;
+	nodeheapfreesize = 0u;
+	// std::cout << "top of free size loop" << std::endl;
+	uint32_t infinitycounter = 0;
+	while (ptr != -1u && infinitycounter < 1024) {
+		infinitycounter++;
+		nodeheapfreesize++;
+		ptr = nodeheap[ptr].parent;
+	}
+	if (ptr != -1u) {
+		std::cout << "loop timeout" << std::endl;
+		// dumpHeap(nodeheap, 25u);
+	}
+	// std::cout << "bottom of free size loop" << std::endl;
 
 	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, msbmemory);
 	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	
+	memoryavailable = true;
+}
 
-	/*void* heap;
-	vkMapMemory(
-			GraphicsHandler::vulkaninfo.logicaldevice,
-			tsbmemory,
-			0u,
-			numnodes * NODE_SIZE,
-			0,
-			&heap);
-	Node* nodeheap = reinterpret_cast<Node*>(heap);
-
-	// uint32_t dist, nodeidx, depth, tempptr;
-	// std::cout << numleaves << std::endl;
-	for (uint32_t leafidx = 0; leafidx < numleaves; leafidx++) {
-		dist = glm::distance(camerapos, getLeafPos(leafidx, nodeidx, nodeheap));
-		depth = 0u;
-		tempptr = nodeidx;
-		while (tempptr != 0u) {
-			depth++;
-			tempptr = nodeheap[tempptr].parent;
+void Terrain::dumpHeap (Node* heap, uint32_t n) {
+	std::cout << heap[0].childidx << " leaves, first free block @" << heap[0].parent << std::endl;
+	Node p;
+	for (uint32_t i = 1; i < n; i++) {
+		p = heap[i];
+		if (p.voxel == -1u) {
+			std::cout << p.childidx << " <-- " << i << " --> " << p.parent << std::endl;
 		}
-		if (dist > 5.) nodeheap[nodeidx].voxel = 0;
-		if (dist < 5.) {
-			nodeheap[nodeidx].voxel = 1;
-			if (depth < 4) subdivide(nodeidx, nodeheap);
+		else {
+			std::cout << p.parent << std::endl;
+			std::cout << i << std::endl;
+			if (p.children[0] == -1u) std::cout << "x x x x x x x x" << std::endl;
+			else {
+				for (uint8_t c = 0; c < 8; c++) {
+					std::cout << p.children[c] << " ";
+				}
+				std::cout << std::endl;
+			}
 		}
 	}
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);*/
 }
