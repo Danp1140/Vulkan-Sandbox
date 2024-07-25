@@ -98,6 +98,7 @@ private:
 	Terrain* testterrain;
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
+	bool bloom, ssrr;
 	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
 	Setting* currentsetting;
 
