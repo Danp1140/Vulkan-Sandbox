@@ -100,6 +100,9 @@ private:
 public:
 	ParticleSystem (ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
 
+	// below creates a pipeline specialized for grass, re-evaluate as we expand the system
+	static void createPipeline ();
+
 	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds) const;
 };
 

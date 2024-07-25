@@ -15,25 +15,40 @@ private:
 	glm::vec2 bounds;
 	Mesh*shore;
 	TextureInfo heightmap, normalmap, velocitymap;
-	VkDescriptorSet*computedescriptorsets;
-	VkCommandBuffer*computecommandbuffers;
+	VkDescriptorSet* computedescriptorsets;
+	VkCommandBuffer* computecommandbuffers;
 	TextureInfo seabeddepthmap;
 
-	void initDescriptorSets();
-	void initComputeCommandBuffers();
-public:
-	Ocean(glm::vec3 pos, glm::vec2 b, Mesh*s);
+	void initDescriptorSets ();
 
-	void renderDepthMap(Mesh*seabed);
-	void rewriteTextureDescriptorSets();
-	void recordDraw(uint8_t fifindex, uint8_t sciindex, VkDescriptorSet*sceneds);
-	void recordCompute(uint8_t fifindex);
-	void rewriteDescriptorSet(uint32_t index);
-	VkDescriptorSet*getComputeDescriptorSets(){return computedescriptorsets;}
-	VkCommandBuffer*getComputeCommandBuffers(){return computecommandbuffers;}
-	TextureInfo*getHeightMapPtr(){return &heightmap;}   //perhaps use displacement map instead (better for cresting and such)
-	TextureInfo*getNormalMapPtr(){return &normalmap;}
-	TextureInfo*getDepthMapPtr(){return &seabeddepthmap;}
+	void initComputeCommandBuffers ();
+
+public:
+	Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s);
+
+	static void createComputePipeline ();
+
+	static void createGraphicsPipeline ();
+
+	void renderDepthMap (Mesh* seabed);
+
+	void rewriteTextureDescriptorSets ();
+
+	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds);
+
+	void recordCompute (uint8_t fifindex);
+
+	void rewriteDescriptorSet (uint32_t index);
+
+	VkDescriptorSet* getComputeDescriptorSets () {return computedescriptorsets;}
+
+	VkCommandBuffer* getComputeCommandBuffers () {return computecommandbuffers;}
+
+	TextureInfo*
+	getHeightMapPtr () {return &heightmap;}   //perhaps use displacement map instead (better for cresting and such)
+	TextureInfo* getNormalMapPtr () {return &normalmap;}
+
+	TextureInfo* getDepthMapPtr () {return &seabeddepthmap;}
 };
 
 

@@ -37,6 +37,8 @@ public:
 
 	~Text ();
 
+	static void createPipeline ();
+
 	void setMessage (std::string m, uint32_t index);
 
 	static void recordCommandBuffer (cbRecData data, VkCommandBuffer& cb);

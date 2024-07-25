@@ -1,3 +1,5 @@
+path="/Users/danp/Desktop/C Coding/VulkanSandbox/resources/shaders"
+cd "$path"
 echo "compiling default shaders"
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/DefaultVertex.glsl -o SPIRV/defaultvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=tesc GLSL/DefaultTessellationControl.glsl -o SPIRV/defaulttesc.spv
@@ -33,7 +35,7 @@ echo "compiling compositing shaders"
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/CompositingVertex.glsl -o SPIRV/compositingvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/CompositingFragment.glsl -o SPIRV/compositingfrag.spv
 echo "compiling TG shaders"
-/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=comp GLSL/TGVoxelCompute.glsl -o SPIRV/tgvoxelcomp.spv
+/Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=comp GLSL/TGVoxelCompute2.glsl -o SPIRV/tgvoxelcomp.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=vert GLSL/VoxelTroubleshootingVertex.glsl -o SPIRV/voxeltroubleshootingvert.spv
 /Users/danp/VulkanSDK/1.2.176.1/macOS/bin/glslc -fshader-stage=frag GLSL/VoxelTroubleshootingFragment.glsl -o SPIRV/voxeltroubleshootingfrag.spv
 

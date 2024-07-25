@@ -5,6 +5,9 @@
 #define SCALE 0.1
 #define VOXEL_BOUNDS 10.
 
+
+#define DEREF(pnode) tree.nodes[pnode]
+
 struct Node {
     uint parent;
     uint voxel;
@@ -52,34 +55,70 @@ vec3 childDirection(uint childidx);
 vec3 traversalposition = vec3(0.);
 uint traversaldepth = 0u;
 
+void getLeafPos(in uint leafidx, out vec3 position, out uint nodeidx) {
+	uint tempptr = 0u, depth = 0u;
+	position = vec3(0.);
+	// go to bottom leftmost
+	while (DEREF(tempptr).children[0] != -1u) {
+		tempptr = DEREF(tempptr).children[0];
+		depth++;
+		position += vec3(1.) * pow(0.5, depth);
+	}
+	uint childidx = 0u;
+	for (uint i = 0u; i < leafidx; i++) {
+		// if we can continue on the same level, do so
+		if (childidx != 7) {
+			position -= childDirection(childidx) * pow(0.5, depth);
+			childidx++;
+			position += childDirection(childidx) * pow(0.5, depth);
+			tempptr = DEREF(DEREF(tempptr).parent).children[childidx];
+			// go BLM just in case
+			while (DEREF(tempptr).children[0] != -1u) {
+				tempptr = DEREF(tempptr).children[0];
+				depth++;
+				position += vec3(1.) * pow(0.5, depth); 
+				childidx = 0u;
+			}
+			
+		}
+		// if we have reached the end of the level
+		else {
+			// step up until we find a sibling to the right
+			while (childidx == 7) {
+				position -= childDirection(childidx) * pow(0.5, depth);
+				depth--;
+				tempptr = DEREF(tempptr).parent;
+				childidx = DEREF(tempptr).childidx;
+			}
+			// go to that sibling
+			position -= childDirection(childidx) * pow(0.5, depth);
+			childidx++;
+			position += childDirection(childidx) * pow(0.5, depth);
+			tempptr = DEREF(DEREF(tempptr).parent).children[childidx];
+			// go BLM
+			while (DEREF(tempptr).children[0] != -1u) {
+				tempptr = DEREF(tempptr).children[0];
+				depth++;
+				position += vec3(1.) * pow(0.5, depth); 
+				childidx = 0u;
+			}
+		}
+	}
+	nodeidx = tempptr;
+}
+
 void main() {
     const uint destinationidx = uint(floor(float(gl_VertexIndex) / 6.f));
     uint traversalidx = 0u;
     uint currentnode = 0u;
     uint tempnode;
 
-    currentnode = bottomLeftMost(0u);           // start by going all the way to the bottom left
-    while (traversalidx != destinationidx) {
-        tempnode = siblingToRight(currentnode);
-        if (tempnode != -1u) {  // if theres a sibling to the right:
-            traversalposition -= childDirection(tree.nodes[currentnode].childidx) * pow(0.5, traversaldepth);
-            traversalposition += childDirection(tree.nodes[tempnode].childidx) * pow(0.5, traversaldepth);
-            currentnode = tempnode; // traverse to that sibling
-        }
-        else {  // if theres no sibling to the right
-            if (currentnode != 0u) {    // if we're not at the root
-                tempnode = parentToRight(currentnode);  // go up and to the right searching for the next parent
-                if (tempnode == -1u) break; // if that takes us to the root, we're done
-            }
-        }
-        currentnode = bottomLeftMost(tempnode); // go to the bottom left no matter what
-        traversalidx++;
-    }
-
+    getLeafPos(destinationidx, traversalposition, currentnode);
     voxelid = tree.nodes[currentnode].voxel;
     nodeid = currentnode;
     nodeid = destinationidx;
-    gl_Position = vec4(vertexpositions[vertexindices[gl_VertexIndex - 6 * destinationidx]], 0., 0.) + constants.cameravp * vec4(traversalposition, 1.);
+    gl_Position = 0.5 * vec4(vertexpositions[vertexindices[gl_VertexIndex - 6 * destinationidx]], 0., 0.) + constants.cameravp * vec4(traversalposition, 1.);
+    //gl_Position = float(nodeid) / 64. * vec4(vertexpositions[vertexindices[gl_VertexIndex - 6 * destinationidx]], 0., 0.) + constants.cameravp * vec4(traversalposition, 1.);
 //    gl_Position = vec4(vertexpositions[vertexindices[gl_VertexIndex - 6 * destinationidx]], 0., 0.) + constants.cameravp * vec4(destinationidx * 0.1, 0., 0., 1.);
 }
 
@@ -98,6 +137,15 @@ uint siblingToRight(uint nodeidx) {
 
 uint bottomLeftMost(uint nodeidx) {
     uint result = nodeidx;
+    while (tree.nodes[result].children[0] != -1u) {
+	result = tree.nodes[result].children[0];
+	traversaldepth++;
+	traversalposition += childDirection(0) * pow(0.5, traversaldepth);
+    }
+    return result;
+    // below is code for case without guarenteed complete tree levels
+	/*
+    uint result = nodeidx;
     for (int x = 0; x < 8; x++) {
         if (tree.nodes[result].children[x] != -1) {
             result = tree.nodes[result].children[x];
@@ -107,6 +155,7 @@ uint bottomLeftMost(uint nodeidx) {
         }
     }
     return result;
+    */
 }
 
 uint parentToRight(uint nodeidx) {
