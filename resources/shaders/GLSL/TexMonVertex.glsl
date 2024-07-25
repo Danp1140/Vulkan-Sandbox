@@ -1,5 +1,6 @@
 #version 460 core
 
+// TODO: pass AR in
 #define ASPECT_RATIO (144./90.)
 #define SCALE 0.5
 #define OFFSET vec2(-0.5, 0.)

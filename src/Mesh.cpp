@@ -13,6 +13,7 @@ Mesh::Mesh (
 		uint32_t hir) : position(p), scale(s), rotation(r), dsmutex() {
 	recalculateModelMatrix();
 	initDescriptorSets();
+	// hey man i really dont think we need a seperate buffer/memory per sci
 	GraphicsHandler::VKSubInitUniformBuffer(
 			&descriptorsets,
 			0,
@@ -176,30 +177,31 @@ void Mesh::generateSmoothVertexNormals () {
 }
 
 void Mesh::initDescriptorSets () {
-	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
+	VkDescriptorSetLayout layoutstemp[MAX_FRAMES_IN_FLIGHT];
+	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++)
 		layoutstemp[x] = GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl;
 	if (descriptorsets)
 		vkFreeDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
 							 GraphicsHandler::vulkaninfo.descriptorpool,
-							 GraphicsHandler::vulkaninfo.numswapchainimages,
+							 MAX_FRAMES_IN_FLIGHT,
 							 descriptorsets);
 	delete[] descriptorsets;
-	descriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
+	descriptorsets = new VkDescriptorSet[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
+			MAX_FRAMES_IN_FLIGHT,
 			&layoutstemp[0]
 	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo,
-							 &descriptorsets[0]);
+	std::cout << string_VkResult(vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
+														  &descriptorsetallocinfo,
+														  &descriptorsets[0])) << std::endl;
 }
 
 void Mesh::rewriteTextureDescriptorSets () {
 	VkDescriptorImageInfo imginfo = diffusetexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
@@ -219,7 +221,7 @@ void Mesh::rewriteTextureDescriptorSets () {
 							   nullptr);
 	}
 	imginfo = normaltexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
@@ -239,7 +241,7 @@ void Mesh::rewriteTextureDescriptorSets () {
 							   nullptr);
 	}
 	imginfo = heighttexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
+	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,

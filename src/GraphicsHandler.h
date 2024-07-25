@@ -49,8 +49,9 @@
 
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
 #define NUM_RECORDING_THREADS 1
-#define MAX_FRAMES_IN_FLIGHT 3 // i did bad indexing somewhere, change this to see errors lol // TODO: fix this later
-#define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
+#define MAX_FRAMES_IN_FLIGHT 6  // TODO: take a much closer look at our fif system. why does the
+// number change so fast and never wait to catch up w/ scii?
+#define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MAX_LIGHTS 2
 #define NUM_SHADER_STAGES_SUPPORTED 5
 const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] = {
@@ -74,6 +75,15 @@ typedef enum ChangeFlagBits {
 	LIGHT_CHANGE_FLAG_BIT = 0x00000004,
 } ChangeFlagBits;
 typedef int ChangeFlag;
+
+typedef enum PostProcOps {
+	POST_PROC_OP_TONEMAP,
+	POST_PROC_OP_LUMINANCE_CUTOFF,
+	POST_PROC_OP_BLOOM,
+	POST_PROC_OP_DOWNSAMPLE,
+	POST_PROC_OP_UPSAMPLE
+} PostProcOps;
+typedef int PostProcOp;
 
 typedef enum TextureType {
 	TEXTURE_TYPE_DIFFUSE,
@@ -161,6 +171,13 @@ typedef struct OceanPushConstants {
 typedef struct ShadowmapPushConstants {
 	glm::mat4 lightvpmatrices, lspmatrix;
 } ShadowmapPushConstants;
+
+typedef struct PostProcPushConstants {
+	PostProcOp op;
+	float exposure;
+	glm::uvec2 numinvocs, scext;
+	uint32_t dfdepth; // would like to make this a uint8_t if possible
+} PostProcPushConstants;
 
 typedef struct TerrainGenPushConstants {
 	uint32_t numleaves, heapsize, phase;
@@ -295,7 +312,7 @@ typedef struct VulkanInfo {
 	VkImage* swapchainimages;
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
-	VkRenderPass primaryrenderpass, templateshadowrenderpass, waterrenderpass;
+	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass, ssrrrenderpass;
 	PipelineInfo primarygraphicspipeline,
 			textgraphicspipeline,
 			skyboxgraphicspipeline,
@@ -306,21 +323,25 @@ typedef struct VulkanInfo {
 			texmongraphicspipeline,
 			linegraphicspipeline,
 			terraingencomputepipeline,
-			voxeltroubleshootingpipeline;
-	VkFramebuffer* primaryframebuffers, * waterframebuffers;
+			voxeltroubleshootingpipeline,
+			postprocpipeline,
+			postprocgraphicspipeline;    // is it good to have this many pipelines? some can be combined if we want/need to
+	VkFramebuffer* primaryframebuffers, * ssrrframebuffers, * compositingframebuffers; // TODO: is ssrrframebuffers deprecated?
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
 	VkCommandBuffer* commandbuffers, interimcommandbuffer;
 	VkSemaphore imageavailablesemaphores[MAX_FRAMES_IN_FLIGHT], renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
 	// TODO: remove recordinginvalidfences
-	VkFence* submitfinishedfences, * recordinginvalidfences, * presentfinishedfences;
+	VkFence* submitfinishedfences, * recordinginvalidfences, * presentfinishedfences, tempfence;
 	int currentframeinflight;
 	VkBuffer stagingbuffer;
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
+	// what are below for??
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	TextureInfo depthbuffer, * ssrrbuffers;
+	VkDescriptorSet* postprocds;
+	TextureInfo depthbuffer, scratchdepthbuffer, scratchbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
@@ -416,7 +437,8 @@ private:
 			VkDescriptorSetLayoutCreateInfo* descsetlayoutcreateinfos,
 			VkPushConstantRange pushconstantrange,
 			VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo,
-			bool depthtest);
+			bool depthtest,
+			VkRenderPass renderpass);
 
 	static void VKSubInitShaders (
 			VkShaderStageFlags stages,
@@ -563,6 +585,16 @@ public:
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
 
+	static void submitAndPresent ();
+
+	static void recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb);
+
+	static void initPostProc ();
+
+	static void recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb);
+
+	static void recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb);
+
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);
 
@@ -571,9 +603,6 @@ public:
 	static void makeRectPrism (glm::vec3** dst, glm::vec3 min, glm::vec3 max);
 
 	static VkDeviceSize VKHelperGetPixelSize (VkFormat format);
-
-	
-	static void submitAndPresent();
 
 	/* Functions to handle Vulkan validation layers debugger creation, destruction, and behavior
 	 * TODO: reorder functions to reflect above comment's implied order

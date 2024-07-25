@@ -116,7 +116,8 @@ void GraphicsHandler::VKInitPipelines () {
 								  0,
 								  nullptr
 						  },
-						  false);
+						  true,
+                          GraphicsHandler::vulkaninfo.templateshadowrenderpass);
 	}
 	//texmon
 	{
@@ -159,7 +160,8 @@ void GraphicsHandler::VKInitPipelines () {
 						0,
 						nullptr
 				},
-				false);
+				false,
+				GraphicsHandler::vulkaninfo.compositingrenderpass);
 	}
 	//lines
 	{
@@ -203,8 +205,136 @@ void GraphicsHandler::VKInitPipelines () {
 				&dslci[0],
 				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
 				pvisci,
-				false);
+				false,
+                GraphicsHandler::vulkaninfo.primaryrenderpass);
 	}
+    // post-proc
+    {
+        VkDescriptorSetLayoutBinding objdslbindings[4] {{
+            0,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            1,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            2,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }, {
+            3,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_COMPUTE_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            nullptr
+        }};
+        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            0,
+            nullptr
+        }, {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            4,
+            &objdslbindings[0]
+        }};
+        const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/postproccomp.spv";
+        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocpipeline,
+                          VK_SHADER_STAGE_COMPUTE_BIT,
+                          &shaderfilepaths,
+                          &dslcreateinfos[0],
+                          {VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(PostProcPushConstants)},
+                          {
+                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                              nullptr,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              nullptr
+                          },
+                          false,
+                          nullptr);
+    }
+    // post-proc graphics
+    {
+        VkDescriptorSetLayoutBinding objdslbindings[4] {{
+            0,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            1,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            2,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }, {
+            3,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr
+        }};
+        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            0,
+            nullptr
+        }, {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            nullptr,
+            0,
+            4,
+            &objdslbindings[0]
+        }};
+        // note: this shares dslayout w/ compute, and current impl shares ds's too
+        const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocvert.spv",
+										  WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocfrag.spv"};
+        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocgraphicspipeline,
+                          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                          &shaderfilepaths[0],
+                          &dslcreateinfos[0],
+                          {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)},
+                          {
+                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                              nullptr,
+                              0,
+                              0,
+                              nullptr,
+                              0,
+                              nullptr
+                          },
+                          false,
+                          GraphicsHandler::vulkaninfo.compositingrenderpass);
+    }
+
 }
 
 void GraphicsHandler::VKSubInitWindow () {
@@ -402,11 +532,12 @@ void GraphicsHandler::VKSubInitSwapchain () {
 			0,
 			vulkaninfo.surface,
 			vulkaninfo.numswapchainimages,
-			VK_FORMAT_B8G8R8A8_SRGB,
+			SWAPCHAIN_IMAGE_FORMAT,
 			VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
 			vulkaninfo.swapchainextent,
 			1,
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+			VK_IMAGE_USAGE_STORAGE_BIT, // curious if these parameters significantly impact performance
 			queuefamilyindicesaresame ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
 			queuefamilyindicesaresame ? 0u : 2u,
 			queuefamilyindicesaresame ? nullptr : &vulkaninfo.graphicsqueuefamilyindex,
@@ -472,6 +603,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 			0,
 			nullptr
 	};
+	// why do we have 2 dependencies here??
 	VkSubpassDependency shadowsubpassdependencies[2] {{
 															  VK_SUBPASS_EXTERNAL,
 															  0,
@@ -514,7 +646,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
 																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 														 },
 														 {
 																 0,
@@ -525,7 +657,7 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
 																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 														 }};
 	VkAttachmentReference prcolorattachmentreference {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
 			prdepthattachmentreference {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
@@ -560,6 +692,107 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 					   &primaryrenderpasscreateinfo,
 					   nullptr,
 					   &vulkaninfo.primaryrenderpass);
+
+	// not sure if we should make above render to transfer src and below render from that to present src
+	VkAttachmentDescription ssrrattachmentdescriptions[2] {{
+																   0,
+																   SWAPCHAIN_IMAGE_FORMAT,
+																   VK_SAMPLE_COUNT_1_BIT,
+																   VK_ATTACHMENT_LOAD_OP_LOAD,
+																   VK_ATTACHMENT_STORE_OP_STORE,
+																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+																   VK_IMAGE_LAYOUT_GENERAL
+														   }, {
+																   0,
+																   VK_FORMAT_D32_SFLOAT,
+																   VK_SAMPLE_COUNT_1_BIT,
+																   VK_ATTACHMENT_LOAD_OP_LOAD,
+																   VK_ATTACHMENT_STORE_OP_STORE,
+																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
+																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+																   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+														   }};
+	// idk what this layout means lmao
+	VkAttachmentReference ssrrattachmentreferences[2] {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+													   {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};
+	// what is input attachment for???? maybe we use this here???
+	// or perhaps it only matters for multiple subpasses
+	// tbh im not even certain we really need another renderpass here but its whatever
+	VkSubpassDescription ssrrsubpass {
+			0,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			0, nullptr,
+			1, &ssrrattachmentreferences[0], nullptr, &ssrrattachmentreferences[1],
+			0, nullptr
+	};
+	VkSubpassDependency ssrrdependency {
+			VK_SUBPASS_EXTERNAL, 0,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			0
+	};
+	VkRenderPassCreateInfo ssrrrenderpasscreateinfo {
+			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			nullptr,
+			0,
+			2, &ssrrattachmentdescriptions[0],
+			1, &ssrrsubpass,
+			1, &ssrrdependency
+	};
+	// adding this renderpass caused screen to blank grey on quit
+	// on second thought, why bother with another renderpass? see if we can just cpy mid-render (w/ pipeline barrier obv)
+	vkCreateRenderPass(vulkaninfo.logicaldevice,
+					   &ssrrrenderpasscreateinfo,
+					   nullptr,
+					   &vulkaninfo.ssrrrenderpass);
+
+	VkAttachmentDescription compositingad[1] {{
+													  0,
+													  SWAPCHAIN_IMAGE_FORMAT,
+													  VK_SAMPLE_COUNT_1_BIT,
+													  VK_ATTACHMENT_LOAD_OP_LOAD,
+													  VK_ATTACHMENT_STORE_OP_STORE,
+													  VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+													  VK_ATTACHMENT_STORE_OP_DONT_CARE,
+													  VK_IMAGE_LAYOUT_GENERAL,
+													  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+											  }};
+	VkAttachmentReference compositingar {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkSubpassDescription compositingsp {
+			0,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			0, nullptr,
+			1,
+			&compositingar,
+			nullptr,
+			nullptr,
+			0, nullptr
+	};
+	VkSubpassDependency compositingspd {
+			VK_SUBPASS_EXTERNAL, 0,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			0
+	};
+	VkRenderPassCreateInfo compositingrpci {
+			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			nullptr,
+			0,
+			1, &compositingad[0],
+			1, &compositingsp,
+			1, &compositingspd
+	};
+	vkCreateRenderPass(vulkaninfo.logicaldevice,
+					   &compositingrpci,
+					   nullptr,
+					   &vulkaninfo.compositingrenderpass);
 }
 
 void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
@@ -786,6 +1019,8 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 	//one for particle system, plus 3 auto-init'd by mesh parent
 	//one input attachment for ocean, two for compositing
 	//we should find a better way to do this lol
+	//tacking on another for postproc screenbuffer (will need one more soon for scratch buffer ig
+	// TODO: dear god there has to be a better way wtf is this shit
 	VkDescriptorPoolSize descriptorpoolsizes[5] {{
 														 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 														 vulkaninfo.numswapchainimages *
@@ -793,13 +1028,13 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-														 vulkaninfo.numswapchainimages *
-														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1) +
+														 MAX_FRAMES_IN_FLIGHT *
+														 (4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1) +
 														 MAX_FRAMES_IN_FLIGHT
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-														 vulkaninfo.numswapchainimages * 2
+														 vulkaninfo.numswapchainimages * 4
 												 },
 												 {
 														 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -814,7 +1049,7 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 			nullptr,
 			VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT |
 			VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,      //perhaps look into flags; do we really need update after bind?
-			vulkaninfo.numswapchainimages * (2 * MAX_LIGHTS + 4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1 + 2) +
+			vulkaninfo.numswapchainimages * (2 * MAX_LIGHTS + 4 * nummeshes + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 1) +
 			MAX_FRAMES_IN_FLIGHT,
 			5,
 			&descriptorpoolsizes[0]
@@ -837,18 +1072,18 @@ void GraphicsHandler::VKSubInitUniformBuffer (
 	if (*descsets) {
 		vkFreeDescriptorSets(vulkaninfo.logicaldevice,
 							 vulkaninfo.descriptorpool,
-							 vulkaninfo.numswapchainimages,
+							 MAX_FRAMES_IN_FLIGHT,
 							 *descsets);
 		delete[] *descsets;
 	}
-	*descsets = new VkDescriptorSet[vulkaninfo.numswapchainimages];       //is this really something we should be doing inside the method???
-	VkDescriptorSetLayout dsltemp[vulkaninfo.numswapchainimages];
-	for (unsigned char x = 0; x < vulkaninfo.numswapchainimages; x++) dsltemp[x] = descsetlayout;
+	*descsets = new VkDescriptorSet[MAX_FRAMES_IN_FLIGHT];       //is this really something we should be doing inside the method???
+	VkDescriptorSetLayout dsltemp[MAX_FRAMES_IN_FLIGHT];
+	for (unsigned char x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) dsltemp[x] = descsetlayout;
 	VkDescriptorSetAllocateInfo descsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			nullptr,
 			vulkaninfo.descriptorpool,
-			vulkaninfo.numswapchainimages,
+			MAX_FRAMES_IN_FLIGHT,
 			&dsltemp[0]
 	};
 	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &descsetallocinfo, *descsets);
@@ -899,16 +1134,20 @@ void GraphicsHandler::VKSubInitUniformBuffer (
 		vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &(*memories)[x]);
 		vkBindBufferMemory(vulkaninfo.logicaldevice, (*buffers)[x], (*memories)[x], 0);
 
+
+	}
+
+	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
 		VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
 		for (uint32_t y = 0; y < elementcount; y++) {
-			descriptorbuffinfos[y].buffer = (*buffers)[x];
+			descriptorbuffinfos[y].buffer = (*buffers)[0];
 			descriptorbuffinfos[y].offset = y * roundedupsize;
 			descriptorbuffinfos[y].range = elementsize;
 		}
 		VkWriteDescriptorSet writedescriptorset {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
-				(*descsets)[x],
+				(*descsets)[fifi],
 				binding,
 				0,
 				elementcount,      //i mean, we only /really/ have to update the buffers for active lights
@@ -967,7 +1206,11 @@ void GraphicsHandler::VKSubInitStorageBuffer (
 
 void GraphicsHandler::VKSubInitFramebuffers () {
 	vulkaninfo.primaryframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.ssrrframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
+	vulkaninfo.compositingframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < vulkaninfo.numswapchainimages; x++) {
+		// if ssrr renderpass pans out, we dont need this swapchain image view here
+		// frankly, though, shadowmaps may form a good analog for ssrr stuff in terms of renderpass/pipeline techniques
 		VkImageView attachmentstemp[2] = {vulkaninfo.swapchainimageviews[x],
 										  vulkaninfo.depthbuffer.imageview};
 		VkFramebufferCreateInfo framebuffercreateinfo {
@@ -980,6 +1223,32 @@ void GraphicsHandler::VKSubInitFramebuffers () {
 		};
 		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr,
 							&vulkaninfo.primaryframebuffers[x]);
+
+		VkFramebufferCreateInfo ssrrframebuffercreateinfo {
+				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				nullptr,
+				0,
+				vulkaninfo.ssrrrenderpass,
+				2, &attachmentstemp[0],
+				vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1
+		};
+		vkCreateFramebuffer(vulkaninfo.logicaldevice,
+							&ssrrframebuffercreateinfo,
+							nullptr,
+							&vulkaninfo.ssrrframebuffers[x]);
+
+		VkFramebufferCreateInfo compositingfbci {
+				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				nullptr,
+				0,
+				vulkaninfo.compositingrenderpass,
+				1, &attachmentstemp[0],
+				vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1
+		};
+		vkCreateFramebuffer(vulkaninfo.logicaldevice,
+							&compositingfbci,
+							nullptr,
+							&vulkaninfo.compositingframebuffers[x]);
 	}
 }
 
@@ -1045,6 +1314,7 @@ void GraphicsHandler::VKSubInitSemaphoresAndFences () {
 //		vulkaninfo.imageinflightfences[x]=VK_NULL_HANDLE;
 		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.recordinginvalidfences[x]);
 	}
+	vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.tempfence);
 }
 
 void GraphicsHandler::VKSubInitSamplers () {
@@ -1086,6 +1356,14 @@ void GraphicsHandler::VKSubInitSamplers () {
 	samplercreateinfo.minFilter = VK_FILTER_LINEAR;
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminsampler);
 	samplercreateinfo.magFilter = VK_FILTER_LINEAR;
+	samplercreateinfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	/*
+	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	*/
+
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminmagsampler);
 }
 
@@ -1096,7 +1374,8 @@ void GraphicsHandler::VKSubInitPipeline (
 		VkDescriptorSetLayoutCreateInfo* descsetlayoutcreateinfos,
 		VkPushConstantRange pushconstantrange,
 		VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo,
-		bool depthtest) {
+		bool depthtest,
+		VkRenderPass renderpass) {
 	if (shaderstages & VK_SHADER_STAGE_COMPUTE_BIT) {
 		vkCreateDescriptorSetLayout(vulkaninfo.logicaldevice,
 									&descsetlayoutcreateinfos[0],
@@ -1321,7 +1600,7 @@ void GraphicsHandler::VKSubInitPipeline (
 			&colorblendstatecreateinfo,
 			nullptr,
 			pipelineinfo->pipelinelayout,
-			issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass,  // TODO: add renderpass arg
+			renderpass,
 			0,
 			VK_NULL_HANDLE,
 			-1
@@ -1665,7 +1944,7 @@ void GraphicsHandler::VKSubInitDepthBuffer () {
 			1,
 			VK_SAMPLE_COUNT_1_BIT,
 			VK_IMAGE_TILING_OPTIMAL,        //apparently this development device's implementation doesn't support tiling linear
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 			VK_SHARING_MODE_EXCLUSIVE,
 			0,
 			nullptr,
@@ -2103,9 +2382,10 @@ void GraphicsHandler::VKHelperInitTexture (
 	else if (textype == TEXTURE_TYPE_SUBPASS) { // entire subpass textype may be useless eventually
 		usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 		layout = VK_IMAGE_LAYOUT_GENERAL;
-	} else if (textype == TEXTURE_TYPE_SSRR_BUFFER) {
+	} else if (textype == TEXTURE_TYPE_SSRR_BUFFER) { // TODO: change this to scratch buffer, review properties
 		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		layout = VK_IMAGE_LAYOUT_GENERAL;
+		if (format != VK_FORMAT_D32_SFLOAT) usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+		layout = VK_IMAGE_LAYOUT_GENERAL; // is this layout correct?
 	} else if (memprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
 		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2139,7 +2419,7 @@ void GraphicsHandler::VKHelperInitTexture (
 		size = subresourcelayout.size;
 	}
 
-	if (textype != TEXTURE_TYPE_SHADOWMAP && textype != TEXTURE_TYPE_SUBPASS) {
+	if (textype != TEXTURE_TYPE_SHADOWMAP && textype != TEXTURE_TYPE_SUBPASS && textype != TEXTURE_TYPE_SSRR_BUFFER) {
 		char* emptydata = new char[size];
 		memset(emptydata, 0, size);
 		VKHelperUpdateWholeTexture(texturedst, reinterpret_cast<void*>(emptydata));
@@ -2333,6 +2613,267 @@ void GraphicsHandler::VKHelperRecordImageTransition (
 						 0, nullptr,
 						 0, nullptr,
 						 1, &imgmembar);
+}
+
+void GraphicsHandler::submitAndPresent () {
+	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	VkSubmitInfo submitinfo {
+			VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			nullptr,
+			1,
+			&vulkaninfo.imageavailablesemaphores[GraphicsHandler::swapchainimageindex],
+			&pipelinestageflags,
+			1,
+			&vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+			1,
+			&vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight]
+	};
+	vkResetFences(vulkaninfo.logicaldevice, 1,
+				  &vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
+	vkQueueSubmit(vulkaninfo.graphicsqueue,
+				  1,
+				  &submitinfo,
+				  vulkaninfo.submitfinishedfences[GraphicsHandler::vulkaninfo.currentframeinflight]);
+	VkPresentInfoKHR presentinfo {
+			VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+			nullptr,
+			1,
+			&vulkaninfo.renderfinishedsemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
+			1,
+			&vulkaninfo.swapchain,
+			&swapchainimageindex,
+			nullptr
+	};
+	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
+}
+
+void GraphicsHandler::recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb) {
+	VkCommandBufferInheritanceInfo cbinherinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			VK_NULL_HANDLE,
+			0,
+			VK_NULL_HANDLE,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cbbeginfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			0,
+			&cbinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cbbeginfo);
+	// vkCmdCopyImage2(cb, &cpyinfo);
+	VkImageCopy imgcpy = {
+			cpyinfo.pRegions->srcSubresource,
+			cpyinfo.pRegions->srcOffset,
+			cpyinfo.pRegions->dstSubresource,
+			cpyinfo.pRegions->dstOffset,
+			cpyinfo.pRegions->extent
+	};
+	vkCmdCopyImage(cb,
+				   cpyinfo.srcImage, cpyinfo.srcImageLayout,
+				   cpyinfo.dstImage, cpyinfo.dstImageLayout,
+				   cpyinfo.regionCount, &imgcpy);
+	vkEndCommandBuffer(cb);
+}
+
+void GraphicsHandler::initPostProc () {
+	vulkaninfo.postprocds = new VkDescriptorSet[vulkaninfo.numswapchainimages];
+	VkDescriptorSetLayout layouts[vulkaninfo.numswapchainimages];
+	for (uint8_t scii = 0; scii < vulkaninfo.numswapchainimages; scii++)
+		layouts[scii] = vulkaninfo.postprocpipeline.objectdsl;
+	VkDescriptorSetAllocateInfo allocinfo {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			nullptr,
+			vulkaninfo.descriptorpool,
+			vulkaninfo.numswapchainimages,
+			&layouts[0]
+	};
+	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &allocinfo, &vulkaninfo.postprocds[0]);
+	for (uint8_t scii = 0; scii < vulkaninfo.numswapchainimages; scii++) {
+		VkDescriptorImageInfo dii {
+				genericsampler,
+				vulkaninfo.swapchainimageviews[scii],
+				VK_IMAGE_LAYOUT_GENERAL
+		};
+		VkWriteDescriptorSet writeds {
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				nullptr,
+				vulkaninfo.postprocds[scii],
+				0,
+				0,
+				1,
+				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				&dii,
+				nullptr,
+				nullptr
+		};
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
+		dii.imageView = GraphicsHandler::vulkaninfo.scratchbuffer.imageview;
+		writeds.dstBinding = 1;
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
+		dii.imageView = GraphicsHandler::vulkaninfo.swapchainimageviews[scii];
+		dii.sampler = GraphicsHandler::vulkaninfo.scratchbuffer.sampler;
+		writeds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeds.dstBinding = 2;
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
+		dii.imageView = GraphicsHandler::vulkaninfo.scratchbuffer.imageview;
+		writeds.dstBinding = 3;
+		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
+	}
+}
+
+// the length of this and other rec functions brings to mind the question of sync btwn threads to ensure order is maintained
+// note this function requires multiple data to be passed as a std::vector<cbRecData>
+void
+GraphicsHandler::recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb) {
+	// odd thought, but this is p redundant w/ other compute records, can we generalize the recording func? thatd make things much easier...
+	VkCommandBufferInheritanceInfo cbinherinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			VK_NULL_HANDLE,
+			0,
+			VK_NULL_HANDLE,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cbbeginfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			0,
+			&cbinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cbbeginfo);
+	vkCmdBindPipeline(
+			cb,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			data.pipeline.pipeline);
+	vkCmdBindDescriptorSets(
+			cb,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			data.pipeline.pipelinelayout,
+			0,
+			1, &data.descriptorset,
+			0, nullptr);
+	uint8_t d = 0u;
+	uint8_t pci = 0u;
+	// TODO: actually fill in pcs data
+	// (is this smth we should really be redoing every record? if not install a change flag or smth)
+	pcs.clear();
+	//for (; d < pcs.size() / 2; d++) {
+	for (; d < 5u; d++) {
+		pcs.push_back({
+							  POST_PROC_OP_DOWNSAMPLE,
+							  0.,
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height) * pow(0.5, d + 1),
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height),
+							  d + 1u});
+		vkCmdPushConstants(
+				cb,
+				data.pipeline.pipelinelayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0u,
+				sizeof(PostProcPushConstants),
+				reinterpret_cast<void*>(&pcs[pci]));
+		vkCmdDispatch(
+				cb,
+				pcs[pci].numinvocs.x,
+				pcs[pci].numinvocs.y,
+				1);
+		VkImageSubresourceRange imgsubrecrange {
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				0, 1, 0, 1
+		};
+		VkImageMemoryBarrier imgmembar {
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				nullptr,
+				VK_ACCESS_SHADER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_GENERAL,
+				VK_IMAGE_LAYOUT_GENERAL,
+				0,
+				0,
+				GraphicsHandler::vulkaninfo.scratchbuffer.image,
+				imgsubrecrange
+		};
+		// TODO: observe effects of removing this sync
+		// or at least removing the imgmembar, seems unneccesary
+		vkCmdPipelineBarrier(
+				cb,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &imgmembar);
+		pci++;
+	}
+	// this uint hacking seems a little wrong but we can come back later
+	// nvm, skipping lvl 1 on purpose cuz i dont want to handle scratch overwrites, ill just sample from half-sized upsample instead
+	for (d--; d > 0; d--) {
+		pcs.push_back({
+							  POST_PROC_OP_UPSAMPLE,
+							  0.,
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height) * pow(0.5, d),
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height),
+							  d + 1u});
+		vkCmdPushConstants(
+				cb,
+				data.pipeline.pipelinelayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0u,
+				sizeof(PostProcPushConstants),
+				reinterpret_cast<void*>(&pcs[pci]));
+		vkCmdDispatch(
+				cb,
+				pcs[pci].numinvocs.x,
+				pcs[pci].numinvocs.y,
+				1);
+		pci++;
+	}
+	vkEndCommandBuffer(cb);
+}
+
+void GraphicsHandler::recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb) {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			nullptr,
+			data.renderpass,
+			0,
+			data.framebuffer,
+			VK_FALSE,
+			0,
+			0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo {
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			nullptr,
+			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+			&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
+	vkCmdBindPipeline(
+			cb,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			data.pipeline.pipeline);
+	vkCmdBindDescriptorSets(
+			cb,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			data.pipeline.pipelinelayout,
+			0,
+			1, &data.descriptorset,
+			0, nullptr);
+	vkCmdDraw(cb, 6, 1, 0, 0);
+	vkEndCommandBuffer(cb);
 }
 
 glm::vec3 GraphicsHandler::mat4TransformVec3 (glm::mat4 M, glm::vec3 v) {

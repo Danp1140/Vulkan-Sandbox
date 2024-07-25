@@ -16,6 +16,7 @@ PhysicsHandler::PhysicsHandler () {
 			0.0f
 	};
 	lasttime = std::chrono::high_resolution_clock::now();
+	t0 = lasttime;
 }
 
 PhysicsHandler::PhysicsHandler (Camera*c){
@@ -30,6 +31,7 @@ PhysicsHandler::PhysicsHandler (Camera*c){
 			0.0f
 	};
 	lasttime = std::chrono::high_resolution_clock::now();
+	t0 = lasttime;
 }
 
 bool PhysicsHandler::triIntersectionNoY (glm::vec3 tripoints[3], glm::vec3 q) {
@@ -231,9 +233,9 @@ void PhysicsHandler::updateCameraPos (const std::vector<Tri>&land){
 }
 
 void PhysicsHandler::update (const std::vector<Tri>&land){
-	dt = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - lasttime).count();
+	dt = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - lasttime).count();
 	lasttime = std::chrono::high_resolution_clock::now();
-	//should the lasttime reset go here???
+	t = std::chrono::duration<float>(lasttime - t0).count();
 	updateCameraPos(land);
 }
 

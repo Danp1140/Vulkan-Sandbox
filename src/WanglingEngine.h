@@ -42,6 +42,35 @@
         GraphicsHandler::troubleshootingsstrm<<'\n'<<#op<<" execution time: "\
         <<std::chrono::duration<double>(std::chrono::high_resolution_clock::now()-start).count(); \
 }
+#define NUM_FRAME_SAMPLES 60 // number of frames to sample for fps statistics
+
+typedef enum SettingTypes {
+	SETTING_TYPE_TOGGLE,
+	SETTING_TYPE_RANGE
+} SettingTypes;
+typedef int SettingType;
+typedef struct SettingDataToggle {
+	bool on;
+} SettingDataToggle;
+typedef struct SettingDataRange {
+	float min, max, value;
+} SettingDataRange;
+typedef union SettingData {
+	SettingDataToggle toggle;
+	SettingDataRange range;
+} SettingData;
+typedef struct Setting {
+	const char* name;
+	int hotkey;
+	SettingType type;
+	SettingData data;
+} Setting;
+typedef struct SettingsFolder {
+	const char* name;
+	int hotkey;
+	std::vector<SettingsFolder> folders;
+	std::vector<Setting> settings;
+} SettingsFolder;
 
 class WanglingEngine {
 private:
@@ -50,7 +79,7 @@ private:
 	std::vector<Light*> lights;
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
-	Text* troubleshootingtext;
+	Text* troubleshootingtext, * settingstext;
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
@@ -67,6 +96,15 @@ private:
 	std::queue<cbCollectInfo> secondarybuffers;
 	static std::mutex recordingmutex, scenedsmutex;
 	Terrain* testterrain;
+	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
+	uint8_t framesamplecounter = 0u;
+	bool bloom, ssrr;
+	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
+	Setting* currentsetting;
+
+	void initSettings ();
+
+	void updateSettings ();
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -98,6 +136,10 @@ private:
 	void loadScene (const char* scenefilepath);
 	void genScene ();
 	void updatePCsAndBuffers();
+
+	void calcFrameStats (float sptime = 0.);
+
+	void updatePCsAndBuffers ();
 
 public:
 	WanglingEngine ();

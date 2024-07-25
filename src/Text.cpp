@@ -88,12 +88,14 @@ void Text::createPipeline() {
 
 // TODO: get rid of index lmao
 void Text::setMessage (std::string m, uint32_t index) {
+	// kinda feel like this func should be able to handle changing for all fif...
+	// hold on a fucking second, we dont need a texture for each fif wtf is this shit
 	message = m;
 	pushconstants.scale = glm::vec2(2.0f / (float)horizontalres, 2.0f / (float)verticalres);
 	regenFaces(false);
-	VkDescriptorImageInfo imginfo = {
-			textures[GraphicsHandler::vulkaninfo.currentframeinflight].sampler,
-			textures[GraphicsHandler::vulkaninfo.currentframeinflight].imageview,
+	/*VkDescriptorImageInfo imginfo = {
+			textures[0].sampler,
+			textures[0].imageview,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
 	VkWriteDescriptorSet write {
@@ -109,6 +111,7 @@ void Text::setMessage (std::string m, uint32_t index) {
 			nullptr
 	};
 	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
+	 */
 }
 
 void Text::regenFaces (bool init) {
@@ -172,7 +175,7 @@ void Text::regenFaces (bool init) {
 //				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
 //				reinterpret_cast<void*>(texturedata));
 		GraphicsHandler::VKHelperUpdateWholeTexture(
-				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
+				&textures[0],
 				reinterpret_cast<void*>(texturedata));
 	}
 	delete (texturedata);
@@ -192,7 +195,7 @@ void Text::initDescriptorSet () {
 	};
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &allocinfo, &descriptorsets[0]);
 	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-		VkDescriptorImageInfo imginfo = textures[x].getDescriptorImageInfo();
+		VkDescriptorImageInfo imginfo = textures[0].getDescriptorImageInfo();
 		VkWriteDescriptorSet write {
 				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				nullptr,
