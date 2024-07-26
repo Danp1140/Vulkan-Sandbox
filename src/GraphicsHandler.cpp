@@ -2926,6 +2926,7 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 	}
 }
 
+/*
 void GraphicsHandler::submitAndPresent() {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	VkSubmitInfo submitinfo {
@@ -2952,6 +2953,7 @@ void GraphicsHandler::submitAndPresent() {
 	};
 	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
 }
+*/
 
 VKAPI_ATTR VkBool32
 

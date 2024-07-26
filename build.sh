@@ -1,1 +1,1 @@
-cmake  --build . -- -Wno-deprecated-volatile
+cmake --build . -- -Wno-deprecated-volatile -Wno-deprecated-declarations

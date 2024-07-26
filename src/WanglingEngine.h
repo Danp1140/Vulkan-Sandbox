@@ -102,9 +102,9 @@ private:
 	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
 	Setting* currentsetting;
 
-	void initSettings ();
+	// void initSettings ();
 
-	void updateSettings ();
+	// void updateSettings ();
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
@@ -138,8 +138,6 @@ private:
 	void updatePCsAndBuffers();
 
 	void calcFrameStats (float sptime = 0.);
-
-	void updatePCsAndBuffers ();
 
 public:
 	WanglingEngine ();

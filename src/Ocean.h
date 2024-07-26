@@ -9,8 +9,7 @@
 
 #define OCEAN_PRE_TESS_SUBDIV 32
 
-//why do we need "public"?
-class Ocean:public Mesh{
+class Ocean : public Mesh{
 private:
 	glm::vec2 bounds;
 	Mesh*shore;
@@ -36,7 +35,11 @@ public:
 
 	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds);
 
+	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
+
 	void recordCompute (uint8_t fifindex);
+
+	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
 
 	void rewriteDescriptorSet (uint32_t index);
 

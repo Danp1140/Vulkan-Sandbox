@@ -61,7 +61,7 @@ WanglingEngine::WanglingEngine () {
 			GraphicsHandler::vulkaninfo.horizontalres,
 			GraphicsHandler::vulkaninfo.verticalres);
 
-	initSettings();
+	// initSettings();
 
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
@@ -1467,15 +1467,15 @@ void WanglingEngine::draw () {
 		!= GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.lastvalue
 		&& GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.down) {
 		currentsetting = &currentsettingsfolder->settings[0];
-		updateSettings();
+		// updateSettings();
 	}
 	if (currentsetting && currentsetting->type == SETTING_TYPE_RANGE) {
 		if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
 			currentsetting->data.range.value -= 0.01;
-			updateSettings();
+			// updateSettings();
 		} else if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
 			currentsetting->data.range.value += 0.01;
-			updateSettings();
+			// updateSettings();
 		}
 	}
 
@@ -1556,6 +1556,7 @@ void WanglingEngine::calcFrameStats (float sptime) {
 	rendertimes[framesamplecounter] = *physicshandler.getDtPtr() - sptime;
 }
 
+/*
 void WanglingEngine::updatePCsAndBuffers () {
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
@@ -1635,7 +1636,7 @@ void WanglingEngine::updatePCsAndBuffers () {
 //	}
 
 	// making this block execute no matter what for shadowmap troubleshooting
-	/*{
+	{
 		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
 			glm::vec3 tempb[8], * tempbp = &tempb[0];
@@ -1661,6 +1662,7 @@ void WanglingEngine::updatePCsAndBuffers () {
 				&lightuniformbuffertemp[0]);
 	}*/
 
+/*
 	MeshUniformBuffer temp;
 	for (auto& m: meshes) {
 		temp = m->getUniformBufferData();
@@ -1670,4 +1672,4 @@ void WanglingEngine::updatePCsAndBuffers () {
 				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
 				reinterpret_cast<void*>(&temp));
 	}
-}
+}*/

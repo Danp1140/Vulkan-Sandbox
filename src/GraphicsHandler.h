@@ -348,6 +348,7 @@ typedef struct VulkanInfo {
 	// figure a better way to handle these tbh
 	SkyboxPushConstants skyboxpushconstants;
 	OceanPushConstants oceanpushconstants;
+	std::vector<PostProcPushConstants> pppc;
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
 	TerrainGenPushConstants terraingenpushconstants, terraingenpushconstants2;
