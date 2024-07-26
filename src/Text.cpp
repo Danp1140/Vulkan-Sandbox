@@ -82,6 +82,7 @@ void Text::createPipeline() {
 	pii.shaderfilepathprefix = "text";
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TextPushConstants)};
+	pii.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 
 	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline, pii);
 }

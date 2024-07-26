@@ -331,7 +331,7 @@ typedef struct VulkanInfo {
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
 	VkCommandBuffer* commandbuffers, interimcommandbuffer;
-	VkSemaphore imageavailablesemaphores[MAX_FRAMES_IN_FLIGHT], renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
+	VkSemaphore* imageavailablesemaphores, renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
 	// TODO: remove recordinginvalidfences
 	VkFence* submitfinishedfences, * recordinginvalidfences, * presentfinishedfences, tempfence;
 	int currentframeinflight;
@@ -378,6 +378,7 @@ typedef struct PipelineInitInfo {
 	VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 	bool depthtest = false;
 	VkSpecializationInfo specinfo = {};
+	VkRenderPass renderpass = VK_NULL_HANDLE; // defaults to primary via VKSubInitPipeline
 } PipelineInitInfo;
 
 const VkCommandBufferBeginInfo cmdbufferbegininfo {

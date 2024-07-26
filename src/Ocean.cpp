@@ -189,32 +189,38 @@ void Ocean::createComputePipeline () {
 }
 
 void Ocean::createGraphicsPipeline () {
-	VkDescriptorSetLayoutBinding objectdslbindings[3] {{
-															   0,
-															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-															   1,
-															   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-															   nullptr
-													   }, {
-															   1,
-															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-															   1,
-															   VK_SHADER_STAGE_FRAGMENT_BIT,
-															   nullptr
-													   }, {
-															   2,
-															   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-															   1,
-															   VK_SHADER_STAGE_FRAGMENT_BIT,
-															   nullptr
-													   }};
+	VkDescriptorSetLayoutBinding objectdslbindings[4] {{
+			   0,
+			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			   1,
+			   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+			   nullptr
+	   }, {
+			   1,
+			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			   1,
+			   VK_SHADER_STAGE_FRAGMENT_BIT,
+			   nullptr
+	   }, {
+			   2,
+			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			   1,
+			   VK_SHADER_STAGE_FRAGMENT_BIT,
+			   nullptr
+	   }, {
+			   3,
+			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			   1,
+			   VK_SHADER_STAGE_FRAGMENT_BIT,
+			   nullptr
+	   }};
 	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
 			scenedslcreateinfo,
 			{
 					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 					nullptr,
 					0,
-					3, &objectdslbindings[0]
+					4, &objectdslbindings[0]
 			}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 	VkVertexInputAttributeDescription vertinattribdesc[3] {{0,

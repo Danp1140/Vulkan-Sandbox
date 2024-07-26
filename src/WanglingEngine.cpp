@@ -1432,7 +1432,7 @@ void WanglingEngine::draw () {
 			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.swapchain,
 			1000000,
-			GraphicsHandler::vulkaninfo.imageavailablesemaphores[GraphicsHandler::vulkaninfo.currentframeinflight],
+			GraphicsHandler::vulkaninfo.imageavailablesemaphores[0],
 			VK_NULL_HANDLE,
 			&GraphicsHandler::swapchainimageindex);
 	if (acquire == VK_TIMEOUT) exit(1);
@@ -1463,6 +1463,7 @@ void WanglingEngine::draw () {
 
 	glfwPollEvents();
 
+	/*
 	if (GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.currentvalue
 		!= GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.lastvalue
 		&& GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.down) {
@@ -1478,6 +1479,7 @@ void WanglingEngine::draw () {
 			// updateSettings();
 		}
 	}
+	*/
 
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
 	physicshandler.update(meshes[0]->getTris());

@@ -78,6 +78,7 @@ void GraphicsHandler::VKInit (uint32_t nummeshes) {
 void GraphicsHandler::VKInitPipelines () {
 	//skybox
 	{
+		/*
 		VkDescriptorSetLayoutBinding binding[1] {{
 														 0,
 														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -118,7 +119,41 @@ void GraphicsHandler::VKInitPipelines () {
 						  },
 						  true,
                           GraphicsHandler::vulkaninfo.templateshadowrenderpass);
+			  */
 	}
+	{
+		VkDescriptorSetLayoutBinding binding[1] {{
+			0,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}};
+
+		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
+				{      //ideally migrate this to either all scenedsl, or no scenedsl and all objectdsl
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						1,
+						&binding[0]
+				},
+				{
+						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+						nullptr,
+						0,
+						0,
+						nullptr
+				}};
+
+		PipelineInitInfo pii;
+		pii.stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		pii.shaderfilepathprefix = "skybox";
+		pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
+		pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPushConstants)};
+		GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline, pii);
+	}
+
 	//texmon
 	{
 		VkDescriptorSetLayoutBinding descriptorsetlayoutbinding {
@@ -1302,17 +1337,17 @@ void GraphicsHandler::VKSubInitSemaphoresAndFences () {
 	vulkaninfo.presentfinishedfences = new VkFence[MAX_FRAMES_IN_FLIGHT];
 	for (int x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr,
-						  &vulkaninfo.imageavailablesemaphores[x]);
-		vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr,
 						  &vulkaninfo.renderfinishedsemaphores[x]);
 		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.submitfinishedfences[x]);
 		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.presentfinishedfences[x]);
 //		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.frameinflightfences[x]);
 	}
 	vulkaninfo.recordinginvalidfences = new VkFence[vulkaninfo.numswapchainimages];
+	vulkaninfo.imageavailablesemaphores = new VkSemaphore[vulkaninfo.numswapchainimages];
 	for (int x = 0; x < vulkaninfo.numswapchainimages; x++) {
 //		vulkaninfo.imageinflightfences[x]=VK_NULL_HANDLE;
 		vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.recordinginvalidfences[x]);
+		vkCreateSemaphore(vulkaninfo.logicaldevice, &semaphorecreateinfo, nullptr, &vulkaninfo.imageavailablesemaphores[x]);
 	}
 	vkCreateFence(vulkaninfo.logicaldevice, &fencecreateinfo, nullptr, &vulkaninfo.tempfence);
 }
@@ -1895,6 +1930,7 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 			1, &colorblendattachmentstate,
 			{0.0f, 0.0f, 0.0f, 0.0f}
 	};
+	if (pii.renderpass == VK_NULL_HANDLE) pii.renderpass = issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass;  // TODO: implement rp arg usage in SM
 	VkGraphicsPipelineCreateInfo pipelinecreateinfo = {
 			VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 			nullptr,
@@ -1911,7 +1947,7 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 			&colorblendstatecreateinfo,
 			nullptr,
 			pipelineinfo->pipelinelayout,
-			issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass,  // TODO: add renderpass arg
+			pii.renderpass,
 			0,
 			VK_NULL_HANDLE,
 			-1
@@ -2622,7 +2658,7 @@ void GraphicsHandler::submitAndPresent () {
 			VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			nullptr,
 			1,
-			&vulkaninfo.imageavailablesemaphores[GraphicsHandler::swapchainimageindex],
+			&vulkaninfo.imageavailablesemaphores[0],
 			&pipelinestageflags,
 			1,
 			&vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
