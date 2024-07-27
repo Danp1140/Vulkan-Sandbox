@@ -9,6 +9,12 @@
 
 #define OCEAN_PRE_TESS_SUBDIV 32
 
+typedef struct OceanPushConstants {
+	glm::mat4 cameravpmatrices = glm::mat4(1);
+	alignas(16) glm::vec3 cameraposition = glm::vec3(0);
+	uint32_t numlights = 0;
+} OceanPushConstants;
+
 class Ocean : public Mesh{
 private:
 	glm::vec2 bounds;
@@ -17,42 +23,42 @@ private:
 	VkDescriptorSet* computedescriptorsets;
 	VkCommandBuffer* computecommandbuffers;
 	TextureInfo seabeddepthmap;
+	OceanPushConstants pushconstants;
 
 	void initDescriptorSets ();
 
 	void initComputeCommandBuffers ();
 
 public:
+	/*
+	 * Constructors & Destructors
+	 */
 	Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s);
 
-	static void createComputePipeline ();
-
-	static void createGraphicsPipeline ();
+	/*
+	 * Member Access
+	 */
+	VkDescriptorSet* getComputeDescriptorSets () {return computedescriptorsets;}
+	VkCommandBuffer* getComputeCommandBuffers () {return computecommandbuffers;}
+	TextureInfo* getHeightMapPtr () {return &heightmap;}
+	TextureInfo* getNormalMapPtr () {return &normalmap;}
+	TextureInfo* getDepthMapPtr () {return &seabeddepthmap;}
+	OceanPushConstants* getPushConstantsPtr () {return &pushconstants;}
 
 	void renderDepthMap (Mesh* seabed);
-
 	void rewriteTextureDescriptorSets ();
 
-	void recordDraw (uint8_t fifindex, uint8_t sciindex, VkDescriptorSet* sceneds);
-
+	/*
+	 * Vulkan Utilities
+	 */
+	static void createComputePipeline ();
+	static void createGraphicsPipeline ();
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
-
-	void recordCompute (uint8_t fifindex);
-
 	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
 
 	void rewriteDescriptorSet (uint32_t index);
 
-	VkDescriptorSet* getComputeDescriptorSets () {return computedescriptorsets;}
-
-	VkCommandBuffer* getComputeCommandBuffers () {return computecommandbuffers;}
-
-	TextureInfo*
-	getHeightMapPtr () {return &heightmap;}   //perhaps use displacement map instead (better for cresting and such)
-	TextureInfo* getNormalMapPtr () {return &normalmap;}
-
-	TextureInfo* getDepthMapPtr () {return &seabeddepthmap;}
-};
+	};
 
 
 #endif //VULKANSANDBOX_OCEAN_H

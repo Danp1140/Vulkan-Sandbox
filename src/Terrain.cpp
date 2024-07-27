@@ -4,7 +4,14 @@
 
 #include "Terrain.h"
 
-Terrain::Terrain () : Mesh() {
+Terrain::Terrain () : 
+	Mesh(),
+	treesb(VK_NULL_HANDLE),
+	voxelsb(VK_NULL_HANDLE),
+	meminfosb(VK_NULL_HANDLE),
+	tsbmemory(VK_NULL_HANDLE),
+	vsbmemory(VK_NULL_HANDLE),
+	genpushconstants({}) {
 	numnodes = 4096u; // not sure how we reconcile this with the NODE_HEAP_SIZE macro in the .h
 	numleaves = 1u;
 	numvoxels = 3u;
@@ -12,7 +19,7 @@ Terrain::Terrain () : Mesh() {
 	memoryavailable = false;
 	// unsure of default compfif value
 
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.heapsize = numnodes;
+	genpushconstants.heapsize = numnodes;
 
 //	GraphicsHandler::VKSubInitStorageBuffer()
 	// would use VKSubInitStorageBuffer, but that requires as many sbs as scis
@@ -321,7 +328,7 @@ void Terrain::updateNumLeaves () {
 	Node* root = reinterpret_cast<Node*>(getNodeHeapPtr());
 	if (root->childidx == 0) return;
 	numleaves = root->childidx;
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = numleaves;
+	genpushconstants.numleaves = numleaves;
 }
 
 glm::vec3 childDirection (uint8_t childidx) {

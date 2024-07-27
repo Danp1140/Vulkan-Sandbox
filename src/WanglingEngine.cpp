@@ -26,7 +26,7 @@ WanglingEngine::WanglingEngine () {
 	ParticleSystem<GrassParticle>::createPipeline();
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
 //	genScene();
 
 	physicshandler = PhysicsHandler(primarycamera);
@@ -122,7 +122,7 @@ WanglingEngine::WanglingEngine () {
 				shadowsamplerwrites[l] = {
 						VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 						nullptr,
-						meshes[m]->getDescriptorSets()[fifi],
+						meshes[m]->getDescriptorSet(),
 						4,
 						l,
 						1,
@@ -177,7 +177,7 @@ WanglingEngine::WanglingEngine () {
 				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
 				&lightuniformbuffertemp[0]);
 		for (auto& m : meshes) m->pcdata.numlights = lights.size();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
+		ocean->getPushConstantsPtr()->numlights = lights.size();
 	}
 	GraphicsHandler::swapchainimageindex = 0;
 
@@ -307,8 +307,8 @@ void WanglingEngine::genScene () {
 }
 
 void WanglingEngine::updatePCsAndBuffers() {
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.cameravp = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix(); 
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = testterrain->getNumLeaves();
+	testterrain->getGenPushConstantsPtr()->cameravp = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix(); 
+	testterrain->getGenPushConstantsPtr()->numleaves = testterrain->getNumLeaves();
 
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
@@ -318,14 +318,10 @@ void WanglingEngine::updatePCsAndBuffers() {
 			m->pcdata.standinguv = physicshandler.getStandingUV();
 		}
 
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameravpmatrices =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameraposition =
-				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-
-		GraphicsHandler::vulkaninfo.grasspushconstants =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.terraingenpushconstants.camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+		ocean->getPushConstantsPtr()->cameravpmatrices = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+		ocean->getPushConstantsPtr()->cameraposition = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+		GraphicsHandler::vulkaninfo.grasspushconstants = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
+		testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
 	}
 
 	// wtf why does commenting out this lock on cause a val err & crash???
@@ -419,12 +415,17 @@ void WanglingEngine::updatePCsAndBuffers() {
 
 	MeshUniformBuffer temp;
 	for (auto& m: meshes) {
+		// TODO: switch to a const ptr, for less copies
 		temp = m->getUniformBufferData();
+		temp.diffuseuvmatrix = glm::mat4(glfwGetTime());
+		/*
 		GraphicsHandler::VKHelperUpdateUniformBuffer(
 				1,
 				sizeof(MeshUniformBuffer),
 				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
 				reinterpret_cast<void*>(&temp));
+				*/
+		GraphicsHandler::VKHelperUpdateUniformBuffer(m->getUniformBuffer(), static_cast<void*>(&temp));
 	}
 
 
@@ -723,8 +724,6 @@ void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
 }
 
 void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifindex) {
-	self->ocean->recordCompute(fifindex);
-	self->ocean->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
 	self->grass->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
 
 	vkResetCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 0);
@@ -831,8 +830,8 @@ void WanglingEngine::enqueueRecordingTasks () {
 		tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
 			// below is v redundant set
 		// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
-		GraphicsHandler::vulkaninfo.terraingenpushconstants.phase = 0;
-		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants);
+		testterrain->getGenPushConstantsPtr()->phase = 0;
+		tempdata.pushconstantdata = reinterpret_cast<void*>(testterrain->getGenPushConstantsPtr());
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
 		/*
@@ -898,7 +897,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		tempdata.framebuffer = lights[i]->getShadowFramebuffer();
 		tempdata.pushconstantdata = reinterpret_cast<void*>(lights[i]->getShadowPushConstantsPtr());
 		for (auto& m: meshes) {
-			tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
+			tempdata.descriptorset = m->getDescriptorSet();
 			tempdata.dsmutex = m->getDSMutexPtr();
 			tempdata.vertexbuffer = m->getVertexBuffer();
 			tempdata.indexbuffer = m->getIndexBuffer();
@@ -950,7 +949,8 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.primarygraphicspipeline;
 	for (auto& m: meshes) {
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&m->pcdata);
-		tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
+		// tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
+		tempdata.descriptorset = m->getDescriptorSet();
 		tempdata.dsmutex = m->getDSMutexPtr();
 		tempdata.vertexbuffer = m->getVertexBuffer();
 		tempdata.indexbuffer = m->getIndexBuffer();
@@ -1153,8 +1153,8 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.renderpass = GraphicsHandler::vulkaninfo.ssrrrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceangraphicspipeline;
-	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.oceanpushconstants);
-	tempdata.descriptorset = ocean->getDescriptorSets()[GraphicsHandler::swapchainimageindex]; // check that this is the correct index
+	tempdata.pushconstantdata = reinterpret_cast<void*>(ocean->getPushConstantsPtr());
+	tempdata.descriptorset = ocean->getDescriptorSet();
 	tempdata.vertexbuffer = ocean->getVertexBuffer();
 	tempdata.indexbuffer = ocean->getIndexBuffer();
 	tempdata.numtris = ocean->getTris().size();

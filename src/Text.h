@@ -13,6 +13,11 @@
 #define MAX_TEXTURE_WIDTH 1024
 #define MAX_TEXTURE_HEIGHT 1024
 
+typedef struct TextPushConstants {
+	glm::vec2 position, scale;
+	float rotation;
+} TextPushConstants;
+
 class Text {
 private:
 	std::string message;
@@ -31,21 +36,25 @@ public:
 	FT_Library ftlib;
 	FT_Face face;
 
+	/*
+	 * Constructors & Destructors
+	 */
 	Text ();
-
 	Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr);
-
 	~Text ();
 
-	static void createPipeline ();
-
+	/*
+	 * Member Access
+	 */
 	void setMessage (std::string m, uint32_t index);
-
-	static void recordCommandBuffer (cbRecData data, VkCommandBuffer& cb);
-
 	VkDescriptorSet* getDescriptorSets () {return descriptorsets;}
-
 	TextPushConstants* getPushConstantData () {return &pushconstants;}
+
+	/*
+	 * Vulkan Utilities
+	 */
+	static void createPipeline ();
+	static void recordCommandBuffer (cbRecData data, VkCommandBuffer& cb);
 };
 
 #endif //SANDBOX_TEXT_H

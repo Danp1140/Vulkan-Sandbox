@@ -78,50 +78,6 @@ void GraphicsHandler::VKInit (uint32_t nummeshes) {
 void GraphicsHandler::VKInitPipelines () {
 	//skybox
 	{
-		/*
-		VkDescriptorSetLayoutBinding binding[1] {{
-														 0,
-														 VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-														 1,
-														 VK_SHADER_STAGE_FRAGMENT_BIT,
-														 nullptr
-												 }};
-		VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
-				{      //ideally migrate this to either all scenedsl, or no scenedsl and all objectdsl
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&binding[0]
-				},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr
-				}};
-		const char* shaderfilepathstemp[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/skyboxvert.spv",
-											  WORKING_DIRECTORY "/resources/shaders/SPIRV/skyboxfrag.spv"};
-		VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline,
-						  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-						  &shaderfilepathstemp[0],
-						  &dslcreateinfos[0],
-						  {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPushConstants)},
-						  {
-								  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-								  nullptr,
-								  0,
-								  0,
-								  nullptr,
-								  0,
-								  nullptr
-						  },
-						  true,
-                          GraphicsHandler::vulkaninfo.templateshadowrenderpass);
-			  */
-	}
-	{
 		VkDescriptorSetLayoutBinding binding[1] {{
 			0,
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -1095,6 +1051,45 @@ void GraphicsHandler::VKSubInitDescriptorLayoutsAndPool (uint32_t nummeshes) {
 						   &vulkaninfo.descriptorpool);
 }
 
+void GraphicsHandler::VKHelperCreateAndAllocateBuffer (BufferInfo& b) {
+	if (b.buffer != VK_NULL_HANDLE && b.buffer != GraphicsHandler::vulkaninfo.stagingbuffer) {
+		vkDestroyBuffer(vulkaninfo.logicaldevice, b.buffer, nullptr);
+		vkFreeMemory(vulkaninfo.logicaldevice, b.memory, nullptr);
+	}
+	VkBufferCreateInfo buffercreateinfo {
+		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		nullptr,
+		0,
+		b.roundedelemsize * b.numelems,
+		b.usage,
+		VK_SHARING_MODE_EXCLUSIVE,
+		0,
+		nullptr
+	};
+	vkCreateBuffer(vulkaninfo.logicaldevice, &buffercreateinfo, nullptr, &b.buffer);
+
+	VkMemoryRequirements memrequirements {};
+	vkGetBufferMemoryRequirements(vulkaninfo.logicaldevice, b.buffer, &memrequirements);
+	VkPhysicalDeviceMemoryProperties physicaldevicememprops {};
+	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
+	uint32_t memindex = -1u;
+	for (uint32_t x = 0; x < physicaldevicememprops.memoryTypeCount; x++) {
+		if (memrequirements.memoryTypeBits & (1 << x)
+			&& ((physicaldevicememprops.memoryTypes[x].propertyFlags & b.memprops) == b.memprops)) {
+			memindex = x;
+			break;
+		}
+	}
+	VkMemoryAllocateInfo memallocateinfo {
+		VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		nullptr,
+		memrequirements.size,
+		memindex
+	};
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &b.memory);
+	vkBindBufferMemory(vulkaninfo.logicaldevice, b.buffer, b.memory, 0);
+}
+
 void GraphicsHandler::VKSubInitUniformBuffer (
 		VkDescriptorSet** descsets,
 		uint32_t binding,
@@ -1193,6 +1188,18 @@ void GraphicsHandler::VKSubInitUniformBuffer (
 		};
 		vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
 	}
+}
+
+void GraphicsHandler::VKSubInitUniformBuffer (BufferInfo& b) {
+	VkPhysicalDeviceProperties pdprops;
+	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
+	b.roundedelemsize = b.elemsize;
+	if (b.elemsize % pdprops.limits.minUniformBufferOffsetAlignment != 0) {
+		b.roundedelemsize = (1 + floor((float)b.elemsize / 
+					(float)pdprops.limits.minUniformBufferOffsetAlignment)) *
+					pdprops.limits.minUniformBufferOffsetAlignment;
+	}
+	VKHelperCreateAndAllocateBuffer(b);
 }
 
 void GraphicsHandler::VKSubInitStorageBuffer (
@@ -2543,6 +2550,23 @@ void GraphicsHandler::VKHelperUpdateWholeTexture (
 	}
 }
 
+void GraphicsHandler::VKHelperUpdateUniformBuffer (const BufferInfo& b, void* data) {
+	void* datatemp;
+	vkMapMemory(vulkaninfo.logicaldevice,
+		b.memory,
+		0,
+		b.roundedelemsize * b.numelems,
+		0,
+		&datatemp);
+	char* datadst = (char*)datatemp, * datasrc = (char*)data;
+	for (uint32_t x = 0; x < b.numelems; x++) {
+		memcpy((void*)datadst, (void*)datasrc, b.elemsize);
+		datadst += b.roundedelemsize;
+		datasrc += b.elemsize;
+	}
+	vkUnmapMemory(vulkaninfo.logicaldevice, b.memory);
+}
+
 void GraphicsHandler::VKHelperUpdateUniformBuffer (
 		uint32_t elementcount,
 		VkDeviceSize elementsize,
@@ -2650,6 +2674,27 @@ void GraphicsHandler::VKHelperRecordImageTransition (
 						 0, nullptr,
 						 1, &imgmembar);
 }
+
+void GraphicsHandler::updateDescriptorSet (
+		const VkDescriptorSet ds, 
+		const std::vector<uint32_t>& bindings,
+		const std::vector<VkDescriptorType>& types,
+		const std::vector<VkDescriptorImageInfo>& imginfos,
+		const std::vector<VkDescriptorBufferInfo>& bufinfos) {
+	VkWriteDescriptorSet writes[bindings.size()];
+	for (size_t i = 0; i < bindings.size(); i++) {
+		writes[i] = {
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			ds,
+			bindings[i], 0, 1, 
+			types[i],
+			&imginfos[i], &bufinfos[i], 0
+		};
+	}
+	vkUpdateDescriptorSets(vulkaninfo.logicaldevice, bindings.size(), &writes[0], 0, nullptr);
+}
+
 
 void GraphicsHandler::submitAndPresent () {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;

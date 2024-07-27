@@ -4,13 +4,11 @@
 
 #include "Text.h"
 
-Text::Text () {
-	message = "";
-	fontcolor = glm::vec4(0.5, 0.5, 0.5, 1);
-	fontsize = 12.0f;
-	pushconstants.position = glm::vec2(0, 0);
-	pushconstants.scale = glm::vec2(1.0f, 1.0f);
-	pushconstants.rotation = 0.0f;
+Text::Text () : 
+	message(""), 
+	fontcolor(glm::vec4(0.5, 0.5, 0.5, 1)), 
+	fontsize(12),
+	pushconstants({glm::vec2(0), glm::vec2(1), 0}) {
 	textures = new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
@@ -22,15 +20,13 @@ Text::Text () {
 	initDescriptorSet();
 }
 
-Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) {
-	message = m;
-	fontcolor = mc;
-	fontsize = fs;
-	horizontalres = hr;
-	verticalres = vr;
-	pushconstants.position = p;
-	pushconstants.scale = glm::vec2(2.0f / (float)hr, 2.0f / (float)vr);
-	pushconstants.rotation = 0.0f;
+Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) :
+	message(m),
+	fontcolor(mc),
+	fontsize(fs),
+	horizontalres(hr),
+	verticalres(vr),
+	pushconstants({p, glm::vec2(2.0f / (float)hr, 2.0f / (float)vr), 0}) {
 	textures = new TextureInfo[MAX_FRAMES_IN_FLIGHT];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
