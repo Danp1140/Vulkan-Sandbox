@@ -1199,51 +1199,25 @@ void GraphicsHandler::VKSubInitUniformBuffer (BufferInfo& b) {
 					(float)pdprops.limits.minUniformBufferOffsetAlignment)) *
 					pdprops.limits.minUniformBufferOffsetAlignment;
 	}
+	b.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	b.memprops = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 	VKHelperCreateAndAllocateBuffer(b);
 }
 
-void GraphicsHandler::VKSubInitStorageBuffer (
-		VkDescriptorSet* descriptorsets,
-		uint32_t binding,
-		VkDeviceSize elementsize,
-		uint32_t elementcount,
-		VkBuffer* buffers,
-		VkDeviceMemory* memories) {
+void GraphicsHandler::VKSubInitStorageBuffer (BufferInfo& b) {
 	VkPhysicalDeviceProperties pdprops;
 	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
-	VkDeviceSize roundedupsize = elementsize;
-	if (elementsize % pdprops.limits.minUniformBufferOffsetAlignment != 0) {
-		roundedupsize = (1 + floor((float)elementsize / (float)pdprops.limits.minUniformBufferOffsetAlignment)) *
-						pdprops.limits.minUniformBufferOffsetAlignment;
+	b.roundedelemsize = b.elemsize;
+	if (b.elemsize % pdprops.limits.minUniformBufferOffsetAlignment != 0) {
+		b.roundedelemsize = (1 + floor((float)b.elemsize / 
+					(float)pdprops.limits.minUniformBufferOffsetAlignment)) *
+					pdprops.limits.minUniformBufferOffsetAlignment;
 	}
-	VKHelperCreateAndAllocateBuffer(
-			&buffers[0],
-			roundedupsize * elementcount,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			&memories[0],
-			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-//			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	//unneccesary, clean up later
-	VkDescriptorBufferInfo descriptorbuffinfos[elementcount];
-	for (uint32_t y = 0; y < elementcount; y++) {
-		descriptorbuffinfos[y].buffer = *buffers;
-		descriptorbuffinfos[y].offset = y * roundedupsize;
-		descriptorbuffinfos[y].range = elementsize;
-	}
-	//clearly my understanding of this struct, esp the elementcount field, is flawed
-	VkWriteDescriptorSet writedescriptorset {
-			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			nullptr,
-			*descriptorsets,
-			binding,
-			0,
-			1,      //i mean, we only /really/ have to update the buffers for active lights
-			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			nullptr,
-			&descriptorbuffinfos[0],
-			nullptr
-	};
-	vkUpdateDescriptorSets(vulkaninfo.logicaldevice, 1, &writedescriptorset, 0, nullptr);
+
+	// TODO: why aren't these buffers device local if we're doing buffer transfers??
+	b.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	b.memprops = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+	VKHelperCreateAndAllocateBuffer(b);
 }
 
 void GraphicsHandler::VKSubInitFramebuffers () {
@@ -2089,7 +2063,7 @@ void GraphicsHandler::VKHelperCreateAndAllocateBuffer (
 
 void GraphicsHandler::VKHelperCpyBufferToBuffer (
 		VkBuffer* src,
-		VkBuffer* dst,
+		const VkBuffer* const dst,
 		VkDeviceSize size) {
 	VkBufferCopy region {
 			0,
@@ -2606,45 +2580,32 @@ void GraphicsHandler::VKHelperUpdateUniformBuffer (
 	vkUnmapMemory(vulkaninfo.logicaldevice, buffermemory);
 }
 
-void GraphicsHandler::VKHelperUpdateStorageBuffer (
-		uint32_t elementcount,
-		VkDeviceSize elementsize,
-		VkBuffer* buffer,
-		VkDeviceMemory buffermemory,
-		void* data) {
-	VkPhysicalDeviceProperties physdevprops;
-	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &physdevprops);
-	VkDeviceSize roundedupelementsize = elementsize;
-	// TODO: change to minStorageBuffer...
-	if (elementsize % physdevprops.limits.minUniformBufferOffsetAlignment != 0) {
-		roundedupelementsize =
-				(1 + floor((float)elementsize / (float)physdevprops.limits.minUniformBufferOffsetAlignment))
-				* physdevprops.limits.minUniformBufferOffsetAlignment;
-	}
+void GraphicsHandler::VKHelperUpdateStorageBuffer (const BufferInfo& b, void* data) {
 	VKHelperCreateAndAllocateBuffer(
 			&GraphicsHandler::vulkaninfo.stagingbuffer,
-			roundedupelementsize * elementcount,
+			b.roundedelemsize * b.numelems,
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 			&GraphicsHandler::vulkaninfo.stagingbuffermemory,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	void* datatemp;
-	vkMapMemory(vulkaninfo.logicaldevice,
-				GraphicsHandler::vulkaninfo.stagingbuffermemory,
-				0,
-				roundedupelementsize * elementcount,
-				0,
-				&datatemp);
+	vkMapMemory(
+		vulkaninfo.logicaldevice,
+		GraphicsHandler::vulkaninfo.stagingbuffermemory,
+		0,
+		b.roundedelemsize * b.numelems,
+		0,
+		&datatemp);
 	char* datadst = (char*)datatemp, * datasrc = (char*)data;
-	for (uint32_t x = 0; x < elementcount; x++) {
-		memcpy((void*)datadst, (void*)datasrc, elementsize);
-		datadst += roundedupelementsize;
-		datasrc += elementsize;
+	for (uint32_t x = 0; x < b.numelems; x++) {
+		memcpy((void*)datadst, (void*)datasrc, b.elemsize);
+		datadst += b.roundedelemsize;
+		datasrc += b.elemsize;
 	}
 	vkUnmapMemory(vulkaninfo.logicaldevice, GraphicsHandler::vulkaninfo.stagingbuffermemory);
 	VKHelperCpyBufferToBuffer(
 			&GraphicsHandler::vulkaninfo.stagingbuffer,
-			buffer,
-			roundedupelementsize * elementcount);
+			&b.buffer,
+			b.roundedelemsize * b.numelems);
 	vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
 	vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
 }
@@ -3047,6 +3008,9 @@ VKAPI_CALL GraphicsHandler::debugCallback (
 	if (severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 		std::cout << callbackdata->pMessage << std::endl;
 	uint32_t newlinecounter = 0u, charcounter = 0u;
+	// this disables a warning about not updating our light buffers
+	// (as in the ones we dont actually have a light for yet)
+	// im unsure if there's a better way around this
 	if (callbackdata->messageIdNumber != -1539028524) {
 		while (callbackdata->pMessage[charcounter] != '\0') {
 			//		troubleshootingsstrm<<callbackdata->pMessage[charcounter];

@@ -29,10 +29,9 @@ typedef struct Node {
  */
 class Terrain : private Mesh {
 private:
-	VkBuffer treesb, voxelsb, meminfosb;
-	VkDeviceMemory tsbmemory, vsbmemory, msbmemory;
+	BufferInfo treestoragebuffer, voxelstoragebuffer, meminfostoragebuffer;
 	uint32_t numnodes, numleaves, numvoxels;
-	VkDescriptorSet* computedss;
+	VkDescriptorSet computeds;
 	bool memoryavailable; // flag to coordinate CPU node heap realloc & GPU memory use
 	uint8_t compfif; // fif compute was submitted on, to track when memavail should be reset
 	VkDeviceSize nodeheapfreesize; // troubleshooting measure to make sure heap is safe
@@ -50,8 +49,8 @@ public:
 	 */
 	uint32_t getNumLeaves () {return numleaves;}
 	void* getNodeHeapPtr ();
-	VkDescriptorSet getDS (uint8_t scii) {return computedss[scii];}
-	VkBuffer getTreeBuffer () {return treesb;}
+	VkDescriptorSet getComputeDescriptorSet () const {return computeds;}
+	VkBuffer getTreeBuffer () const {return treestoragebuffer.buffer;}
 	uint8_t getCompFIF () {return compfif;}
 	void setCompFIF (uint8_t cf) {compfif = cf;}
 	VkDeviceSize getNodeHeapFreeness () {return nodeheapfreesize;}
@@ -82,6 +81,7 @@ public:
 	static void createGraphicsPipeline ();
 	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
 	static void recordTroubleshootDraw (cbRecData data, VkCommandBuffer& cb);
+	void initDescriptorSets (VkDescriptorSetLayout objdsl) override;
 };
 
 

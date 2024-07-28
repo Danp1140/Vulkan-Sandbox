@@ -117,8 +117,7 @@ WanglingEngine::WanglingEngine () {
 		VkDescriptorImageInfo imginfo;
 		for (uint8_t m = 0; m < meshes.size(); m++) {
 			for (uint8_t l = 0; l < lights.size(); l++) {
-				if (l < lights.size()) imginfo = lights[l]->getShadowmapPtr()->getDescriptorImageInfo();
-				else imginfo = {};
+				imginfo = lights[l]->getShadowmapPtr()->getDescriptorImageInfo();
 				shadowsamplerwrites[l] = {
 						VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 						nullptr,
@@ -827,7 +826,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		testterrain->setCompFIF(GraphicsHandler::vulkaninfo.currentframeinflight);
 		// code in this block seems very wrong... why are we doing a phase 0 and a phase 1 every loop???
 		tempdata.pipeline = GraphicsHandler::vulkaninfo.terraingencomputepipeline;
-		tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+		tempdata.descriptorset = testterrain->getComputeDescriptorSet();
 			// below is v redundant set
 		// can probably handle push constants better in general to coorperate with (relatively) new recording strategy
 		testterrain->getGenPushConstantsPtr()->phase = 0;
@@ -872,7 +871,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	*/
 
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceancomputepipeline;
-	tempdata.descriptorset = ocean->getComputeDescriptorSets()[GraphicsHandler::swapchainimageindex]; // double-check that this is correct idx
+	tempdata.descriptorset = ocean->getComputeDescriptorSet();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(physicshandler.getTPtr());
 //	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
 
@@ -967,7 +966,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.voxeltroubleshootingpipeline;
-	tempdata.descriptorset = testterrain->getDS(GraphicsHandler::swapchainimageindex);
+	tempdata.descriptorset = testterrain->getComputeDescriptorSet();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terrainpushconstants);
 	tempdata.numtris = testterrain->getNumLeaves() * 2u;
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordTroubleshootDraw(tempdata, c);}));

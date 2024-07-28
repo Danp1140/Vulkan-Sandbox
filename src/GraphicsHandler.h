@@ -520,13 +520,7 @@ public:
 			VkDeviceMemory** memories,
 			VkDescriptorSetLayout descsetlayout);
 	static void VKSubInitUniformBuffer (BufferInfo& b);
-	static void VKSubInitStorageBuffer (
-			VkDescriptorSet* descriptorsets,
-			uint32_t binding,
-			VkDeviceSize elementsize,
-			uint32_t elementcount,
-			VkBuffer* buffers,
-			VkDeviceMemory* memories);
+	static void VKSubInitStorageBuffer (BufferInfo& b);
 	static void VKHelperCreateAndAllocateBuffer (
 			VkBuffer* buffer,
 			VkDeviceSize buffersize,
@@ -535,7 +529,7 @@ public:
 			VkMemoryPropertyFlags reqprops);
 	static void VKHelperCpyBufferToBuffer (
 			VkBuffer* src,
-			VkBuffer* dst,
+			const VkBuffer* const dst,
 			VkDeviceSize size);
 	static void VKHelperInitVertexAndIndexBuffers (
 			const std::vector<Vertex>& vertices,
@@ -553,13 +547,9 @@ public:
 			VkDeviceSize elementsize,
 			VkDeviceMemory buffermemory,
 			void* data);
+	// TODO: change below to UpdateDeviceLocal and UpdateHostCoherent cuz thats what they really are
 	static void VKHelperUpdateUniformBuffer (const BufferInfo& b, void* data);
-	static void VKHelperUpdateStorageBuffer (
-			uint32_t elementcount,
-			VkDeviceSize elementsize,
-			VkBuffer* buffer,
-			VkDeviceMemory buffermemory,
-			void* data);
+	static void VKHelperUpdateStorageBuffer (const BufferInfo& b, void* data);
 
 	/*
 	 * Image Utilities

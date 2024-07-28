@@ -36,11 +36,11 @@ protected:
 	VkBuffer vertexbuffer, indexbuffer;
 	BufferInfo uniformbuffer;
 	VkDeviceMemory vertexbuffermemory, indexbuffermemory;
-	VkDescriptorSet ds, * descriptorsets;
+	VkDescriptorSet ds;
 	MeshUniformBuffer uniformbufferdata;
 	std::mutex dsmutex;
 
-	virtual void initDescriptorSets ();
+	virtual void initDescriptorSets (const VkDescriptorSetLayout objdsl);
 	void texInit (uint32_t dir, uint32_t nir, uint32_t hir);
 
 	void triangulatePolygon (std::vector<glm::vec3> v, std::vector<glm::vec3>& dst);
@@ -73,6 +73,7 @@ public:
 	/*
 	 * Graphics Utilities
 	 */
+	// TODO: rename w/o "Texture," also updates uniform buffer
 	virtual void rewriteTextureDescriptorSets ();
 	static void createPipeline ();
 	static void createShadowmapPipeline ();

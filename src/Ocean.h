@@ -15,17 +15,18 @@ typedef struct OceanPushConstants {
 	uint32_t numlights = 0;
 } OceanPushConstants;
 
-class Ocean : public Mesh{
+class Ocean : public Mesh {
 private:
 	glm::vec2 bounds;
 	Mesh*shore;
+	// height & normal are duplicate with Mesh's own textures...why???
 	TextureInfo heightmap, normalmap, velocitymap;
-	VkDescriptorSet* computedescriptorsets;
+	VkDescriptorSet computeds;
 	VkCommandBuffer* computecommandbuffers;
 	TextureInfo seabeddepthmap;
 	OceanPushConstants pushconstants;
 
-	void initDescriptorSets ();
+	void initDescriptorSets (const VkDescriptorSetLayout objdsl) override;
 
 	void initComputeCommandBuffers ();
 
@@ -38,7 +39,7 @@ public:
 	/*
 	 * Member Access
 	 */
-	VkDescriptorSet* getComputeDescriptorSets () {return computedescriptorsets;}
+	VkDescriptorSet getComputeDescriptorSet () const {return computeds;}
 	VkCommandBuffer* getComputeCommandBuffers () {return computecommandbuffers;}
 	TextureInfo* getHeightMapPtr () {return &heightmap;}
 	TextureInfo* getNormalMapPtr () {return &normalmap;}
@@ -46,7 +47,7 @@ public:
 	OceanPushConstants* getPushConstantsPtr () {return &pushconstants;}
 
 	void renderDepthMap (Mesh* seabed);
-	void rewriteTextureDescriptorSets ();
+	void rewriteTextureDescriptorSets () override;
 
 	/*
 	 * Vulkan Utilities
@@ -55,9 +56,6 @@ public:
 	static void createGraphicsPipeline ();
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
 	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
-
-	void rewriteDescriptorSet (uint32_t index);
-
 	};
 
 

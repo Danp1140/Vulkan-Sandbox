@@ -4,9 +4,17 @@
 
 #include "Ocean.h"
 
-Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos), pushconstants({}) {
-	bounds = b;
-	shore = s;
+Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : 
+	Mesh(pos), 
+	bounds(b),
+	shore(s),
+	heightmap({}),
+	normalmap({}),
+	velocitymap({}),
+	computeds(VK_NULL_HANDLE),
+	computecommandbuffers(nullptr),
+	seabeddepthmap({}),
+	pushconstants({}) {
 	float subdivwidth = 1.0 / (float)OCEAN_PRE_TESS_SUBDIV;
 	glm::vec2 dbounds = bounds / (float)OCEAN_PRE_TESS_SUBDIV;
 	for (uint16_t y = 0; y < OCEAN_PRE_TESS_SUBDIV + 1; y++) {
@@ -30,30 +38,29 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos), pushconstants({}
 	cleanUpVertsAndTris();
 	//consider using smaller formats
 	GraphicsHandler::VKHelperInitImage(&heightmap,
-									   512, 512,
-									   VK_FORMAT_R32_SFLOAT,
-									   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-									   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-									   VK_IMAGE_LAYOUT_GENERAL,
-									   VK_IMAGE_VIEW_TYPE_2D);
+		512, 512,
+		VK_FORMAT_R32_SFLOAT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_VIEW_TYPE_2D);
 	GraphicsHandler::VKHelperInitImage(&velocitymap,
-									   512,
-									   512,
-									   VK_FORMAT_R32G32B32A32_SFLOAT,
-									   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-									   VK_IMAGE_USAGE_STORAGE_BIT,
-									   VK_IMAGE_LAYOUT_GENERAL,
-									   VK_IMAGE_VIEW_TYPE_2D);
+		512, 512,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		VK_IMAGE_USAGE_STORAGE_BIT,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_VIEW_TYPE_2D);
 
 	glm::vec4* datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
 	memset((void*)datatemp, 0, 512 * 512 * sizeof(glm::vec4));
 	GraphicsHandler::VKHelperInitTexture(&normalmap,
-										 2048, 0,
-										 VK_FORMAT_R32G32B32A32_SFLOAT,
-										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-										 TEXTURE_TYPE_NORMAL,
-										 VK_IMAGE_VIEW_TYPE_2D,
-										 GraphicsHandler::genericsampler);
+		2048, 0,
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		TEXTURE_TYPE_NORMAL,
+		VK_IMAGE_VIEW_TYPE_2D,
+		GraphicsHandler::genericsampler);
 	free(datatemp);
 //	TextureHandler::generateTextures({normalmap}, TextureHandler::oceanTexGenSet);
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
@@ -64,7 +71,7 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : Mesh(pos), pushconstants({}
 			&indexbuffer,
 			&indexbuffermemory);
 	initComputeCommandBuffers();
-	initDescriptorSets();
+	initDescriptorSets(GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl);
 }
 
 // this was originally intended to help calculate waves, we'll see if we ever get around to it lol
@@ -153,31 +160,31 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 
 void Ocean::createComputePipeline () {
 	VkDescriptorSetLayoutBinding objdslbindings[2] {{
-															0,
-															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-															1,
-															VK_SHADER_STAGE_COMPUTE_BIT,
-															nullptr
-													}, {
-															1,
-															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-															1,
-															VK_SHADER_STAGE_COMPUTE_BIT,
-															nullptr
-													}};
+			0,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			1,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			nullptr
+	}};
 	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   0,
-															   nullptr
-													   }, {
-															   VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-															   nullptr,
-															   0,
-															   2,
-															   &objdslbindings[0]
-													   }};
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			0,
+			nullptr
+		}, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			2,
+			&objdslbindings[0]
+	}};
 
 	PipelineInitInfo pii = {};
 	pii.stages = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -254,25 +261,24 @@ void Ocean::createGraphicsPipeline () {
 	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceangraphicspipeline, pii);
 }
 
-void Ocean::initDescriptorSets () {
-	// note that the top part of this init is gonna be redundant with the mesh-side init
-	// so this looks like a double-init with the Mesh constructor, which could be causing the issues we're seeing
-	VkDescriptorSetLayout dsltemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		dsltemp[x] = GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl;
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
+void Ocean::initDescriptorSets (const VkDescriptorSetLayout objdsl) {
+	Mesh::initDescriptorSets(objdsl);
+	if (computeds != VK_NULL_HANDLE)
+		vkFreeDescriptorSets(
+			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
-			&dsltemp[0]
+			1, &computeds);
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.descriptorpool,
+		1, &GraphicsHandler::vulkaninfo.oceancomputepipeline.objectdsl 
 	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
-	computedescriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		dsltemp[x] = GraphicsHandler::vulkaninfo.oceancomputepipeline.objectdsl;
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo,
-							 &computedescriptorsets[0]);
+	vkAllocateDescriptorSets(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		&descriptorsetallocinfo,
+		&computeds);
+
 }
 
 void Ocean::initComputeCommandBuffers () {
@@ -288,6 +294,29 @@ void Ocean::initComputeCommandBuffers () {
 }
 
 void Ocean::rewriteTextureDescriptorSets () {
+	// Ocean doesn't own the skybox. i think it gets written elsewhere but this is probably a sub-optimal
+	// way of doing things
+	GraphicsHandler::updateDescriptorSet(
+		ds,
+		{1, 2, 3},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+		{normalmap.getDescriptorImageInfo(),
+		GraphicsHandler::vulkaninfo.scratchbuffer.getDescriptorImageInfo(),
+		GraphicsHandler::vulkaninfo.scratchdepthbuffer.getDescriptorImageInfo()},
+		{{}, {}, {}});
+
+	GraphicsHandler::updateDescriptorSet(
+		computeds,
+		{0, 1},
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
+		{heightmap.getDescriptorImageInfo(),
+		velocitymap.getDescriptorImageInfo()},
+		{{}, {}, {}, {}});
+
+	/*
 	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
 		VkDescriptorImageInfo imginfo = {GraphicsHandler::genericsampler, heightmap.imageview, VK_IMAGE_LAYOUT_GENERAL};
 		VkWriteDescriptorSet writedescset {
@@ -340,6 +369,7 @@ void Ocean::rewriteTextureDescriptorSets () {
 //		imginfo=environmentmap->getDescriptorImageInfo();
 //		writedescset.dst
 	}
+	*/
 }
 
 void Ocean::recordDraw (cbRecData data, VkCommandBuffer& cb) {
@@ -469,27 +499,4 @@ void Ocean::recordCompute (cbRecData data, VkCommandBuffer& cb) {
 //					     0, nullptr,
 //					     1, &imgmembarr);
 	vkEndCommandBuffer(cb);
-}
-
-void Ocean::rewriteDescriptorSet (uint32_t index) {
-	VkDescriptorImageInfo imginfo = heightmap.getDescriptorImageInfo();
-	VkWriteDescriptorSet write {
-			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			nullptr,
-			descriptorsets[index],
-			0,
-			0,
-			1,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			&imginfo,
-			nullptr,
-			nullptr,
-	};
-	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
-
-	imginfo = normalmap.getDescriptorImageInfo();
-	write.dstBinding = 1;
-	write.pImageInfo = &imginfo;
-	//could p write both at once
-	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
 }

@@ -90,13 +90,9 @@ private:
 	ParticleType type;
 	DistributionType distributiontype;
 	DistributionData distributiondata;
-	VkBuffer* particleuniformbuffers;
-	VkDeviceMemory* particleuniformbuffermemories;
+	BufferInfo storagebuffer;
 
 	void distributeParticles ();
-
-	void initDescriptorSets () override;
-
 public:
 	ParticleSystem (ParticleType t, uint32_t nparticles, DistributionType disttype, DistributionData distdata);
 

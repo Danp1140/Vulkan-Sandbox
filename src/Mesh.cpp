@@ -21,24 +21,12 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 	dsmutex() {
 	
 	recalculateModelMatrix();
-	initDescriptorSets();
+	initDescriptorSets(GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
 	
 	uniformbuffer.elemsize = sizeof(MeshUniformBuffer);
 	uniformbuffer.numelems = 1;
-	uniformbuffer.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	uniformbuffer.memprops = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 	GraphicsHandler::VKSubInitUniformBuffer(uniformbuffer);
-	VkDescriptorBufferInfo dbi = uniformbuffer.getDescriptorBufferInfo();
-	VkWriteDescriptorSet write {
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		nullptr,
-		ds,
-		0, 0, 1,
-		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		nullptr, &dbi, nullptr
-	};
-	vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &write, 0, nullptr);
-
+	
 	texInit(dir, nir, hir);
 	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
 	rewriteTextureDescriptorSets();
@@ -61,11 +49,9 @@ Mesh::~Mesh () {
 	vkFreeDescriptorSets(
 		GraphicsHandler::vulkaninfo.logicaldevice,
 		GraphicsHandler::vulkaninfo.descriptorpool,
-		GraphicsHandler::vulkaninfo.numswapchainimages,
-		descriptorsets);
+		1, &ds);
 	vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.memory, nullptr);
 	vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.buffer, nullptr);
-	delete[] descriptorsets;
 }
 
 void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
@@ -185,7 +171,7 @@ void Mesh::generateSmoothVertexNormals () {
 	}
 }
 
-void Mesh::initDescriptorSets () {
+void Mesh::initDescriptorSets (const VkDescriptorSetLayout objdsl) {
 	if (ds != VK_NULL_HANDLE)
 		vkFreeDescriptorSets(
 			GraphicsHandler::vulkaninfo.logicaldevice,
@@ -195,7 +181,7 @@ void Mesh::initDescriptorSets () {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
 		GraphicsHandler::vulkaninfo.descriptorpool,
-		1, &GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl
+		1, &objdsl 
 	};
 	vkAllocateDescriptorSets(
 		GraphicsHandler::vulkaninfo.logicaldevice,
@@ -204,6 +190,7 @@ void Mesh::initDescriptorSets () {
 }
 
 void Mesh::rewriteTextureDescriptorSets () {
+	// binding 4 (array of shadowmaps) is written in WE, since it has access to lights
 	GraphicsHandler::updateDescriptorSet(
 		ds,
 		{0, 1, 2, 3},
