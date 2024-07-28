@@ -11,8 +11,6 @@ VkDescriptorSet* WanglingEngine::scenedescriptorsets = nullptr;
 WanglingEngine::WanglingEngine () {
 	bloom = false;
 	TextureHandler::init();
-	uint8_t nummeshes, numlights;
-	countSceneObjects(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json", &nummeshes, &numlights);
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
@@ -27,42 +25,29 @@ WanglingEngine::WanglingEngine () {
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
 	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-//	genScene();
-
+	
 	physicshandler = PhysicsHandler(primarycamera);
 
 	// theres probably a better place for this
 	// could p put in initPostProc()
 	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchbuffer,
-										 GraphicsHandler::vulkaninfo.swapchainextent.width,
-										 GraphicsHandler::vulkaninfo.swapchainextent.height,
-										 SWAPCHAIN_IMAGE_FORMAT,
-										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-										 TEXTURE_TYPE_SSRR_BUFFER,
-										 VK_IMAGE_VIEW_TYPE_2D,
-										 GraphicsHandler::linearminmagsampler);
+		GraphicsHandler::vulkaninfo.swapchainextent.width,
+		GraphicsHandler::vulkaninfo.swapchainextent.height,
+		SWAPCHAIN_IMAGE_FORMAT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		TEXTURE_TYPE_SSRR_BUFFER,
+		VK_IMAGE_VIEW_TYPE_2D,
+		GraphicsHandler::linearminmagsampler);
 	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchdepthbuffer,
-										 GraphicsHandler::vulkaninfo.swapchainextent.width,
-										 GraphicsHandler::vulkaninfo.swapchainextent.height,
-										 VK_FORMAT_D32_SFLOAT,  // TODO: convert this to a macro too
-										 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-										 TEXTURE_TYPE_SSRR_BUFFER,
-										 VK_IMAGE_VIEW_TYPE_2D,
-										 GraphicsHandler::genericsampler);
+		GraphicsHandler::vulkaninfo.swapchainextent.width,
+		GraphicsHandler::vulkaninfo.swapchainextent.height,
+		VK_FORMAT_D32_SFLOAT,  // TODO: convert this to a macro too
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		TEXTURE_TYPE_SSRR_BUFFER,
+		VK_IMAGE_VIEW_TYPE_2D,
+		GraphicsHandler::genericsampler);
 	GraphicsHandler::initPostProc();
-
-
-	// TODO: make it so our null inits dont crash the program, so we can stop making everything a fucking pointer
-	settingstext = new Text(
-			"hi im gonna be settings in a sec",
-			glm::vec2(0., 0.),
-			glm::vec4(0., 0., 0., 1.),
-			32.,
-			GraphicsHandler::vulkaninfo.horizontalres,
-			GraphicsHandler::vulkaninfo.verticalres);
-
-	// initSettings();
-
+	
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
 	//texturehandler.generateOceanTextures(&textemp, 1);
@@ -78,6 +63,7 @@ WanglingEngine::WanglingEngine () {
 			GraphicsHandler::vulkaninfo.verticalres);
 
 	initSkybox();
+	initTexMon();
 
 	GraphicsHandler::VKHelperInitTexture(
 			&skyboxtexture,
@@ -90,7 +76,6 @@ WanglingEngine::WanglingEngine () {
 	texturehandler.generateSkyboxTexture(&skyboxtexture);
 	updateSkyboxDescriptorSets();
 
-//	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/fuckingcube.obj", glm::vec3(3., 1., -2.)));
 /*	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
 							  glm::vec3(0., -1., 5.),
 							  glm::vec3(1.),
@@ -98,18 +83,13 @@ WanglingEngine::WanglingEngine () {
 	TextureHandler::generateTextures({*meshes.back()->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
 	*/
 
-//	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
-//	meshes[0]->rewriteTextureDescriptorSets();
-
 	initSceneData();
-
 	initTroubleshootingLines();
 
-//	 updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
-//	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.ssrrbuffers[0]);
+	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
 //	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
-	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
+	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
@@ -120,36 +100,36 @@ WanglingEngine::WanglingEngine () {
 				imginfo = lights[l]->getShadowmapPtr()->getDescriptorImageInfo();
 				shadowsamplerwrites[l] = {
 						VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-						nullptr,
-						meshes[m]->getDescriptorSet(),
-						4,
-						l,
-						1,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						&imginfo,
-						nullptr,
-						nullptr
+					nullptr,
+					meshes[m]->getDescriptorSet(),
+					4,
+					l,
+					1,
+					VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					&imginfo,
+					nullptr,
+					nullptr
 				};
 			}
-			vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-								   lights.size(), &shadowsamplerwrites[0],
-								   0, nullptr);
+			vkUpdateDescriptorSets(
+				GraphicsHandler::vulkaninfo.logicaldevice,
+				lights.size(), &shadowsamplerwrites[0],
+				0, nullptr);
 		}
 	}
 
 	for (uint8_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		enqueueRecordingTasks();
 		for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
-			recordingthreads[i] = std::thread(processRecordingTasks,
-											  &recordingtasks,
-											  &secondarybuffers,
-											  x,
-											  i,
-											  GraphicsHandler::vulkaninfo.logicaldevice);
+			recordingthreads[i] = std::thread(
+				processRecordingTasks,
+				&recordingtasks,
+				&secondarybuffers,
+				x,
+				i,
+				GraphicsHandler::vulkaninfo.logicaldevice);
 		}
-		for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) {
-			recordingthreads[i].join();
-		}
+		for (uint8_t i = 0; i < NUM_RECORDING_THREADS; i++) recordingthreads[i].join();
 		collectSecondaryCommandBuffers();
 		GraphicsHandler::vulkaninfo.currentframeinflight++;
 	}
@@ -416,7 +396,6 @@ void WanglingEngine::updatePCsAndBuffers() {
 	for (auto& m: meshes) {
 		// TODO: switch to a const ptr, for less copies
 		temp = m->getUniformBufferData();
-		temp.diffuseuvmatrix = glm::mat4(glfwGetTime());
 		/*
 		GraphicsHandler::VKHelperUpdateUniformBuffer(
 				1,
@@ -463,39 +442,31 @@ void WanglingEngine::initSceneData () {
 void WanglingEngine::initSkybox () {
 	skyboxcommandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
 	VkCommandBufferAllocateInfo cmdbufallocinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.commandpool,
+		VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+		MAX_FRAMES_IN_FLIGHT
 	};
 	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, skyboxcommandbuffers);
 
-	skyboxdescriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	VkDescriptorSetLayout descsetlay[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint8_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		descsetlay[x] = GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.scenedsl;
 	VkDescriptorSetAllocateInfo descsetallocinfo {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			nullptr,
 			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
-			&descsetlay[0]
+			1, &GraphicsHandler::vulkaninfo.skyboxgraphicspipeline.scenedsl
 	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descsetallocinfo, &skyboxdescriptorsets[0]);
+	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descsetallocinfo, &skyboxds);
+}
 
-	texmondescriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	VkDescriptorSetLayout dsl[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint8_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		dsl[x] = GraphicsHandler::vulkaninfo.texmongraphicspipeline.objectdsl;
+void WanglingEngine::initTexMon () {
 	VkDescriptorSetAllocateInfo dsallocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
-			&dsl[0]
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.descriptorpool,
+		1, &GraphicsHandler::vulkaninfo.texmongraphicspipeline.objectdsl
 	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &dsallocinfo, &texmondescriptorsets[0]);
+	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &dsallocinfo, &texmonds);
 }
 
 void WanglingEngine::initTroubleshootingLines () {
@@ -560,22 +531,12 @@ void WanglingEngine::initTroubleshootingLines () {
 }
 
 void WanglingEngine::updateSkyboxDescriptorSets () {
-	VkDescriptorImageInfo imginfo = skyboxtexture.getDescriptorImageInfo();
-	for (uint8_t sci = 0; sci < GraphicsHandler::vulkaninfo.numswapchainimages; sci++) {
-		VkWriteDescriptorSet writedescset {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				skyboxdescriptorsets[sci],
-				0,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-	}
+	GraphicsHandler::updateDescriptorSet(
+		skyboxds,
+		{0},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+		{skyboxtexture.getDescriptorImageInfo()},
+		{});
 }
 
 void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
@@ -704,121 +665,28 @@ void WanglingEngine::recordTroubleshootingLinesCommandBuffers (cbRecData data, V
 }
 
 void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
-	VkDescriptorImageInfo imginfo = tex.getDescriptorImageInfo();
-	for (uint8_t sci = 0; sci < GraphicsHandler::vulkaninfo.numswapchainimages; sci++) {
-		VkWriteDescriptorSet writedescset {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				texmondescriptorsets[sci],
-				0,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-	}
-}
-
-void WanglingEngine::recordCommandBuffer (WanglingEngine* self, uint32_t fifindex) {
-	self->grass->recordDraw(fifindex, GraphicsHandler::swapchainimageindex, self->scenedescriptorsets);
-
-	vkResetCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 0);
-
-	vkBeginCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], &cmdbufferbegininfo);
-
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] | LIGHT_CHANGE_FLAG_BIT) {
-	}
-
-	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 1,
-						 &self->ocean->getComputeCommandBuffers()[fifindex]);
-
-	VkRenderPassBeginInfo renderpassbegininfo {
-			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.primaryrenderpass,
-			GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex],
-			{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
-			2,
-			&GraphicsHandler::vulkaninfo.primaryclears[0]
-	};
-	vkCmdBeginRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], &renderpassbegininfo,
-						 VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-
-//	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[fifindex], 1,
-//						 &self->grass->getCommandBuffers()[fifindex]);
-
-	vkCmdExecuteCommands(
-			GraphicsHandler::vulkaninfo.commandbuffers[fifindex],
-			1,
-			&self->troubleshootinglinescommandbuffers[fifindex]);
-
-
-	/*
-	 * Summary of images and their neccesary layout transitions
-	 * SCI is current swapchain image, SSRR is current ssrr buffer image
-	 *
-	 * SCI must be VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to start and until the end of primary renderpass
-	 *
-	 * SSRR must be VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL before the cpy
-	 * SCI must be VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL before the cpy
-	 * then do cpy
-	 * SSRR must be VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL before the start of the water renderpass
-	 * SCI must be VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL before the start of the water renderpass
-	 *
-	 * SCI must be VK_IMAGE_LAYOUT_PRESENT_SRC_KHR before the submission of the queue
-	 *
-	 * OR we could run a test with both just VK_IMAGE_LAYOUT_GENERAL
-	 */
-
-//	vkCmdExecuteCommands(GraphicsHandler::vulkaninfo.commandbuffers[fifindex],
-//						 1, &self->ocean->getCommandBuffers()[fifindex]);
-
-	vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[fifindex]);
-
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] | LIGHT_CHANGE_FLAG_BIT) {
-		// ummmmm, shouldn't this layout change come before we render meshes???
-		for (uint8_t i = 0; i < self->lights.size(); i++) {
-			VkImageMemoryBarrier imgmembar {
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-					nullptr,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					VK_QUEUE_FAMILY_IGNORED,
-					VK_QUEUE_FAMILY_IGNORED,
-					self->lights[i]->getShadowmapPtr()->image,
-					{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
-			};
-			vkCmdPipelineBarrier(GraphicsHandler::vulkaninfo.commandbuffers[fifindex],
-								 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-								 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-								 0,
-								 0, nullptr,
-								 0, nullptr,
-								 1, &imgmembar);
-		}
-	}
-	vkEndCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[fifindex]);
-	GraphicsHandler::changeflags[fifindex] = NO_CHANGE_FLAG_BIT;
+	GraphicsHandler::updateDescriptorSet(
+		texmonds,
+		{0},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+		{tex.getDescriptorImageInfo()}, {});
 }
 
 // TODO: figure out which buffer recording setup structs can be made static const for efficiency
 // you know, we only have to re-enqueue if the tasks change...
 void WanglingEngine::enqueueRecordingTasks () {
-	cbRecData tempdata {VK_NULL_HANDLE,
-						VK_NULL_HANDLE,
-						VK_NULL_HANDLE,
-						VK_NULL_HANDLE,
-						{},
-						nullptr,
-						nullptr,
-						VK_NULL_HANDLE, VK_NULL_HANDLE, 0u};
-	// hey so im not even certain that i have to sync ds access, maybe just alloc/free
-
+	cbRecData tempdata {
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		{},
+		nullptr,
+		nullptr,
+		VK_NULL_HANDLE, VK_NULL_HANDLE, 0u};
+	/*
+	 * Terrain Generation
+	 */
 	// only recompute voxels if we've had time to realloc memory
 	if (testterrain->getCompFIF() == MAX_FRAMES_IN_FLIGHT + 1
 		&& testterrain->isMemoryAvailable() 
@@ -834,30 +702,26 @@ void WanglingEngine::enqueueRecordingTasks () {
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordCompute(tempdata, c);}));
 
 		/*
-			// prob a mem leak
-			// unless we free after collection
 		VkBufferMemoryBarrier2* membar = new VkBufferMemoryBarrier2 {
-				VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-				nullptr,
-				VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				VK_ACCESS_SHADER_WRITE_BIT,
-				VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_QUEUE_FAMILY_IGNORED,
-				VK_QUEUE_FAMILY_IGNORED,
-				testterrain->getTreeBuffer(),
-				0u,
-				NODE_HEAP_SIZE * NODE_SIZE
+			VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			VK_ACCESS_SHADER_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			testterrain->getTreeBuffer(),
+			0u,
+			NODE_HEAP_SIZE * NODE_SIZE
 		};
 		recordingtasks.push(cbRecTask({
-											  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-											  nullptr,
-											  0,
-											  0, nullptr,
-											  1, membar,
-											  0, nullptr}));
-
-
+			VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+			nullptr,
+			0,
+			0, nullptr,
+			1, membar,
+			0, nullptr}));
 		GraphicsHandler::vulkaninfo.terraingenpushconstants2 = GraphicsHandler::vulkaninfo.terraingenpushconstants;
 		GraphicsHandler::vulkaninfo.terraingenpushconstants2.phase = 1;
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terraingenpushconstants2);
@@ -865,16 +729,16 @@ void WanglingEngine::enqueueRecordingTasks () {
 		*/
 	}
 	/*
-	else if (!testterrain->isMemoryAvailable()) std::cout << "no memory available" << std::endl;
-	else if (testterrain->getCompFIF() != MAX_FRAMES_IN_FLIGHT + 1) std::cout << "TG invoc already in flight" << std::endl;
-	else std::cout << "no movement" << std::endl;
-	*/
-
+	 * Ocean Compute
+	 */
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceancomputepipeline;
 	tempdata.descriptorset = ocean->getComputeDescriptorSet();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(physicshandler.getTPtr());
-//	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
+	// recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
 
+	/*
+	 * Shadowmap Renders
+	 */
 	// do we need those ds mutexes???
 	// try removing them from draws once we have both mesh draws in and are stress testing
 	// TODO: check for light change flag
@@ -883,15 +747,15 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.scenedsmutex = &scenedsmutex;
 	for (uint8_t i = 0; i < lights.size(); i++) {
 		recordingtasks.push(cbRecTask({
-											  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-											  nullptr,
-											  lights[i]->getShadowRenderPass(),
-											  lights[i]->getShadowFramebuffer(),
-											  {{0, 0}, {static_cast<uint32_t>(lights[i]->getShadowmapResolution()),
-														static_cast<uint32_t>(lights[i]->getShadowmapResolution())}},
-											  1,
-											  &GraphicsHandler::vulkaninfo.shadowmapclear
-									  }));
+			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			nullptr,
+			lights[i]->getShadowRenderPass(),
+			lights[i]->getShadowFramebuffer(),
+			{{0, 0}, {static_cast<uint32_t>(lights[i]->getShadowmapResolution()),
+			static_cast<uint32_t>(lights[i]->getShadowmapResolution())}},
+			1,
+			&GraphicsHandler::vulkaninfo.shadowmapclear
+		}));
 		tempdata.renderpass = lights[i]->getShadowRenderPass();
 		tempdata.framebuffer = lights[i]->getShadowFramebuffer();
 		tempdata.pushconstantdata = reinterpret_cast<void*>(lights[i]->getShadowPushConstantsPtr());
@@ -901,50 +765,60 @@ void WanglingEngine::enqueueRecordingTasks () {
 			tempdata.vertexbuffer = m->getVertexBuffer();
 			tempdata.indexbuffer = m->getIndexBuffer();
 			tempdata.numtris = m->getTrisPtr()->size();
-			recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Mesh::recordShadowDraw(tempdata, c);}));
+			recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
+				Mesh::recordShadowDraw(tempdata, c);
+			}));
 		}
-		// could we put this in a constructor or smth?
 		VkImageMemoryBarrier2KHR* imb = new VkImageMemoryBarrier2KHR {
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-				nullptr,
-				VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_QUEUE_FAMILY_IGNORED,
-				VK_QUEUE_FAMILY_IGNORED,
-				lights[i]->getShadowmapPtr()->image,
-				{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_QUEUE_FAMILY_IGNORED,
+			VK_QUEUE_FAMILY_IGNORED,
+			lights[i]->getShadowmapPtr()->image,
+			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
 		};
 		recordingtasks.push(cbRecTask({
-											  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-											  nullptr,
-											  0,
-											  0, nullptr,
-											  0, nullptr,
-											  1, imb
-									  }));
+			VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+			nullptr,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, imb
+		}));
 	}
 
+	/*
+	 * Primary Renderpass
+	 */
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-										  nullptr,
-										  GraphicsHandler::vulkaninfo.primaryrenderpass,
-										  GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex],
-										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
-										  2,
-										  &GraphicsHandler::vulkaninfo.primaryclears[0]
-								  }));
-	tempdata.renderpass = GraphicsHandler::vulkaninfo.primaryrenderpass;        // should maybe make this a different renderpass for skybox
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.primaryrenderpass,
+		GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex],
+		{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+		2,
+		&GraphicsHandler::vulkaninfo.primaryclears[0]
+	}));
+	tempdata.renderpass = GraphicsHandler::vulkaninfo.primaryrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.primaryframebuffers[GraphicsHandler::swapchainimageindex];
 
-	tempdata.descriptorset = skyboxdescriptorsets[GraphicsHandler::swapchainimageindex]; // TODO: figure out whether we want one ds per sci or fif
+	/*
+	 * Skybox
+	 */
+	tempdata.descriptorset = skyboxds;
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.skyboxgraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.skyboxpushconstants);
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordSkyboxCommandBuffers(tempdata, c);}));
 
+	/*
+	 * Meshes
+	 */
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.primarygraphicspipeline;
 	for (auto& m: meshes) {
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&m->pcdata);
@@ -957,14 +831,18 @@ void WanglingEngine::enqueueRecordingTasks () {
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Mesh::recordDraw(tempdata, c);}));
 	}
 
+	/*
+	 * Troubleshooting Lines
+	 */
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.linegraphicspipeline;
 	tempdata.vertexbuffer = troubleshootinglinesvertexbuffer;
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-		recordTroubleshootingLinesCommandBuffers(tempdata,
-												 c);
+		recordTroubleshootingLinesCommandBuffers(tempdata, c);
 	}));
 
-
+	/*
+	 * Troubleshooting Voxels
+	 */
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.voxeltroubleshootingpipeline;
 	tempdata.descriptorset = testterrain->getComputeDescriptorSet();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.terrainpushconstants);
@@ -974,180 +852,184 @@ void WanglingEngine::enqueueRecordingTasks () {
 	// cpy op should take place here, only one texture needs to exist, probably in GH, cpy op could be in secondary buff, or we add a new type of cbRecTask
 	// we put it down below temporarily so we didnt need another renderpass for 2d stuff, but in the future we should do that
 
-	// dummy to end renderpass
+	/*
+	 * End Primary Renderpass
+	 */
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-										  nullptr,
-										  VK_NULL_HANDLE,
-										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
-										  {{0, 0}, {0, 0}},
-										  0, nullptr
-								  }));
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		nullptr,
+		VK_NULL_HANDLE,
+		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		{{0, 0}, {0, 0}},
+		0, nullptr
+	}));
 
 
-	// if this works, move and change to static
 
+	/*
+	 * Wait for Pre-Reflection & Refraction Renders to Finish
+	 */
 	// feels a bit hamfisted to have so many membars, well do it like this for now, but see if there is a more elegant way later
 	// can combine these into one dependency rec task w/ 2 membars
 	VkImageMemoryBarrier2KHR* ssrrcolorpreimb = new VkImageMemoryBarrier2KHR {
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			nullptr,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.scratchbuffer.image,
-			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		nullptr,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		GraphicsHandler::vulkaninfo.scratchbuffer.image,
+		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-										  nullptr,
-										  0,
-										  0, nullptr,
-										  0, nullptr,
-										  1, ssrrcolorpreimb
-								  }));
+		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+		nullptr,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, ssrrcolorpreimb
+	}));
 	VkImageMemoryBarrier2KHR* ssrrdepthpreimb = new VkImageMemoryBarrier2KHR {
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			nullptr,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		nullptr,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
+		{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
 	};
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-										  nullptr,
-										  0,
-										  0, nullptr,
-										  0, nullptr,
-										  1, ssrrdepthpreimb
-								  }));
+		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+		nullptr,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, ssrrdepthpreimb
+	}));
 
+	/*
+	 * Copy Screen to Scratch Buffer (& Wait for that to Finish)
+	 */
 	VkImageSubresourceLayers subreclayers {
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			0,
-			0,
-			1
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		0,
+		0,
+		1
 	};
 	VkImageCopy2 imgcpy {
-			VK_STRUCTURE_TYPE_IMAGE_COPY_2,
-			nullptr,
-			subreclayers, {0, 0, 0},
-			subreclayers, {0, 0, 0},
-			{GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height, 1}
+		VK_STRUCTURE_TYPE_IMAGE_COPY_2,
+		nullptr,
+		subreclayers, {0, 0, 0},
+		subreclayers, {0, 0, 0},
+		{GraphicsHandler::vulkaninfo.swapchainextent.width, 
+		GraphicsHandler::vulkaninfo.swapchainextent.height, 
+		1}
 	};
 	VkCopyImageInfo2 cpyinfo {
-			VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-			nullptr,
-			GraphicsHandler::vulkaninfo.swapchainimages[GraphicsHandler::swapchainimageindex],
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			GraphicsHandler::vulkaninfo.scratchbuffer.image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1, &imgcpy
+		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
+		nullptr,
+		GraphicsHandler::vulkaninfo.swapchainimages[GraphicsHandler::swapchainimageindex],
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		GraphicsHandler::vulkaninfo.scratchbuffer.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1, &imgcpy
 	};
 	recordingtasks.push(cbRecTask([tempdata, cpyinfo] (VkCommandBuffer& c) {
-		GraphicsHandler::recordImgCpy(tempdata,
-									  cpyinfo,
-									  c);
+		GraphicsHandler::recordImgCpy(tempdata, cpyinfo, c);
 	}));
-
 	VkImageSubresourceLayers depthsubreclayers {
-			VK_IMAGE_ASPECT_DEPTH_BIT,
-			0,
-			0,
-			1
+		VK_IMAGE_ASPECT_DEPTH_BIT,
+		0,
+		0,
+		1
 	};
 	VkImageCopy2 depthimgcpy {
-			VK_STRUCTURE_TYPE_IMAGE_COPY_2,
-			nullptr,
-			depthsubreclayers, {0, 0, 0},
-			depthsubreclayers, {0, 0, 0},
-			{GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height, 1}
+		VK_STRUCTURE_TYPE_IMAGE_COPY_2,
+		nullptr,
+		depthsubreclayers, {0, 0, 0},
+		depthsubreclayers, {0, 0, 0},
+		{GraphicsHandler::vulkaninfo.swapchainextent.width, 
+		GraphicsHandler::vulkaninfo.swapchainextent.height, 
+		1}
 	};
 	VkCopyImageInfo2 depthcpyinfo {
-			VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-			nullptr,
-			GraphicsHandler::vulkaninfo.depthbuffer.image,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
-			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1, &depthimgcpy
+		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
+		nullptr,
+		GraphicsHandler::vulkaninfo.depthbuffer.image,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
+		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1, &depthimgcpy
 	};
-
 	recordingtasks.push(cbRecTask([tempdata, depthcpyinfo] (VkCommandBuffer& c) {
-		GraphicsHandler::recordImgCpy(tempdata,
-									  depthcpyinfo,
-									  c);
+		GraphicsHandler::recordImgCpy(tempdata, depthcpyinfo, c);
+	}));
+	VkImageMemoryBarrier2KHR* ssrrcolorimb = new VkImageMemoryBarrier2KHR {
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		nullptr,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		GraphicsHandler::vulkaninfo.scratchbuffer.image,
+		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+		nullptr,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, ssrrcolorimb
+	}));
+	VkImageMemoryBarrier2KHR* ssrrdepthimb = new VkImageMemoryBarrier2KHR {
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		nullptr,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_ACCESS_TRANSFER_WRITE_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_SHADER_READ_BIT,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
+		{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+	};
+	recordingtasks.push(cbRecTask({
+		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+		nullptr,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, ssrrdepthimb
 	}));
 
-	// lmao why is this a pointer
-	// TODO: possible memory leak lmaoooooo
-	VkImageMemoryBarrier2KHR* ssrrcolorimb = new VkImageMemoryBarrier2KHR {
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			nullptr,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.scratchbuffer.image,
-			{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-	};
+	/*
+	 * Start Renderpass for Objects using Reflection & Refraction
+	 */
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-										  nullptr,
-										  0,
-										  0, nullptr,
-										  0, nullptr,
-										  1, ssrrcolorimb
-								  }));
-
-	VkImageMemoryBarrier2KHR* ssrrdepthimb = new VkImageMemoryBarrier2KHR {
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			nullptr,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-			{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
-	};
-	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-										  nullptr,
-										  0,
-										  0, nullptr,
-										  0, nullptr,
-										  1, ssrrdepthimb
-								  }));
-
-	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-										  nullptr,
-										  GraphicsHandler::vulkaninfo.ssrrrenderpass,
-										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
-										  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
-										  2,
-										  &GraphicsHandler::vulkaninfo.primaryclears[0]
-								  }));
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.ssrrrenderpass,
+		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+		2,
+		&GraphicsHandler::vulkaninfo.primaryclears[0]
+	}));
 
 	tempdata.renderpass = GraphicsHandler::vulkaninfo.ssrrrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex];
@@ -1159,60 +1041,36 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.numtris = ocean->getTris().size();
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordDraw(tempdata, c);}));
 
-	// dummy to end renderpass
+	/*
+	 * End SSRR Renderpass
+	 */
 	recordingtasks.push(cbRecTask({
-										  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-										  nullptr,
-										  VK_NULL_HANDLE,
-										  GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
-										  {{0, 0}, {0, 0}},
-										  0, nullptr
-								  }));
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		nullptr,
+		VK_NULL_HANDLE,
+		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		{{0, 0}, {0, 0}},
+		0, nullptr
+	}));
 
-	// post-proc computes can p go here, btwn renderpasses
-	// much as id like to just cpy the screen to scratch buffer and write post-proc right to present surface, effects
-	// like bloom seemingly neccesitate putting post-proc fx on scratch buffer, then adding that scratchbuffer to
-	// the present surface
-	// yeah b/c applying a kernel requires the full completion of the render
-	// yknow for smth like bloom itd be nice to progressively write to the bloom buffer, but b/c we're saving memory with
-	// a scratch buffer thats not an option rn
-
-	// this would result in one operation that writes the cutoff to the scratch buffer, a membar to make that finish,
-	// then an operation to blur and write to the present surface
-
-	// worth also considering how other post-proc fx would play in w/ this structure
-
-	// diffraction spikes could /probably/ be draw right on the present surface, assuming we can just sample intensity,
-	// really depends on our impl
-
-	// dof/bokeh would also require a tactic similar to bloom, but these two cannot be easily combined
-
-	// exposure adjustment can be done as each final present surface pixel sum is calculated (i think)
-	// analysis of proper exposure can also be done by writing to a uniform max/stat manager
-
-	// lens flares strike me as simlar impl questions as diffraction spikes
-
-	// heat distortion is gonna end up similar to ssrr (and also a bit like bloom and dof)
-
-	// the way i see it now, we either sacrifice memory by having multiple buffers, or sacrifice performance w/ multiple
-	// scans on the same pixel
-	// also p bad parallelization if we keep having to wait for the previous post-proc op to finish before the next can
-	// begin
-
-	/// for now, b/c i anticipate memory being tight, i will be working with one scratch buffer and multiple compute ops
-
+	/*
+	 * Start Compositing Renderpass
+	 */
 	recordingtasks.push(cbRecTask({
-												  VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-												  nullptr,
-												  GraphicsHandler::vulkaninfo.compositingrenderpass,
-												  GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex],
-												  {{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
-												  1,
-												  &GraphicsHandler::vulkaninfo.primaryclears[0]
-										  }));
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.compositingrenderpass,
+		GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex],
+		{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
+		1,
+		&GraphicsHandler::vulkaninfo.primaryclears[0]
+	}));
 	tempdata.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex];
 
+	/*
+	 * Bloom
+	 */
 	if (bloom) {
 		tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
 		tempdata.descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
@@ -1225,8 +1083,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		GraphicsHandler::vulkaninfo.pppc[0].dfdepth = 1;
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata,
-												   c);
+			GraphicsHandler::recordPostProcCompute(tempdata, c);
 		}));
 
 		GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_DOWNSAMPLE;
@@ -1237,8 +1094,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata,
-												   c);
+			GraphicsHandler::recordPostProcCompute(tempdata, c);
 		}));
 		
 		GraphicsHandler::vulkaninfo.pppc[2].op = POST_PROC_OP_DOWNSAMPLE;
@@ -1263,37 +1119,31 @@ void WanglingEngine::enqueueRecordingTasks () {
 		}
 		*/
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata,
-												   GraphicsHandler::vulkaninfo.pppc,
-												   c);
+			GraphicsHandler::recordPostProcCompute(tempdata, GraphicsHandler::vulkaninfo.pppc, c);
 		}));
-
-
 
 		tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocgraphicspipeline;
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcGraphics(tempdata,
-													c);
+			GraphicsHandler::recordPostProcGraphics(tempdata, c);
 		}));
 	}
 
-	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::swapchainimageindex];
-
-	tempdata.descriptorset = texmondescriptorsets[GraphicsHandler::vulkaninfo.currentframeinflight];
+	/*
+	 * Texture Monitor
+	 */
+	tempdata.descriptorset = texmonds;
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
-	// recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
 
+	/*
+	 * Upper Left Text
+	 */
 	tempdata.descriptorset = troubleshootingtext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.textgraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(troubleshootingtext->getPushConstantData());
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
 
-	tempdata.descriptorset = settingstext->getDescriptorSets()[GraphicsHandler::vulkaninfo.currentframeinflight];
-	tempdata.pushconstantdata = reinterpret_cast<void*>(settingstext->getPushConstantData());
-	//recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Text::recordCommandBuffer(tempdata, c);}));
-
 	// TODO: switch post-proc off of linear min-mag, should have no interp
-
 }
 
 void WanglingEngine::processRecordingTasks (
@@ -1357,11 +1207,9 @@ void WanglingEngine::processRecordingTasks (
 }
 
 void WanglingEngine::collectSecondaryCommandBuffers () {
-	vkResetCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-						 0); // is this call neccesary???
+	vkResetCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight], 0); // is this call neccesary???
 
-	vkBeginCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-						 &cmdbufferbegininfo);
+	vkBeginCommandBuffer(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight], &cmdbufferbegininfo);
 	bool inrp = false;
 	while (!secondarybuffers.empty()) {
 		if (secondarybuffers.front().type == cbCollectInfo::cbCollectInfoType::CB_COLLECT_INFO_TYPE_COMMAND_BUFFER) {
@@ -1385,10 +1233,6 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 					vkCmdEndRenderPass(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight]);
 					inrp = false;
 				}
-
-				// WLYL: you were investigating this "dependency" barrier system, and learning abt pipeline barrier to facilitate copying the screen buffer
-				// when troubleshooting this, try monitoring the memory in texmon
-				// perhaps just try running a cpy lol
 
 				VkImageMemoryBarrier imb {
 						// TODO: sequester this shit to a function
@@ -1461,25 +1305,7 @@ void WanglingEngine::draw () {
 	updatePCsAndBuffers();
 
 	glfwPollEvents();
-
-	/*
-	if (GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.currentvalue
-		!= GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.lastvalue
-		&& GraphicsHandler::keyvalues.find(GLFW_KEY_TAB)->second.down) {
-		currentsetting = &currentsettingsfolder->settings[0];
-		// updateSettings();
-	}
-	if (currentsetting && currentsetting->type == SETTING_TYPE_RANGE) {
-		if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-			currentsetting->data.range.value -= 0.01;
-			// updateSettings();
-		} else if (glfwGetKey(GraphicsHandler::vulkaninfo.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-			currentsetting->data.range.value += 0.01;
-			// updateSettings();
-		}
-	}
-	*/
-
+	
 	primarycamera->takeInputs(GraphicsHandler::vulkaninfo.window);
 	physicshandler.update(meshes[0]->getTris());
 
@@ -1556,121 +1382,3 @@ void WanglingEngine::calcFrameStats (float sptime) {
 	}
 	rendertimes[framesamplecounter] = *physicshandler.getDtPtr() - sptime;
 }
-
-/*
-void WanglingEngine::updatePCsAndBuffers () {
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
-		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.cameravpmatrices =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.camerapos =
-				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.standinguv = physicshandler.getStandingUV();
-
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameravpmatrices =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-		GraphicsHandler::vulkaninfo.oceanpushconstants.cameraposition =
-				primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-
-		GraphicsHandler::vulkaninfo.grasspushconstants =
-				primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-	}
-
-//	GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] |= CAMERA_LOOK_CHANGE_FLAG_BIT;
-	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT
-		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-		GraphicsHandler::vulkaninfo.skyboxpushconstants = {
-				primarycamera->getProjectionMatrix() * primarycamera->calcAndGetSkyboxViewMatrix(),
-				lights[0]->getPosition()
-		};
-//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-//		for (uint8_t i = 0; i < lights.size(); i++) {
-//			if (lights[i]->getShadowType() == SHADOW_TYPE_LIGHT_SPACE_PERSPECTIVE ||
-//				lights[i]->getShadowType() == SHADOW_TYPE_CAMERA_SPACE_PERSPECTIVE) {  // this is a lie
-//				glm::vec3* tempb = new glm::vec3[8];
-//				GraphicsHandler::makeRectPrism(&tempb, meshes[0]->getMin(), meshes[0]->getMax());
-//				lights[i]->updateMatrices(primarycamera->getForward(),
-//										  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.), tempb, 8);
-//				delete[] tempb;
-//				lightuniformbuffertemp[i] = {
-//						lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-//						lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-//						lights[i]->getPosition(),
-//						lights[i]->getIntensity(),
-//						glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-//						lights[i]->getType(),
-//						lights[i]->getColor()
-//				};
-//				GraphicsHandler::VKHelperUpdateUniformBuffer(   // feels like this could be moved a level down, watch out for swapping if and for
-//						MAX_LIGHTS,
-//						sizeof(LightUniformBuffer),
-//						lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-//						&lightuniformbuffertemp[0]);
-//			}
-//		}
-	}
-
-	GraphicsHandler::vulkaninfo.terrainpushconstants =
-			primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix();
-
-	// how is this not redundant w/ the above??
-//	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & LIGHT_CHANGE_FLAG_BIT) {
-//		LightUniformBuffer lightuniformbuffertemp[MAX_LIGHTS];
-//		for (uint8_t i = 0; i < lights.size(); i++) {
-//			lightuniformbuffertemp[i] = {
-//					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-//					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-//					lights[i]->getPosition(),
-//					lights[i]->getIntensity(),
-//					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-//					lights[i]->getType(),
-//					lights[i]->getColor()
-//			};
-//			GraphicsHandler::VKHelperUpdateUniformBuffer(
-//					MAX_LIGHTS,
-//					sizeof(LightUniformBuffer),
-//					lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-//					&lightuniformbuffertemp[0]);
-//		}
-//		GraphicsHandler::vulkaninfo.primarygraphicspushconstants.numlights = lights.size();
-//		GraphicsHandler::vulkaninfo.oceanpushconstants.numlights = lights.size();
-//	}
-
-	// making this block execute no matter what for shadowmap troubleshooting
-	{
-		LightUniformBuffer lightuniformbuffertemp[lights.size()];
-		for (uint8_t i = 0; i < lights.size(); i++) {
-			glm::vec3 tempb[8], * tempbp = &tempb[0];
-			GraphicsHandler::makeRectPrism(&tempbp, meshes[0]->getMin(), meshes[0]->getMax());
-			lights[i]->updateMatrices(primarycamera->getForward(),
-									  primarycamera->getPosition() + glm::vec3(0., 0.5, 0.),
-									  tempbp,
-									  8);
-			lightuniformbuffertemp[i] = {
-					lights[i]->getShadowPushConstantsPtr()->lightvpmatrices,
-					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
-					lights[i]->getPosition(),
-					lights[i]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
-					lights[i]->getType(),
-					lights[i]->getColor()
-			};
-		}
-		GraphicsHandler::VKHelperUpdateUniformBuffer(
-				lights.size(),
-				sizeof(LightUniformBuffer),
-				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
-				&lightuniformbuffertemp[0]);
-	}*/
-
-/*
-	MeshUniformBuffer temp;
-	for (auto& m: meshes) {
-		temp = m->getUniformBufferData();
-		GraphicsHandler::VKHelperUpdateUniformBuffer(
-				1,
-				sizeof(MeshUniformBuffer),
-				m->getUniformBufferMemories()[GraphicsHandler::swapchainimageindex],
-				reinterpret_cast<void*>(&temp));
-	}
-}*/

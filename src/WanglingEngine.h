@@ -44,34 +44,6 @@
 }
 #define NUM_FRAME_SAMPLES 60 // number of frames to sample for fps statistics
 
-typedef enum SettingTypes {
-	SETTING_TYPE_TOGGLE,
-	SETTING_TYPE_RANGE
-} SettingTypes;
-typedef int SettingType;
-typedef struct SettingDataToggle {
-	bool on;
-} SettingDataToggle;
-typedef struct SettingDataRange {
-	float min, max, value;
-} SettingDataRange;
-typedef union SettingData {
-	SettingDataToggle toggle;
-	SettingDataRange range;
-} SettingData;
-typedef struct Setting {
-	const char* name;
-	int hotkey;
-	SettingType type;
-	SettingData data;
-} Setting;
-typedef struct SettingsFolder {
-	const char* name;
-	int hotkey;
-	std::vector<SettingsFolder> folders;
-	std::vector<Setting> settings;
-} SettingsFolder;
-
 class WanglingEngine {
 private:
 	Camera* primarycamera;
@@ -87,7 +59,7 @@ private:
 	std::thread recordingthreads[NUM_RECORDING_THREADS];
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet* skyboxdescriptorsets, * texmondescriptorsets;
+	VkDescriptorSet skyboxds, texmonds;
 	static VkDescriptorSet* scenedescriptorsets;
 	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
 	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
@@ -99,8 +71,6 @@ private:
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
 	bool bloom, ssrr;
-	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
-	Setting* currentsetting;
 
 	// void initSettings ();
 
@@ -111,13 +81,13 @@ private:
 	 */
 	void initSceneData ();
 	void initSkybox ();
+	void initTexMon ();
 	void initTroubleshootingLines ();
 	void updateSkyboxDescriptorSets ();
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 	void updateTexMonDescriptorSets (TextureInfo tex);
-	static void recordCommandBuffer (WanglingEngine* self, uint32_t fifindex);
 	void enqueueRecordingTasks ();
 	static void processRecordingTasks (
 			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference
