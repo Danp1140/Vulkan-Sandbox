@@ -78,15 +78,6 @@ typedef enum ChangeFlagBits {
 } ChangeFlagBits;
 typedef int ChangeFlag;
 
-typedef enum PostProcOps {
-	POST_PROC_OP_TONEMAP,
-	POST_PROC_OP_LUMINANCE_CUTOFF,
-	POST_PROC_OP_BLOOM,
-	POST_PROC_OP_DOWNSAMPLE,
-	POST_PROC_OP_UPSAMPLE
-} PostProcOps;
-typedef int PostProcOp;
-
 typedef enum TextureType {
 	TEXTURE_TYPE_DIFFUSE,
 	TEXTURE_TYPE_NORMAL,
@@ -134,12 +125,14 @@ typedef struct PipelineInitInfo {
 	bool depthtest = false;
 	VkSpecializationInfo specinfo = {};
 	VkRenderPass renderpass = VK_NULL_HANDLE; // defaults to primary via VKSubInitPipeline
+	VkExtent2D extent = {0, 0}; // defaults to swapchain extent via VKSubInitPipeline
+	VkCullModeFlags culling = VK_CULL_MODE_BACK_BIT;
 } PipelineInitInfo;
 
 typedef struct PipelineInfo {
-	VkDescriptorSetLayout scenedsl, objectdsl;
-	VkPipelineLayout pipelinelayout;
-	VkPipeline pipeline;
+	VkDescriptorSetLayout scenedsl = VK_NULL_HANDLE, objectdsl = VK_NULL_HANDLE;
+	VkPipelineLayout pipelinelayout = VK_NULL_HANDLE;
+	VkPipeline pipeline = VK_NULL_HANDLE;
 } PipelineInfo;
 
 typedef struct TextureInfo {
@@ -156,16 +149,18 @@ private:
 	}
 
 public:
-	VkImage image;
-	VkDeviceMemory memory;
-	VkImageView imageview;
-	VkSampler sampler;
-	VkImageLayout layout;
-	VkFormat format;
-	VkExtent2D resolution;
-	VkMemoryPropertyFlags memoryprops;
-	TextureType type;
-	glm::mat3 uvmatrix;
+	VkImage image = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkImageView imageview = VK_NULL_HANDLE;
+	VkSampler sampler = VK_NULL_HANDLE;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkFormat format = VK_FORMAT_UNDEFINED;
+	VkImageUsageFlags usage = 0x00000000;
+	VkExtent2D resolution = {0, 0};
+	VkMemoryPropertyFlags memoryprops = 0x00000000;
+	TextureType type = TEXTURE_TYPE_MAX;
+	glm::mat3 uvmatrix = glm::mat3(1);
+	VkImageViewType viewtype = VK_IMAGE_VIEW_TYPE_2D;
 
 	VkDescriptorImageInfo getDescriptorImageInfo () const {
 		return {sampler, imageview, layout};
@@ -206,13 +201,6 @@ typedef struct SkyboxPushConstants {
 typedef struct ShadowmapPushConstants {
 	glm::mat4 lightvpmatrices, lspmatrix;
 } ShadowmapPushConstants;
-
-typedef struct PostProcPushConstants {
-	PostProcOp op;
-	float exposure;
-	glm::uvec2 numinvocs, scext;
-	uint32_t dfdepth; // would like to make this a uint8_t if possible
-} PostProcPushConstants;
 
 /*
  * Uniform Buffer Structs
@@ -355,7 +343,7 @@ typedef struct VulkanInfo {
 	VkSurfaceKHR surface;
 	VkDebugUtilsMessengerEXT debugmessenger;
 	VkPhysicalDevice physicaldevice;
-	VkDevice logicaldevice;
+	VkDevice logicaldevice = VK_NULL_HANDLE;
 	VkQueue graphicsqueue, presentationqueue;
 	uint32_t graphicsqueuefamilyindex, presentqueuefamilyindex, transferqueuefamilyindex;
 	VkSwapchainKHR swapchain;
@@ -364,13 +352,11 @@ typedef struct VulkanInfo {
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
 	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass, ssrrrenderpass;
-	PipelineInfo primarygraphicspipeline,
-			textgraphicspipeline,
+	PipelineInfo textgraphicspipeline,
 			skyboxgraphicspipeline,
 			oceangraphicspipeline,
 			oceancomputepipeline,
 			grassgraphicspipeline,
-			shadowmapgraphicspipeline,
 			texmongraphicspipeline,
 			linegraphicspipeline,
 			terraingencomputepipeline,
@@ -389,16 +375,14 @@ typedef struct VulkanInfo {
 	VkBuffer stagingbuffer;
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
-	// what are below for??
+	// TODO: delete
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	VkDescriptorSet* postprocds;
 	TextureInfo depthbuffer, scratchdepthbuffer, scratchbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
 	// figure a better way to handle these tbh
 	SkyboxPushConstants skyboxpushconstants;
-	std::vector<PostProcPushConstants> pppc;
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
 	// TerrainGenPushConstants terraingenpushconstants, terraingenpushconstants2;
@@ -506,6 +490,7 @@ public:
 	// TODO: destroy this function once and for all, cast it into the flames
 	static void VKInitPipelines ();
 	static void VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineInitInfo pii);
+	static void destroyPipeline(PipelineInfo& p);
 
 	/*
 	 * Buffer Utilities
@@ -583,6 +568,8 @@ public:
 			TextureType textype,
 			VkImageViewType imgviewtype,
 			VkSampler sampler);
+	static void VKHelperInitTexture (TextureInfo& texturedst);
+	static void destroyTexture (TextureInfo& t);
 	static void VKHelperUpdateWholeTexture (
 			TextureInfo* texdst,
 			void* src);
@@ -605,9 +592,6 @@ public:
 			const std::vector<VkDescriptorBufferInfo>& bufinfos);
 
 	static void submitAndPresent ();
-	static void initPostProc ();
-	static void recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb);
-	static void recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb);
 
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);

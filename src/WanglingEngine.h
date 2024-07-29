@@ -19,6 +19,7 @@
 #include "Ocean.h"
 #include "ParticleSystem.h"
 #include "Terrain.h"
+#include "Compositing.h"
 
 #include <thread>
 #include <rapidjson/document.h>
@@ -71,6 +72,7 @@ private:
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
 	bool bloom, ssrr;
+	SSRR rrengine;
 
 	// void initSettings ();
 

@@ -25,6 +25,8 @@ typedef struct PrimaryGraphicsPushConstants {
 class Mesh {
 private:
 	TextureInfo diffusetexture, normaltexture, heighttexture;
+	static PipelineInfo graphicspipeline, shadowpipeline;
+	static size_t nummeshes;
 
 	void recalculateModelMatrix ();
 
@@ -79,6 +81,8 @@ public:
 	static void createShadowmapPipeline ();
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
 	static void recordShadowDraw (cbRecData data, VkCommandBuffer& cb);
+	static const PipelineInfo& getPipeline() {return graphicspipeline;}
+	static const PipelineInfo& getShadowPipeline() {return shadowpipeline;}
 
 	/*
 	 * Member Access

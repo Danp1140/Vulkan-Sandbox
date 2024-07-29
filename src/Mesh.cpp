@@ -4,6 +4,10 @@
 
 #include "Mesh.h"
 
+PipelineInfo Mesh::graphicspipeline = {};
+PipelineInfo Mesh::shadowpipeline = {};
+size_t Mesh::nummeshes = 0;
+
 Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 		uint32_t dir, uint32_t nir, uint32_t hir) : 
 	position(p), 
@@ -19,9 +23,14 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 	ds(VK_NULL_HANDLE),
 	uniformbufferdata({}),
 	dsmutex() {
+	if (nummeshes == 0) {
+		createPipeline();
+		createShadowmapPipeline();
+	}
+	nummeshes++;
 	
 	recalculateModelMatrix();
-	initDescriptorSets(GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
+	initDescriptorSets(graphicspipeline.objectdsl);
 	
 	uniformbuffer.elemsize = sizeof(MeshUniformBuffer);
 	uniformbuffer.numelems = 1;
@@ -40,6 +49,7 @@ Mesh::Mesh (const char* filepath,
 }
 
 Mesh::~Mesh () {
+	nummeshes--;
 	if (vertexbuffer != VK_NULL_HANDLE) {
 		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffer, nullptr);
 		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffermemory, nullptr);
@@ -52,6 +62,10 @@ Mesh::~Mesh () {
 		1, &ds);
 	vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.memory, nullptr);
 	vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.buffer, nullptr);
+	if (nummeshes == 0) {
+		GraphicsHandler::destroyPipeline(shadowpipeline);
+		GraphicsHandler::destroyPipeline(graphicspipeline);
+	}
 }
 
 void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
@@ -332,7 +346,7 @@ void Mesh::createPipeline () {
 	};
 	pii.depthtest = true;
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&graphicspipeline, pii);
 }
 
 void Mesh::createShadowmapPipeline () {
@@ -393,8 +407,11 @@ void Mesh::createShadowmapPipeline () {
 		&vertinattribdesc
 	};
 	pii.depthtest = true;
+	pii.extent = {4096, 4096};
+	pii.culling = VK_CULL_MODE_FRONT_BIT;
+	pii.renderpass = GraphicsHandler::vulkaninfo.templateshadowrenderpass;
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&shadowpipeline, pii);
 }
 
 void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {

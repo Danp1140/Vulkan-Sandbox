@@ -14,8 +14,6 @@ WanglingEngine::WanglingEngine () {
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
-	Mesh::createPipeline();
-	Mesh::createShadowmapPipeline();
 	Text::createPipeline();
 	Ocean::createComputePipeline();
 	Ocean::createGraphicsPipeline();
@@ -25,6 +23,7 @@ WanglingEngine::WanglingEngine () {
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
 	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
+	rrengine = SSRR();
 	
 	physicshandler = PhysicsHandler(primarycamera);
 
@@ -46,7 +45,6 @@ WanglingEngine::WanglingEngine () {
 		TEXTURE_TYPE_SSRR_BUFFER,
 		VK_IMAGE_VIEW_TYPE_2D,
 		GraphicsHandler::genericsampler);
-	GraphicsHandler::initPostProc();
 	
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
@@ -743,7 +741,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	// try removing them from draws once we have both mesh draws in and are stress testing
 	// TODO: check for light change flag
 	tempdata.scenedescriptorset = scenedescriptorsets[GraphicsHandler::swapchainimageindex];
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline;
+	tempdata.pipeline = Mesh::getShadowPipeline();
 	tempdata.scenedsmutex = &scenedsmutex;
 	for (uint8_t i = 0; i < lights.size(); i++) {
 		recordingtasks.push(cbRecTask({
@@ -819,7 +817,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	/*
 	 * Meshes
 	 */
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.primarygraphicspipeline;
+	tempdata.pipeline = Mesh::getPipeline();
 	for (auto& m: meshes) {
 		tempdata.pushconstantdata = reinterpret_cast<void*>(&m->pcdata);
 		// tempdata.descriptorset = m->getDescriptorSets()[GraphicsHandler::swapchainimageindex];
@@ -871,6 +869,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	 */
 	// feels a bit hamfisted to have so many membars, well do it like this for now, but see if there is a more elegant way later
 	// can combine these into one dependency rec task w/ 2 membars
+	/*
 	VkImageMemoryBarrier2KHR* ssrrcolorpreimb = new VkImageMemoryBarrier2KHR {
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 		nullptr,
@@ -915,6 +914,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		0, nullptr,
 		1, ssrrdepthpreimb
 	}));
+	*/
 
 	/*
 	 * Copy Screen to Scratch Buffer (& Wait for that to Finish)
@@ -1072,8 +1072,6 @@ void WanglingEngine::enqueueRecordingTasks () {
 	 * Bloom
 	 */
 	if (bloom) {
-		tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
-		tempdata.descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
 
 		/*
 		GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_DOWNSAMPLE;
@@ -1118,6 +1116,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 			postprocdata[d].pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[d]);
 		}
 		*/
+		/*
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
 			GraphicsHandler::recordPostProcCompute(tempdata, GraphicsHandler::vulkaninfo.pppc, c);
 		}));
@@ -1126,6 +1125,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
 			GraphicsHandler::recordPostProcGraphics(tempdata, c);
 		}));
+		*/
 	}
 
 	/*
@@ -1247,14 +1247,15 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 						secondarybuffers.front().data.di.pImageMemoryBarriers[0].image,
 						secondarybuffers.front().data.di.pImageMemoryBarriers[0].subresourceRange
 				};
-				vkCmdPipelineBarrier(GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-									 secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcStageMask,
-									 secondarybuffers.front().data.di.pImageMemoryBarriers[0].dstStageMask,
-									 secondarybuffers.front().data.di.dependencyFlags,
-									 0, nullptr,
-									 0, nullptr,
-									 1, &imb);
-				delete secondarybuffers.front().data.di.pImageMemoryBarriers;
+				vkCmdPipelineBarrier(
+					GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+					secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcStageMask,
+					secondarybuffers.front().data.di.pImageMemoryBarriers[0].dstStageMask,
+					secondarybuffers.front().data.di.dependencyFlags,
+					0, nullptr,
+					0, nullptr,
+					1, &imb);
+				delete[] secondarybuffers.front().data.di.pImageMemoryBarriers;
 			}
 		}
 		secondarybuffers.pop();

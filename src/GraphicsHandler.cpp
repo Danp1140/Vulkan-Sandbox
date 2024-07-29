@@ -38,10 +38,8 @@ GraphicsHandler::~GraphicsHandler () {
 		vkDestroyFramebuffer(vulkaninfo.logicaldevice, vulkaninfo.primaryframebuffers[x], nullptr);
 	}
 	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.pipeline, nullptr);
-	vkDestroyPipeline(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipeline, nullptr);
 	vkDestroyRenderPass(vulkaninfo.logicaldevice, vulkaninfo.primaryrenderpass, nullptr);
 	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, vulkaninfo.textgraphicspipeline.pipelinelayout, nullptr);
-	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, vulkaninfo.primarygraphicspipeline.pipelinelayout, nullptr);
 	for (uint32_t x = 0; x < vulkaninfo.numswapchainimages; x++)
 		vkDestroyImageView(vulkaninfo.logicaldevice, vulkaninfo.swapchainimageviews[x], nullptr);
 	vkDestroySwapchainKHR(vulkaninfo.logicaldevice, vulkaninfo.swapchain, nullptr);
@@ -199,133 +197,6 @@ void GraphicsHandler::VKInitPipelines () {
 				false,
                 GraphicsHandler::vulkaninfo.primaryrenderpass);
 	}
-    // post-proc
-    {
-        VkDescriptorSetLayoutBinding objdslbindings[4] {{
-            0,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
-            nullptr
-        }, {
-            1,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
-            nullptr
-        }, {
-            2,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
-            nullptr
-        }, {
-            3,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
-            nullptr
-        }};
-        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            nullptr,
-            0,
-            0,
-            nullptr
-        }, {
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            nullptr,
-            0,
-            4,
-            &objdslbindings[0]
-        }};
-        const char* shaderfilepaths = WORKING_DIRECTORY "/resources/shaders/SPIRV/postproccomp.spv";
-        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocpipeline,
-                          VK_SHADER_STAGE_COMPUTE_BIT,
-                          &shaderfilepaths,
-                          &dslcreateinfos[0],
-                          {VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(PostProcPushConstants)},
-                          {
-                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                              nullptr,
-                              0,
-                              0,
-                              nullptr,
-                              0,
-                              nullptr
-                          },
-                          false,
-                          nullptr);
-    }
-    // post-proc graphics
-    {
-        VkDescriptorSetLayoutBinding objdslbindings[4] {{
-            0,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1,
-            VK_SHADER_STAGE_FRAGMENT_BIT |
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr
-        }, {
-            1,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1,
-            VK_SHADER_STAGE_FRAGMENT_BIT |
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr
-        }, {
-            2,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1,
-            VK_SHADER_STAGE_FRAGMENT_BIT |
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr
-        }, {
-            3,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1,
-            VK_SHADER_STAGE_FRAGMENT_BIT |
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr
-        }};
-        VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            nullptr,
-            0,
-            0,
-            nullptr
-        }, {
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            nullptr,
-            0,
-            4,
-            &objdslbindings[0]
-        }};
-        // note: this shares dslayout w/ compute, and current impl shares ds's too
-        const char* shaderfilepaths[2] = {WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocvert.spv",
-										  WORKING_DIRECTORY "/resources/shaders/SPIRV/postprocfrag.spv"};
-        VKSubInitPipeline(&GraphicsHandler::vulkaninfo.postprocgraphicspipeline,
-                          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                          &shaderfilepaths[0],
-                          &dslcreateinfos[0],
-                          {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)},
-                          {
-                              VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                              nullptr,
-                              0,
-                              0,
-                              nullptr,
-                              0,
-                              nullptr
-                          },
-                          false,
-                          GraphicsHandler::vulkaninfo.compositingrenderpass);
-    }
-
 }
 
 void GraphicsHandler::VKSubInitWindow () {
@@ -1498,7 +1369,7 @@ void GraphicsHandler::VKSubInitPipeline (
 			0,
 			3
 	};
-	bool issm = pipelineinfo == &GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline;
+	bool issm = false;
 	VkViewport viewporttemp {
 			0.0f,
 			0.0f,
@@ -1809,19 +1680,18 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 			0,
 			3
 	};
-	bool issm = pipelineinfo == &GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline;
+	if (pii.extent.width == 0 && pii.extent.height == 0) pii.extent = vulkaninfo.swapchainextent;
 	VkViewport viewporttemp {
 			0.0f,
 			0.0f,
-			issm ? 4096 : (float)vulkaninfo.swapchainextent.width,
-			issm ? 4096 : (float)vulkaninfo.swapchainextent.height,
+			static_cast<float>(pii.extent.width),
+			static_cast<float>(pii.extent.height),
 			0.0f,               // TODO: try changing this to -1.f!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			1.0f
 	};
-	VkExtent2D tempext {4096, 4096};
 	VkRect2D scissortemp {
 			{0, 0},
-			issm ? tempext : vulkaninfo.swapchainextent
+			pii.extent
 	};
 	VkPipelineViewportStateCreateInfo viewportstatecreateinfo {
 			VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -1839,8 +1709,7 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 			VK_FALSE,
 			VK_FALSE,
 			VK_POLYGON_MODE_FILL,
-			issm ? VK_CULL_MODE_FRONT_BIT : (pipelineinfo == &GraphicsHandler::vulkaninfo.grassgraphicspipeline
-											 ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT),
+			pii.culling,
 			VK_FRONT_FACE_COUNTER_CLOCKWISE,
 			VK_FALSE,                       // TODO: try enabling this for shadowmap someday
 			0.0f,
@@ -1911,7 +1780,7 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 			1, &colorblendattachmentstate,
 			{0.0f, 0.0f, 0.0f, 0.0f}
 	};
-	if (pii.renderpass == VK_NULL_HANDLE) pii.renderpass = issm ? vulkaninfo.templateshadowrenderpass : vulkaninfo.primaryrenderpass;  // TODO: implement rp arg usage in SM
+	if (pii.renderpass == VK_NULL_HANDLE) pii.renderpass = vulkaninfo.primaryrenderpass;
 	VkGraphicsPipelineCreateInfo pipelinecreateinfo = {
 			VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 			nullptr,
@@ -1947,6 +1816,13 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 	}
 	delete[] shadermodules;
 
+}
+
+void GraphicsHandler::destroyPipeline(PipelineInfo& p) {
+	vkDestroyDescriptorSetLayout(vulkaninfo.logicaldevice, p.objectdsl, nullptr);
+	vkDestroyPipelineLayout(vulkaninfo.logicaldevice, p.pipelinelayout, nullptr);
+	vkDestroyPipeline(vulkaninfo.logicaldevice, p.pipeline, nullptr);
+	p = (PipelineInfo){};
 }
 
 void GraphicsHandler::VKSubInitDepthBuffer () {
@@ -2452,6 +2328,79 @@ void GraphicsHandler::VKHelperInitTexture (
 	texturedst->setUVRotation(0.);
 }
 
+void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
+	// TODO: reevaluate each of these texture types & consider adding viewtype to these if's as well
+	// probably remove SUBPASS
+	// probably change SSRR to SCRATCH
+	if (texturedst.type == TEXTURE_TYPE_SHADOWMAP) {
+		texturedst.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	}
+	else if (texturedst.type == TEXTURE_TYPE_SUBPASS) {
+		texturedst.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
+	} else if (texturedst.type == TEXTURE_TYPE_SSRR_BUFFER) {
+		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		if (texturedst.format != VK_FORMAT_D32_SFLOAT) texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
+	} else if (texturedst.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	} else {
+		texturedst.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	}
+
+	VKHelperInitImage(
+			&texturedst,
+			texturedst.resolution.width,
+			texturedst.resolution.height,
+			texturedst.format,
+			texturedst.memoryprops,
+			texturedst.usage,
+			texturedst.layout,
+			texturedst.viewtype);
+
+	VkDeviceSize size =
+			texturedst.resolution.width 
+			* texturedst.resolution.height 
+			* VKHelperGetPixelSize(texturedst.format) 
+			* (texturedst.viewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1);
+	//below stuff has redundant code in updatewholeimages...is it necessary?
+	if (texturedst.viewtype != VK_IMAGE_VIEW_TYPE_CUBE 
+		&& texturedst.format != VK_FORMAT_D32_SFLOAT 
+		&& texturedst.type != TEXTURE_TYPE_SUBPASS) {
+		VkSubresourceLayout subresourcelayout;
+		VkImageSubresource imgsubresource {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+		vkGetImageSubresourceLayout(
+			vulkaninfo.logicaldevice,
+			texturedst.image,
+			&imgsubresource,
+			&subresourcelayout);
+		size = subresourcelayout.size;
+	}
+
+	if (texturedst.type != TEXTURE_TYPE_SHADOWMAP 
+		&& texturedst.type != TEXTURE_TYPE_SUBPASS 
+		&& texturedst.type != TEXTURE_TYPE_SSRR_BUFFER) {
+		char* emptydata = new char[size];
+		memset(emptydata, 0, size);
+		VKHelperUpdateWholeTexture(&texturedst, static_cast<void*>(emptydata));
+		delete[] emptydata;
+	}
+	// texturedst->texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	texturedst.setUVPosition(glm::vec2(0., 0.));
+	texturedst.setUVScale(glm::vec2(1., 1.));
+	texturedst.setUVRotation(0.);
+}
+
+void GraphicsHandler::destroyTexture(TextureInfo& t) {
+	vkDestroyImageView(vulkaninfo.logicaldevice, t.imageview, nullptr);
+	vkFreeMemory(vulkaninfo.logicaldevice, t.memory, nullptr);
+	vkDestroyImage(vulkaninfo.logicaldevice, t.image, nullptr);
+	t = (TextureInfo){};
+}
+
 void GraphicsHandler::VKHelperUpdateWholeTexture (
 		TextureInfo* texdst,
 		void* src) {
@@ -2723,54 +2672,9 @@ void GraphicsHandler::recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, Vk
 	vkEndCommandBuffer(cb);
 }
 
-void GraphicsHandler::initPostProc () {
-	vulkaninfo.postprocds = new VkDescriptorSet[vulkaninfo.numswapchainimages];
-	VkDescriptorSetLayout layouts[vulkaninfo.numswapchainimages];
-	for (uint8_t scii = 0; scii < vulkaninfo.numswapchainimages; scii++)
-		layouts[scii] = vulkaninfo.postprocpipeline.objectdsl;
-	VkDescriptorSetAllocateInfo allocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
-			vulkaninfo.descriptorpool,
-			vulkaninfo.numswapchainimages,
-			&layouts[0]
-	};
-	vkAllocateDescriptorSets(vulkaninfo.logicaldevice, &allocinfo, &vulkaninfo.postprocds[0]);
-	for (uint8_t scii = 0; scii < vulkaninfo.numswapchainimages; scii++) {
-		VkDescriptorImageInfo dii {
-				genericsampler,
-				vulkaninfo.swapchainimageviews[scii],
-				VK_IMAGE_LAYOUT_GENERAL
-		};
-		VkWriteDescriptorSet writeds {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				vulkaninfo.postprocds[scii],
-				0,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-				&dii,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
-		dii.imageView = GraphicsHandler::vulkaninfo.scratchbuffer.imageview;
-		writeds.dstBinding = 1;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
-		dii.imageView = GraphicsHandler::vulkaninfo.swapchainimageviews[scii];
-		dii.sampler = GraphicsHandler::vulkaninfo.scratchbuffer.sampler;
-		writeds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writeds.dstBinding = 2;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
-		dii.imageView = GraphicsHandler::vulkaninfo.scratchbuffer.imageview;
-		writeds.dstBinding = 3;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writeds, 0, nullptr);
-	}
-}
-
 // the length of this and other rec functions brings to mind the question of sync btwn threads to ensure order is maintained
 // note this function requires multiple data to be passed as a std::vector<cbRecData>
+/*
 void
 GraphicsHandler::recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb) {
 	// odd thought, but this is p redundant w/ other compute records, can we generalize the recording func? thatd make things much easier...
@@ -2884,7 +2788,9 @@ GraphicsHandler::recordPostProcCompute (cbRecData data, std::vector<PostProcPush
 	}
 	vkEndCommandBuffer(cb);
 }
+*/
 
+/*
 void GraphicsHandler::recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -2917,6 +2823,7 @@ void GraphicsHandler::recordPostProcGraphics (cbRecData data, VkCommandBuffer& c
 	vkCmdDraw(cb, 6, 1, 0, 0);
 	vkEndCommandBuffer(cb);
 }
+*/
 
 glm::vec3 GraphicsHandler::mat4TransformVec3 (glm::mat4 M, glm::vec3 v) {
 	glm::vec4 w = M * glm::vec4(v.x, v.y, v.z, 1.);
