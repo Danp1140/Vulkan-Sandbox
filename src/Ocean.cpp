@@ -303,8 +303,8 @@ void Ocean::rewriteTextureDescriptorSets () {
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
 		{normalmap.getDescriptorImageInfo(),
-		GraphicsHandler::vulkaninfo.scratchbuffer.getDescriptorImageInfo(),
-		GraphicsHandler::vulkaninfo.scratchdepthbuffer.getDescriptorImageInfo()},
+		CompositingOp::getScratchDII(),
+		CompositingOp::getScratchDepthDII()},
 		{{}, {}, {}});
 
 	GraphicsHandler::updateDescriptorSet(
@@ -315,73 +315,18 @@ void Ocean::rewriteTextureDescriptorSets () {
 		{heightmap.getDescriptorImageInfo(),
 		velocitymap.getDescriptorImageInfo()},
 		{{}, {}, {}, {}});
-
-	/*
-	for (unsigned char x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
-		VkDescriptorImageInfo imginfo = {GraphicsHandler::genericsampler, heightmap.imageview, VK_IMAGE_LAYOUT_GENERAL};
-		VkWriteDescriptorSet writedescset {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				descriptorsets[x],
-				0,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-		imginfo.sampler = VK_NULL_HANDLE;
-		writedescset.dstSet = computedescriptorsets[x];
-		writedescset.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-//		imginfo=velocitymap.getDescriptorImageInfo();
-		imginfo = {VK_NULL_HANDLE, velocitymap.imageview, VK_IMAGE_LAYOUT_GENERAL};
-		writedescset.dstBinding = 1;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-		imginfo = normalmap.getDescriptorImageInfo();
-		writedescset.dstSet = descriptorsets[x];
-		writedescset.dstBinding = 1;
-		writedescset.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-//		writedescset.pImageInfo=&imginfo;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-		imginfo = {GraphicsHandler::linearminmagsampler,
-				   GraphicsHandler::vulkaninfo.scratchbuffer.imageview,
-				   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-		writedescset.dstBinding = 2;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-		// could p consolidate these calls lol
-
-		imginfo.imageView = GraphicsHandler::vulkaninfo.scratchdepthbuffer.imageview;
-		writedescset.dstBinding = 3;
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-//		imginfo={GraphicsHandler::genericsampler, GraphicsHandler::vulkaninfo.swapchainimageviews[x], VK_IMAGE_LAYOUT_GENERAL};
-//		writedescset.dstBinding=2;
-		//figure this out later
-//		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, 1, &writedescset, 0, nullptr);
-
-//		imginfo=environmentmap->getDescriptorImageInfo();
-//		writedescset.dst
-	}
-	*/
 }
 
 void Ocean::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			data.renderpass,
-			0,
-			data.framebuffer,
-			VK_FALSE,
-			0,
-			0
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		data.renderpass,
+		0,
+		data.framebuffer,
+		VK_FALSE,
+		0,
+		0
 	};
 	VkCommandBufferBeginInfo cmdbufbegininfo {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,

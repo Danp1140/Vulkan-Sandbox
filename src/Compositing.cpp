@@ -6,33 +6,32 @@ uint8_t CompositingOp::numcompops = 0;
 
 CompositingOp::CompositingOp () {
 	VK_INIT_GUARD
-	if (numcompops == 0) {
-		std::cout << "first comp" << std::endl;
-		scratchbuffer.sampler = GraphicsHandler::linearminmagsampler;
-		scratchbuffer.format = SWAPCHAIN_IMAGE_FORMAT;
-		scratchbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
-		scratchbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		scratchbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
-		GraphicsHandler::VKHelperInitTexture(scratchbuffer);
-		scratchdepthbuffer.sampler = GraphicsHandler::genericsampler;
-		scratchdepthbuffer.format = COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT;
-		scratchdepthbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
-		scratchdepthbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-		scratchdepthbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
-		GraphicsHandler::VKHelperInitTexture(scratchdepthbuffer);
-	}
+	COMP_INIT_GUARD
 	numcompops++;
 }
 
 CompositingOp::~CompositingOp () {
-	VK_INIT_GUARD
-	if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;
 	numcompops--;
-	if (numcompops == 0) {
-		std::cout << "last comp" << std::endl;
-		GraphicsHandler::destroyTexture(scratchbuffer);
-		GraphicsHandler::destroyTexture(scratchdepthbuffer);
-	}
+}
+
+void CompositingOp::init() {
+	scratchbuffer.sampler = GraphicsHandler::linearminmagsampler;
+	scratchbuffer.format = SWAPCHAIN_IMAGE_FORMAT;
+	scratchbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
+	scratchbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	scratchbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
+	GraphicsHandler::VKHelperInitTexture(scratchbuffer);
+	scratchdepthbuffer.sampler = GraphicsHandler::genericsampler;
+	scratchdepthbuffer.format = COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT;
+	scratchdepthbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
+	scratchdepthbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	scratchdepthbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
+	GraphicsHandler::VKHelperInitTexture(scratchdepthbuffer);
+}
+
+void CompositingOp::terminate() {
+	GraphicsHandler::destroyTexture(scratchbuffer);
+	GraphicsHandler::destroyTexture(scratchdepthbuffer);
 }
 
 VkDependencyInfoKHR SSRR::getPreCopyDependency () {
@@ -113,7 +112,6 @@ VkDependencyInfoKHR SSRR::getPostCopyDependency () {
 		0, nullptr,
 		2, imbs
 	};
-
 }
 
 void SSRR::recordCopy (VkCommandBuffer& cb) {
@@ -134,6 +132,9 @@ void SSRR::recordCopy (VkCommandBuffer& cb) {
 		1, &imgcpy
 	};
 	GraphicsHandler::recordImgCpy({}, cpyinfo, cb);
+}
+
+void SSRR::recordDepthCopy (VkCommandBuffer& cb) {
 	VkImageCopy2 depthimgcpy {
 		VK_STRUCTURE_TYPE_IMAGE_COPY_2,
 		nullptr,
@@ -145,7 +146,7 @@ void SSRR::recordCopy (VkCommandBuffer& cb) {
 		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
 		nullptr,
 		GraphicsHandler::vulkaninfo.depthbuffer.image,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		scratchdepthbuffer.image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1, &depthimgcpy

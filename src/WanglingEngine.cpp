@@ -14,6 +14,7 @@ WanglingEngine::WanglingEngine () {
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
+	CompositingOp::init();
 	Text::createPipeline();
 	Ocean::createComputePipeline();
 	Ocean::createGraphicsPipeline();
@@ -23,29 +24,9 @@ WanglingEngine::WanglingEngine () {
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
 	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-	rrengine = SSRR();
 	
 	physicshandler = PhysicsHandler(primarycamera);
 
-	// theres probably a better place for this
-	// could p put in initPostProc()
-	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchbuffer,
-		GraphicsHandler::vulkaninfo.swapchainextent.width,
-		GraphicsHandler::vulkaninfo.swapchainextent.height,
-		SWAPCHAIN_IMAGE_FORMAT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		TEXTURE_TYPE_SSRR_BUFFER,
-		VK_IMAGE_VIEW_TYPE_2D,
-		GraphicsHandler::linearminmagsampler);
-	GraphicsHandler::VKHelperInitTexture(&GraphicsHandler::vulkaninfo.scratchdepthbuffer,
-		GraphicsHandler::vulkaninfo.swapchainextent.width,
-		GraphicsHandler::vulkaninfo.swapchainextent.height,
-		VK_FORMAT_D32_SFLOAT,  // TODO: convert this to a macro too
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		TEXTURE_TYPE_SSRR_BUFFER,
-		VK_IMAGE_VIEW_TYPE_2D,
-		GraphicsHandler::genericsampler);
-	
 	// diff btwn normalmap and normaltex??????
 	//TextureInfo* textemp = ocean->getNormalMapPtr();
 	//texturehandler.generateOceanTextures(&textemp, 1);
@@ -86,7 +67,7 @@ WanglingEngine::WanglingEngine () {
 
 	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
-//	updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
+	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
 
 	// TODO: move to shadowsamplerinit func
@@ -847,9 +828,6 @@ void WanglingEngine::enqueueRecordingTasks () {
 	tempdata.numtris = testterrain->getNumLeaves() * 2u;
 	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Terrain::recordTroubleshootDraw(tempdata, c);}));
 
-	// cpy op should take place here, only one texture needs to exist, probably in GH, cpy op could be in secondary buff, or we add a new type of cbRecTask
-	// we put it down below temporarily so we didnt need another renderpass for 2d stuff, but in the future we should do that
-
 	/*
 	 * End Primary Renderpass
 	 */
@@ -865,158 +843,12 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 
 	/*
-	 * Wait for Pre-Reflection & Refraction Renders to Finish
+	 * Screen Copy for Objects using Reflection & Refraction 
 	 */
-	// feels a bit hamfisted to have so many membars, well do it like this for now, but see if there is a more elegant way later
-	// can combine these into one dependency rec task w/ 2 membars
-	/*
-	VkImageMemoryBarrier2KHR* ssrrcolorpreimb = new VkImageMemoryBarrier2KHR {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		nullptr,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		GraphicsHandler::vulkaninfo.scratchbuffer.image,
-		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-	};
-	recordingtasks.push(cbRecTask({
-		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-		nullptr,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, ssrrcolorpreimb
-	}));
-	VkImageMemoryBarrier2KHR* ssrrdepthpreimb = new VkImageMemoryBarrier2KHR {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		nullptr,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-		{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
-	};
-	recordingtasks.push(cbRecTask({
-		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-		nullptr,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, ssrrdepthpreimb
-	}));
-	*/
-
-	/*
-	 * Copy Screen to Scratch Buffer (& Wait for that to Finish)
-	 */
-	VkImageSubresourceLayers subreclayers {
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		0,
-		0,
-		1
-	};
-	VkImageCopy2 imgcpy {
-		VK_STRUCTURE_TYPE_IMAGE_COPY_2,
-		nullptr,
-		subreclayers, {0, 0, 0},
-		subreclayers, {0, 0, 0},
-		{GraphicsHandler::vulkaninfo.swapchainextent.width, 
-		GraphicsHandler::vulkaninfo.swapchainextent.height, 
-		1}
-	};
-	VkCopyImageInfo2 cpyinfo {
-		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-		nullptr,
-		GraphicsHandler::vulkaninfo.swapchainimages[GraphicsHandler::swapchainimageindex],
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		GraphicsHandler::vulkaninfo.scratchbuffer.image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1, &imgcpy
-	};
-	recordingtasks.push(cbRecTask([tempdata, cpyinfo] (VkCommandBuffer& c) {
-		GraphicsHandler::recordImgCpy(tempdata, cpyinfo, c);
-	}));
-	VkImageSubresourceLayers depthsubreclayers {
-		VK_IMAGE_ASPECT_DEPTH_BIT,
-		0,
-		0,
-		1
-	};
-	VkImageCopy2 depthimgcpy {
-		VK_STRUCTURE_TYPE_IMAGE_COPY_2,
-		nullptr,
-		depthsubreclayers, {0, 0, 0},
-		depthsubreclayers, {0, 0, 0},
-		{GraphicsHandler::vulkaninfo.swapchainextent.width, 
-		GraphicsHandler::vulkaninfo.swapchainextent.height, 
-		1}
-	};
-	VkCopyImageInfo2 depthcpyinfo {
-		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-		nullptr,
-		GraphicsHandler::vulkaninfo.depthbuffer.image,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // i'm confused here, check renderpass, may need layout transition
-		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1, &depthimgcpy
-	};
-	recordingtasks.push(cbRecTask([tempdata, depthcpyinfo] (VkCommandBuffer& c) {
-		GraphicsHandler::recordImgCpy(tempdata, depthcpyinfo, c);
-	}));
-	VkImageMemoryBarrier2KHR* ssrrcolorimb = new VkImageMemoryBarrier2KHR {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		nullptr,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		GraphicsHandler::vulkaninfo.scratchbuffer.image,
-		{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-	};
-	recordingtasks.push(cbRecTask({
-		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-		nullptr,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, ssrrcolorimb
-	}));
-	VkImageMemoryBarrier2KHR* ssrrdepthimb = new VkImageMemoryBarrier2KHR {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		nullptr,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_ACCESS_TRANSFER_WRITE_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_SHADER_READ_BIT,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_QUEUE_FAMILY_IGNORED,
-		VK_QUEUE_FAMILY_IGNORED,
-		GraphicsHandler::vulkaninfo.scratchdepthbuffer.image,
-		{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
-	};
-	recordingtasks.push(cbRecTask({
-		VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-		nullptr,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, ssrrdepthimb
-	}));
+	recordingtasks.push(cbRecTask(SSRR::getPreCopyDependency()));
+	recordingtasks.push(cbRecTask([] (VkCommandBuffer& c) {SSRR::recordCopy(c);}));
+	recordingtasks.push(cbRecTask([] (VkCommandBuffer& c) {SSRR::recordDepthCopy(c);}));
+	recordingtasks.push(cbRecTask(SSRR::getPostCopyDependency()));
 
 	/*
 	 * Start Renderpass for Objects using Reflection & Refraction
@@ -1234,6 +1066,7 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 					inrp = false;
 				}
 
+				/*
 				VkImageMemoryBarrier imb {
 						// TODO: sequester this shit to a function
 						secondarybuffers.front().data.di.pImageMemoryBarriers[0].sType,
@@ -1247,6 +1080,8 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 						secondarybuffers.front().data.di.pImageMemoryBarriers[0].image,
 						secondarybuffers.front().data.di.pImageMemoryBarriers[0].subresourceRange
 				};
+				*/
+				/*
 				vkCmdPipelineBarrier(
 					GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
 					secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcStageMask,
@@ -1254,7 +1089,14 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 					secondarybuffers.front().data.di.dependencyFlags,
 					0, nullptr,
 					0, nullptr,
-					1, &imb);
+					secondarybuffers.front().data.di.imageMemoryBarrierCount, secondarybuffers.front().data.di.pImageMemoryBarriers);
+				*/
+				// i feel like we should be able to use vkCmdPipelineBarrier2(KHR), but it crashed when I tried...
+				/*
+				 * Leading theory when i left off was that the second mem bar was not
+				 * being executed
+				 */
+				GraphicsHandler::pipelineBarrierFromKHR(secondarybuffers.front().data.di);
 				delete[] secondarybuffers.front().data.di.pImageMemoryBarriers;
 			}
 		}

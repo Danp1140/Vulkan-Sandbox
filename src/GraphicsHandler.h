@@ -162,7 +162,7 @@ public:
 	glm::mat3 uvmatrix = glm::mat3(1);
 	VkImageViewType viewtype = VK_IMAGE_VIEW_TYPE_2D;
 
-	VkDescriptorImageInfo getDescriptorImageInfo () const {
+	inline const VkDescriptorImageInfo getDescriptorImageInfo () const {
 		return {sampler, imageview, layout};
 	}
 
@@ -377,7 +377,7 @@ typedef struct VulkanInfo {
 	VkDescriptorPool descriptorpool;
 	// TODO: delete
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	TextureInfo depthbuffer, scratchdepthbuffer, scratchbuffer;
+	TextureInfo depthbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
 	// perhaps move push constants to wangling engine???
@@ -579,6 +579,7 @@ public:
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
 	static void recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb);
+	static void pipelineBarrierFromKHR (const VkDependencyInfoKHR& di);
 
 	/* Expects all vectors to be of same length (and doesn't error check so could end up
 	 * a bad access if you're not careful). Unneeded img or buf infos can be whatever, but 

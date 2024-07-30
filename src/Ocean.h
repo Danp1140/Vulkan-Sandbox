@@ -6,6 +6,7 @@
 #define VULKANSANDBOX_OCEAN_H
 
 #include "Mesh.h"
+#include "Compositing.h"
 
 #define OCEAN_PRE_TESS_SUBDIV 32
 

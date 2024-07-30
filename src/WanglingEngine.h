@@ -19,7 +19,6 @@
 #include "Ocean.h"
 #include "ParticleSystem.h"
 #include "Terrain.h"
-#include "Compositing.h"
 
 #include <thread>
 #include <rapidjson/document.h>
@@ -52,7 +51,7 @@ private:
 	std::vector<Light*> lights;
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
-	Text* troubleshootingtext, * settingstext;
+	Text* troubleshootingtext;
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
@@ -72,7 +71,6 @@ private:
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
 	bool bloom, ssrr;
-	SSRR rrengine;
 
 	// void initSettings ();
 

@@ -1,6 +1,7 @@
 #include "GraphicsHandler.h"
 
 #define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
+#define COMP_INIT_GUARD {if (scratchbuffer.image == VK_NULL_HANDLE) return;}
 #define COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
 class CompositingOp {
 private:
@@ -10,13 +11,25 @@ protected:
 public:
 	CompositingOp ();
 	~CompositingOp ();
+
+	static void init();
+	static void terminate();
+	static const VkDescriptorImageInfo getScratchDII() {return scratchbuffer.getDescriptorImageInfo();}
+	static const VkDescriptorImageInfo getScratchDepthDII() {return scratchdepthbuffer.getDescriptorImageInfo();}
 };
 
+/*
+ * SSRR is fully static, should not be instantiated
+ */
 class SSRR : public CompositingOp {
 public:
-	VkDependencyInfoKHR getPreCopyDependency ();
-	VkDependencyInfoKHR getPostCopyDependency ();
-	void recordCopy (VkCommandBuffer& cb);
+	SSRR() = delete;
+
+	static VkDependencyInfoKHR getPreCopyDependency ();
+	static VkDependencyInfoKHR getPostCopyDependency ();
+	// separated because they can't be combined into one recordImgCpy op
+	static void recordCopy (VkCommandBuffer& cb);
+	static void recordDepthCopy (VkCommandBuffer& cb);
 };
 
 typedef enum PostProcOpTypes {

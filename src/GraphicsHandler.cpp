@@ -500,27 +500,26 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 
 	// primary renderpass
 	VkAttachmentDescription prattachmentdescriptions[2] {{
-																 0,
-																 SWAPCHAIN_IMAGE_FORMAT,
-																 VK_SAMPLE_COUNT_1_BIT,
-																 VK_ATTACHMENT_LOAD_OP_CLEAR,
-																 VK_ATTACHMENT_STORE_OP_STORE,
-																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
-																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-														 },
-														 {
-																 0,
-																 VK_FORMAT_D32_SFLOAT,
-																 VK_SAMPLE_COUNT_1_BIT,
-																 VK_ATTACHMENT_LOAD_OP_CLEAR,
-																 VK_ATTACHMENT_STORE_OP_STORE,
-																 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-																 VK_ATTACHMENT_STORE_OP_DONT_CARE,
-																 VK_IMAGE_LAYOUT_UNDEFINED,
-																 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-														 }};
+			0,
+			SWAPCHAIN_IMAGE_FORMAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_CLEAR,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		}, {
+			0,
+			VK_FORMAT_D32_SFLOAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_CLEAR,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+	}};
 	VkAttachmentReference prcolorattachmentreference {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
 			prdepthattachmentreference {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 	VkSubpassDescription prsubpass {
@@ -551,35 +550,35 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 			1, &prsubpassdepenedency    // can this just be nullptr???
 	};
 	vkCreateRenderPass(vulkaninfo.logicaldevice,
-					   &primaryrenderpasscreateinfo,
-					   nullptr,
-					   &vulkaninfo.primaryrenderpass);
+					&primaryrenderpasscreateinfo,
+					nullptr,
+					&vulkaninfo.primaryrenderpass);
 
 	// not sure if we should make above render to transfer src and below render from that to present src
 	VkAttachmentDescription ssrrattachmentdescriptions[2] {{
-																   0,
-																   SWAPCHAIN_IMAGE_FORMAT,
-																   VK_SAMPLE_COUNT_1_BIT,
-																   VK_ATTACHMENT_LOAD_OP_LOAD,
-																   VK_ATTACHMENT_STORE_OP_STORE,
-																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
-																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-																   VK_IMAGE_LAYOUT_GENERAL
-														   }, {
-																   0,
-																   VK_FORMAT_D32_SFLOAT,
-																   VK_SAMPLE_COUNT_1_BIT,
-																   VK_ATTACHMENT_LOAD_OP_LOAD,
-																   VK_ATTACHMENT_STORE_OP_STORE,
-																   VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-																   VK_ATTACHMENT_STORE_OP_DONT_CARE,
-																   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-																   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-														   }};
+			0,
+			SWAPCHAIN_IMAGE_FORMAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_LOAD,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL
+		}, {
+			0,
+			VK_FORMAT_D32_SFLOAT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_ATTACHMENT_LOAD_OP_LOAD,
+			VK_ATTACHMENT_STORE_OP_STORE,
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	}};
 	// idk what this layout means lmao
 	VkAttachmentReference ssrrattachmentreferences[2] {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-													   {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};
+								{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};
 	// what is input attachment for???? maybe we use this here???
 	// or perhaps it only matters for multiple subpasses
 	// tbh im not even certain we really need another renderpass here but its whatever
@@ -614,16 +613,16 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 					   &vulkaninfo.ssrrrenderpass);
 
 	VkAttachmentDescription compositingad[1] {{
-													  0,
-													  SWAPCHAIN_IMAGE_FORMAT,
-													  VK_SAMPLE_COUNT_1_BIT,
-													  VK_ATTACHMENT_LOAD_OP_LOAD,
-													  VK_ATTACHMENT_STORE_OP_STORE,
-													  VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-													  VK_ATTACHMENT_STORE_OP_DONT_CARE,
-													  VK_IMAGE_LAYOUT_GENERAL,
-													  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-											  }};
+		0,
+		SWAPCHAIN_IMAGE_FORMAT,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_LOAD,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_GENERAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	}};
 	VkAttachmentReference compositingar {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 	VkSubpassDescription compositingsp {
 			0,
@@ -2200,7 +2199,6 @@ void GraphicsHandler::VKHelperInitImage (
 			uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1),
 			VK_SAMPLE_COUNT_1_BIT,
 			VkImageTiling(tilingoptimal ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR),
-//		VK_IMAGE_TILING_LINEAR,
 			usage,
 			VK_SHARING_MODE_EXCLUSIVE,
 			0,
@@ -2252,8 +2250,6 @@ void GraphicsHandler::VKHelperInitImage (
 			 uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1)}
 	};
 	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &imgdst->imageview);
-
-	imgdst->sampler = VK_NULL_HANDLE;
 }
 
 void GraphicsHandler::VKHelperInitTexture (
@@ -2294,7 +2290,7 @@ void GraphicsHandler::VKHelperInitTexture (
 			format,
 			memprops,
 			usage,
-			layout,
+ 	layout,
 			imgviewtype);
 
 	VkDeviceSize size =
@@ -2332,6 +2328,7 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 	// TODO: reevaluate each of these texture types & consider adding viewtype to these if's as well
 	// probably remove SUBPASS
 	// probably change SSRR to SCRATCH
+	// a little confused by scratch/SSRR traits (usage & layout)
 	if (texturedst.type == TEXTURE_TYPE_SHADOWMAP) {
 		texturedst.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -2341,8 +2338,11 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
 	} else if (texturedst.type == TEXTURE_TYPE_SSRR_BUFFER) {
 		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		if (texturedst.format != VK_FORMAT_D32_SFLOAT) texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
+		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		if (texturedst.format != VK_FORMAT_D32_SFLOAT) {
+			texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+			texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
+		}
 	} else if (texturedst.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
 		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2388,7 +2388,6 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 		VKHelperUpdateWholeTexture(&texturedst, static_cast<void*>(emptydata));
 		delete[] emptydata;
 	}
-	// texturedst->texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	texturedst.setUVPosition(glm::vec2(0., 0.));
 	texturedst.setUVScale(glm::vec2(1., 1.));
 	texturedst.setUVRotation(0.);
@@ -2641,35 +2640,62 @@ void GraphicsHandler::submitAndPresent () {
 
 void GraphicsHandler::recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cbinherinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			VK_NULL_HANDLE,
-			0,
-			VK_NULL_HANDLE,
-			VK_FALSE,
-			0,
-			0
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		VK_NULL_HANDLE,
+		0,
+		VK_NULL_HANDLE,
+		VK_FALSE,
+		0,
+		0
 	};
 	VkCommandBufferBeginInfo cbbeginfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			0,
-			&cbinherinfo
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		0,
+		&cbinherinfo
 	};
 	vkBeginCommandBuffer(cb, &cbbeginfo);
 	// vkCmdCopyImage2(cb, &cpyinfo);
 	VkImageCopy imgcpy = {
-			cpyinfo.pRegions->srcSubresource,
-			cpyinfo.pRegions->srcOffset,
-			cpyinfo.pRegions->dstSubresource,
-			cpyinfo.pRegions->dstOffset,
-			cpyinfo.pRegions->extent
+		cpyinfo.pRegions->srcSubresource,
+		cpyinfo.pRegions->srcOffset,
+		cpyinfo.pRegions->dstSubresource,
+		cpyinfo.pRegions->dstOffset,
+		cpyinfo.pRegions->extent
 	};
-	vkCmdCopyImage(cb,
-				   cpyinfo.srcImage, cpyinfo.srcImageLayout,
-				   cpyinfo.dstImage, cpyinfo.dstImageLayout,
-				   cpyinfo.regionCount, &imgcpy);
+	vkCmdCopyImage(
+		cb,
+		cpyinfo.srcImage, cpyinfo.srcImageLayout,
+		cpyinfo.dstImage, cpyinfo.dstImageLayout,
+		cpyinfo.regionCount, &imgcpy);
 	vkEndCommandBuffer(cb);
+}
+
+void GraphicsHandler::pipelineBarrierFromKHR (const VkDependencyInfoKHR& di) {
+	VkImageMemoryBarrier imb;
+	for (uint32_t i = 0; i < di.imageMemoryBarrierCount; i++) {
+		imb = {
+			di.pImageMemoryBarriers[i].sType,
+			di.pImageMemoryBarriers[i].pNext,
+			(VkAccessFlags)di.pImageMemoryBarriers[i].srcAccessMask,
+			(VkAccessFlags)di.pImageMemoryBarriers[i].dstAccessMask,
+			di.pImageMemoryBarriers[i].oldLayout,
+			di.pImageMemoryBarriers[i].newLayout,
+			di.pImageMemoryBarriers[i].srcQueueFamilyIndex,
+			di.pImageMemoryBarriers[i].dstQueueFamilyIndex,
+			di.pImageMemoryBarriers[i].image,
+			di.pImageMemoryBarriers[i].subresourceRange
+		};
+		vkCmdPipelineBarrier(
+			vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
+			di.pImageMemoryBarriers[i].srcStageMask,
+			di.pImageMemoryBarriers[i].dstStageMask,
+			di.dependencyFlags,
+			0, nullptr,
+			0, nullptr,
+			1, &imb);
+	}
 }
 
 // the length of this and other rec functions brings to mind the question of sync btwn threads to ensure order is maintained
@@ -2875,38 +2901,7 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 	}
 }
 
-/*
-void GraphicsHandler::submitAndPresent() {
-	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	VkSubmitInfo submitinfo {
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		nullptr,
-		1, &vulkaninfo.imageavailablesemaphores[vulkaninfo.currentframeinflight],
-		&pipelinestageflags,
-		1, &vulkaninfo.commandbuffers[vulkaninfo.currentframeinflight],
-		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight]
-	};
-	vkResetFences(vulkaninfo.logicaldevice, 1, &vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
-	vkQueueSubmit(vulkaninfo.graphicsqueue,
-				1,
-				&submitinfo,
-				vulkaninfo.submitfinishedfences[vulkaninfo.currentframeinflight]);
-	VkPresentInfoKHR presentinfo {
-		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-		nullptr,
-		1, &vulkaninfo.renderfinishedsemaphores[vulkaninfo.currentframeinflight],
-		1,
-		&vulkaninfo.swapchain,
-		&swapchainimageindex,
-		nullptr
-	};
-	vkQueuePresentKHR(vulkaninfo.graphicsqueue, &presentinfo);
-}
-*/
-
-VKAPI_ATTR VkBool32
-
-VKAPI_CALL GraphicsHandler::debugCallback (
+VKAPI_ATTR VkBool32 VKAPI_CALL GraphicsHandler::debugCallback (
 		VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 		VkDebugUtilsMessageTypeFlagsEXT type,
 		const VkDebugUtilsMessengerCallbackDataEXT* callbackdata,
