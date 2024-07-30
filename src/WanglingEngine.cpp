@@ -11,9 +11,6 @@ VkDescriptorSet* WanglingEngine::scenedescriptorsets = nullptr;
 WanglingEngine::WanglingEngine () {
 	bloom = false;
 	TextureHandler::init();
-	// TODO: figure out best value for below arg
-	GraphicsHandler::VKInit(200);
-	GraphicsHandler::VKInitPipelines();
 	CompositingOp::init();
 	Text::createPipeline();
 	Ocean::createComputePipeline();
@@ -24,7 +21,6 @@ WanglingEngine::WanglingEngine () {
 	loadScene(WORKING_DIRECTORY "/resources/scenelayouts/rocktestlayout.json");
 	testterrain = new Terrain();
 	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
-	
 	physicshandler = PhysicsHandler(primarycamera);
 
 	// diff btwn normalmap and normaltex??????
@@ -42,7 +38,6 @@ WanglingEngine::WanglingEngine () {
 			GraphicsHandler::vulkaninfo.verticalres);
 
 	initSkybox();
-	initTexMon();
 
 	GraphicsHandler::VKHelperInitTexture(
 			&skyboxtexture,
@@ -65,7 +60,8 @@ WanglingEngine::WanglingEngine () {
 	initSceneData();
 	initTroubleshootingLines();
 
-	updateTexMonDescriptorSets(*lights[0]->getShadowmapPtr());
+	// texmon.updateDescriptorSet(*lights[0]->getShadowmapPtr());
+	texmon.updateDescriptorSet(*meshes[0]->getDiffuseTexturePtr());
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
 	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
@@ -140,6 +136,21 @@ WanglingEngine::WanglingEngine () {
 	GraphicsHandler::swapchainimageindex = 0;
 
 	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
+}
+
+WanglingEngine::~WanglingEngine () {
+	vkQueueWaitIdle(GraphicsHandler::vulkaninfo.graphicsqueue); 
+}
+
+void WanglingEngine::staticInits () {
+	// TODO: figure out best value for below arg
+	GraphicsHandler::VKInit(200);
+	GraphicsHandler::VKInitPipelines();
+	TextureMonitor::init();
+}
+
+void WanglingEngine::staticTerminates () {
+	TextureMonitor::terminate();
 }
 
 void WanglingEngine::countSceneObjects (const char* scenefilepath, uint8_t* nummeshes, uint8_t* numlights) {
@@ -438,16 +449,6 @@ void WanglingEngine::initSkybox () {
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descsetallocinfo, &skyboxds);
 }
 
-void WanglingEngine::initTexMon () {
-	VkDescriptorSetAllocateInfo dsallocinfo {
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		nullptr,
-		GraphicsHandler::vulkaninfo.descriptorpool,
-		1, &GraphicsHandler::vulkaninfo.texmongraphicspipeline.objectdsl
-	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &dsallocinfo, &texmonds);
-}
-
 void WanglingEngine::initTroubleshootingLines () {
 	std::vector<Vertex> troubleshootinglinespoints;
 //	std::vector<glm::vec3> controlpoints {
@@ -562,40 +563,6 @@ void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer
 	vkEndCommandBuffer(cb);
 }
 
-void WanglingEngine::recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
-	// TODO: switch out graphics pipeline stuff to go through cbRecData instead
-	VkCommandBufferInheritanceInfo cmdbufinherinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			data.renderpass,
-			0,
-			data.framebuffer,
-			VK_FALSE,
-			0,
-			0
-	};
-	VkCommandBufferBeginInfo cmdbufbegininfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-			&cmdbufinherinfo
-	};
-	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
-	vkCmdBindPipeline(
-			cb,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.texmongraphicspipeline.pipeline);
-	vkCmdBindDescriptorSets(
-			cb,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.texmongraphicspipeline.pipelinelayout,
-			0,
-			1, &data.descriptorset,
-			0, nullptr);
-	vkCmdDraw(cb, 6, 1, 0, 0);
-	vkEndCommandBuffer(cb);
-}
-
 void WanglingEngine::recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
 	VkCommandBufferInheritanceInfo cbii {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -641,14 +608,6 @@ void WanglingEngine::recordTroubleshootingLinesCommandBuffers (cbRecData data, V
 			0,
 			0);
 	vkEndCommandBuffer(cb);
-}
-
-void WanglingEngine::updateTexMonDescriptorSets (TextureInfo tex) {
-	GraphicsHandler::updateDescriptorSet(
-		texmonds,
-		{0},
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
-		{tex.getDescriptorImageInfo()}, {});
 }
 
 // TODO: figure out which buffer recording setup structs can be made static const for efficiency
@@ -963,9 +922,9 @@ void WanglingEngine::enqueueRecordingTasks () {
 	/*
 	 * Texture Monitor
 	 */
-	tempdata.descriptorset = texmonds;
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.texmongraphicspipeline;
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {recordTexMonCommandBuffers(tempdata, c);}));
+	tempdata.descriptorset = texmon.getDescriptorSet();
+	tempdata.pipeline = TextureMonitor::getPipeline();
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {TextureMonitor::recordDraw(tempdata, c);}));
 
 	/*
 	 * Upper Left Text

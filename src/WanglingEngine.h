@@ -19,6 +19,7 @@
 #include "Ocean.h"
 #include "ParticleSystem.h"
 #include "Terrain.h"
+#include "Debug.h"
 
 #include <thread>
 #include <rapidjson/document.h>
@@ -52,6 +53,7 @@ private:
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
 	Text* troubleshootingtext;
+	TextureMonitor texmon;
 	std::vector<glm::vec3> troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
@@ -81,13 +83,10 @@ private:
 	 */
 	void initSceneData ();
 	void initSkybox ();
-	void initTexMon ();
 	void initTroubleshootingLines ();
 	void updateSkyboxDescriptorSets ();
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	void updateTexMonDescriptorSets (TextureInfo tex);
 	void enqueueRecordingTasks ();
 	static void processRecordingTasks (
 			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference
@@ -111,7 +110,11 @@ private:
 
 public:
 	WanglingEngine ();
+	~WanglingEngine ();
 
+	static void staticInits();
+	static void staticTerminates();
+	
 	/* draw() is –central– to how this entire program works, so it's crucial that it is clean and efficient. It is
 	 * currently not. Many parts of draw should be broken into sub-functions. For instance, flag checking, cmd buf
 	 * submission, swapchain presentation.
@@ -119,6 +122,7 @@ public:
 	void draw ();
 
 	bool shouldClose ();
+
 };
 
 

@@ -3,6 +3,8 @@
 #include "WanglingEngine.h"
 
 int main(){
+	WanglingEngine::staticInits();
+	
 	WanglingEngine wanglingengine;
 
 	do{

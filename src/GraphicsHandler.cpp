@@ -108,50 +108,6 @@ void GraphicsHandler::VKInitPipelines () {
 		GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline, pii);
 	}
 
-	//texmon
-	{
-		VkDescriptorSetLayoutBinding descriptorsetlayoutbinding {
-				0,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				1,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				nullptr
-		};
-		VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr
-				},
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						1,
-						&descriptorsetlayoutbinding
-				}};
-		const char* shaderfilepaths[2] {WORKING_DIRECTORY "/resources/shaders/SPIRV/texmonvert.spv",
-										WORKING_DIRECTORY "/resources/shaders/SPIRV/texmonfrag.spv"};
-		VKSubInitPipeline(
-				&GraphicsHandler::vulkaninfo.texmongraphicspipeline,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				&shaderfilepaths[0],
-				&descriptorsetlayoutcreateinfos[0],
-				{},
-				{
-						VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr,
-						0,
-						nullptr
-				},
-				false,
-				GraphicsHandler::vulkaninfo.compositingrenderpass);
-	}
 	//lines
 	{
 		VkVertexInputBindingDescription vibd {

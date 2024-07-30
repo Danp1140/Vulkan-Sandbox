@@ -1,6 +1,5 @@
 #include "GraphicsHandler.h"
 
-#define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
 #define COMP_INIT_GUARD {if (scratchbuffer.image == VK_NULL_HANDLE) return;}
 
 #define COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
@@ -22,6 +21,7 @@ public:
 
 /*
  * SSRR is fully static, should not be instantiated
+ * Could make it a namespace ig
  */
 class SSRR : public CompositingOp {
 private:

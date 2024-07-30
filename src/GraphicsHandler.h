@@ -51,6 +51,8 @@
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MAX_LIGHTS 2
 
+#define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
+
 /*
  * Consts, Typedefs, and the Like
  */
