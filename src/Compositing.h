@@ -2,7 +2,9 @@
 
 #define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
 #define COMP_INIT_GUARD {if (scratchbuffer.image == VK_NULL_HANDLE) return;}
+
 #define COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
+
 class CompositingOp {
 private:
 	static uint8_t numcompops;
@@ -22,8 +24,18 @@ public:
  * SSRR is fully static, should not be instantiated
  */
 class SSRR : public CompositingOp {
+private:
+	// RP & FB for any draws using the SSRR scratch buffers
+	static VkRenderPass renderpass;
+	static VkFramebuffer* framebuffers;
 public:
-	SSRR() = delete;
+	SSRR () = delete;
+
+	static void init ();
+	static void terminate ();
+
+	static const VkRenderPass getRenderpass () {return renderpass;}
+	static const VkFramebuffer getFramebuffer (uint8_t scii) {return framebuffers[scii];}
 
 	static VkDependencyInfoKHR getPreCopyDependency ();
 	static VkDependencyInfoKHR getPostCopyDependency ();

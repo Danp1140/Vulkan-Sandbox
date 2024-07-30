@@ -351,7 +351,7 @@ typedef struct VulkanInfo {
 	VkImage* swapchainimages;
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
-	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass, ssrrrenderpass;
+	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass;
 	PipelineInfo textgraphicspipeline,
 			skyboxgraphicspipeline,
 			oceangraphicspipeline,
@@ -363,7 +363,7 @@ typedef struct VulkanInfo {
 			voxeltroubleshootingpipeline,
 			postprocpipeline,
 			postprocgraphicspipeline;    // is it good to have this many pipelines? some can be combined if we want/need to
-	VkFramebuffer* primaryframebuffers, * ssrrframebuffers, * compositingframebuffers; // TODO: is ssrrframebuffers deprecated?
+	VkFramebuffer* primaryframebuffers, * compositingframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
@@ -380,12 +380,9 @@ typedef struct VulkanInfo {
 	TextureInfo depthbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
-	// perhaps move push constants to wangling engine???
-	// figure a better way to handle these tbh
 	SkyboxPushConstants skyboxpushconstants;
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
-	// TerrainGenPushConstants terraingenpushconstants, terraingenpushconstants2;
 } VulkanInfo;
 
 /*

@@ -197,66 +197,64 @@ void Ocean::createComputePipeline () {
 
 void Ocean::createGraphicsPipeline () {
 	VkDescriptorSetLayoutBinding objectdslbindings[4] {{
-			   0,
-			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			   1,
-			   VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-			   nullptr
-	   }, {
-			   1,
-			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			   1,
-			   VK_SHADER_STAGE_FRAGMENT_BIT,
-			   nullptr
-	   }, {
-			   2,
-			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			   1,
-			   VK_SHADER_STAGE_FRAGMENT_BIT,
-			   nullptr
-	   }, {
-			   3,
-			   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			   1,
-			   VK_SHADER_STAGE_FRAGMENT_BIT,
-			   nullptr
-	   }};
+			0,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			2,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			3,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+	}};
 	VkDescriptorSetLayoutCreateInfo dslcreateinfos[2] {
-			scenedslcreateinfo,
-			{
-					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-					nullptr,
-					0,
-					4, &objectdslbindings[0]
-			}};
+		scenedslcreateinfo, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			4, &objectdslbindings[0]
+	}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-	VkVertexInputAttributeDescription vertinattribdesc[3] {{0,
-															0,
-															VK_FORMAT_R32G32B32_SFLOAT,
-															offsetof(Vertex, position)},
-														   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
-														   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
-
+	VkVertexInputAttributeDescription vertinattribdesc[3] {
+		{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
+		{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}
+	};
 	PipelineInitInfo pii = {};
 	pii.stages = VK_SHADER_STAGE_VERTEX_BIT
-				 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-				 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-				 | VK_SHADER_STAGE_FRAGMENT_BIT;
+			| VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+			| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+			| VK_SHADER_STAGE_FRAGMENT_BIT;
 	pii.shaderfilepathprefix = "ocean";
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-							 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-							 | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OceanPushConstants)},
+				| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+				| VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OceanPushConstants)},
 			pii.vertexinputstatecreateinfo = {
-					VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-					nullptr,
-					0,
-					1,
-					&vertinbindingdesc,
-					3,
-					&vertinattribdesc[0]
+				VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+				nullptr,
+				0,
+				1,
+				&vertinbindingdesc,
+				3,
+				&vertinattribdesc[0]
 			};
 	pii.depthtest = true;
+	pii.renderpass = SSRR::getRenderpass();
 
 	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceangraphicspipeline, pii);
 }

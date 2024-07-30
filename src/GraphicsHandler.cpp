@@ -555,63 +555,9 @@ void GraphicsHandler::VKSubInitRenderpasses () {
 					&vulkaninfo.primaryrenderpass);
 
 	// not sure if we should make above render to transfer src and below render from that to present src
-	VkAttachmentDescription ssrrattachmentdescriptions[2] {{
-			0,
-			SWAPCHAIN_IMAGE_FORMAT,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_ATTACHMENT_LOAD_OP_LOAD,
-			VK_ATTACHMENT_STORE_OP_STORE,
-			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-			VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			VK_IMAGE_LAYOUT_GENERAL
-		}, {
-			0,
-			VK_FORMAT_D32_SFLOAT,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_ATTACHMENT_LOAD_OP_LOAD,
-			VK_ATTACHMENT_STORE_OP_STORE,
-			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-			VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	}};
-	// idk what this layout means lmao
-	VkAttachmentReference ssrrattachmentreferences[2] {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-								{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}};
-	// what is input attachment for???? maybe we use this here???
-	// or perhaps it only matters for multiple subpasses
-	// tbh im not even certain we really need another renderpass here but its whatever
-	VkSubpassDescription ssrrsubpass {
-			0,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			0, nullptr,
-			1, &ssrrattachmentreferences[0], nullptr, &ssrrattachmentreferences[1],
-			0, nullptr
-	};
-	VkSubpassDependency ssrrdependency {
-			VK_SUBPASS_EXTERNAL, 0,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-			0
-	};
-	VkRenderPassCreateInfo ssrrrenderpasscreateinfo {
-			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-			nullptr,
-			0,
-			2, &ssrrattachmentdescriptions[0],
-			1, &ssrrsubpass,
-			1, &ssrrdependency
-	};
-	// adding this renderpass caused screen to blank grey on quit
+		// adding this renderpass caused screen to blank grey on quit
 	// on second thought, why bother with another renderpass? see if we can just cpy mid-render (w/ pipeline barrier obv)
-	vkCreateRenderPass(vulkaninfo.logicaldevice,
-					   &ssrrrenderpasscreateinfo,
-					   nullptr,
-					   &vulkaninfo.ssrrrenderpass);
-
+	
 	VkAttachmentDescription compositingad[1] {{
 		0,
 		SWAPCHAIN_IMAGE_FORMAT,
@@ -1092,7 +1038,6 @@ void GraphicsHandler::VKSubInitStorageBuffer (BufferInfo& b) {
 
 void GraphicsHandler::VKSubInitFramebuffers () {
 	vulkaninfo.primaryframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
-	vulkaninfo.ssrrframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	vulkaninfo.compositingframebuffers = new VkFramebuffer[vulkaninfo.numswapchainimages];
 	for (uint8_t x = 0; x < vulkaninfo.numswapchainimages; x++) {
 		// if ssrr renderpass pans out, we dont need this swapchain image view here
@@ -1109,19 +1054,6 @@ void GraphicsHandler::VKSubInitFramebuffers () {
 		};
 		vkCreateFramebuffer(vulkaninfo.logicaldevice, &framebuffercreateinfo, nullptr,
 							&vulkaninfo.primaryframebuffers[x]);
-
-		VkFramebufferCreateInfo ssrrframebuffercreateinfo {
-				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-				nullptr,
-				0,
-				vulkaninfo.ssrrrenderpass,
-				2, &attachmentstemp[0],
-				vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1
-		};
-		vkCreateFramebuffer(vulkaninfo.logicaldevice,
-							&ssrrframebuffercreateinfo,
-							nullptr,
-							&vulkaninfo.ssrrframebuffers[x]);
 
 		VkFramebufferCreateInfo compositingfbci {
 				VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,

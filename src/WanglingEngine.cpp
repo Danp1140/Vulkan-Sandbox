@@ -835,7 +835,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		nullptr,
 		VK_NULL_HANDLE,
-		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		SSRR::getFramebuffer(GraphicsHandler::swapchainimageindex),
 		{{0, 0}, {0, 0}},
 		0, nullptr
 	}));
@@ -856,15 +856,15 @@ void WanglingEngine::enqueueRecordingTasks () {
 	recordingtasks.push(cbRecTask({
 		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		nullptr,
-		GraphicsHandler::vulkaninfo.ssrrrenderpass,
-		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		SSRR::getRenderpass(),
+		SSRR::getFramebuffer(GraphicsHandler::swapchainimageindex),
 		{{0, 0}, GraphicsHandler::vulkaninfo.swapchainextent},
 		2,
 		&GraphicsHandler::vulkaninfo.primaryclears[0]
 	}));
 
-	tempdata.renderpass = GraphicsHandler::vulkaninfo.ssrrrenderpass;
-	tempdata.framebuffer = GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex];
+	tempdata.renderpass = SSRR::getRenderpass();
+	tempdata.framebuffer = SSRR::getFramebuffer(GraphicsHandler::swapchainimageindex);
 	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceangraphicspipeline;
 	tempdata.pushconstantdata = reinterpret_cast<void*>(ocean->getPushConstantsPtr());
 	tempdata.descriptorset = ocean->getDescriptorSet();
@@ -880,7 +880,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		nullptr,
 		VK_NULL_HANDLE,
-		GraphicsHandler::vulkaninfo.ssrrframebuffers[GraphicsHandler::swapchainimageindex],
+		SSRR::getFramebuffer(GraphicsHandler::swapchainimageindex),
 		{{0, 0}, {0, 0}},
 		0, nullptr
 	}));
@@ -1066,36 +1066,7 @@ void WanglingEngine::collectSecondaryCommandBuffers () {
 					inrp = false;
 				}
 
-				/*
-				VkImageMemoryBarrier imb {
-						// TODO: sequester this shit to a function
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].sType,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].pNext,
-						(VkAccessFlags)secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcAccessMask,
-						(VkAccessFlags)secondarybuffers.front().data.di.pImageMemoryBarriers[0].dstAccessMask,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].oldLayout,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].newLayout,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcQueueFamilyIndex,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].dstQueueFamilyIndex,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].image,
-						secondarybuffers.front().data.di.pImageMemoryBarriers[0].subresourceRange
-				};
-				*/
-				/*
-				vkCmdPipelineBarrier(
-					GraphicsHandler::vulkaninfo.commandbuffers[GraphicsHandler::vulkaninfo.currentframeinflight],
-					secondarybuffers.front().data.di.pImageMemoryBarriers[0].srcStageMask,
-					secondarybuffers.front().data.di.pImageMemoryBarriers[0].dstStageMask,
-					secondarybuffers.front().data.di.dependencyFlags,
-					0, nullptr,
-					0, nullptr,
-					secondarybuffers.front().data.di.imageMemoryBarrierCount, secondarybuffers.front().data.di.pImageMemoryBarriers);
-				*/
 				// i feel like we should be able to use vkCmdPipelineBarrier2(KHR), but it crashed when I tried...
-				/*
-				 * Leading theory when i left off was that the second mem bar was not
-				 * being executed
-				 */
 				GraphicsHandler::pipelineBarrierFromKHR(secondarybuffers.front().data.di);
 				delete[] secondarybuffers.front().data.di.pImageMemoryBarriers;
 			}
