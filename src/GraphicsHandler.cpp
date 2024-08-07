@@ -107,52 +107,6 @@ void GraphicsHandler::VKInitPipelines () {
 		pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPushConstants)};
 		GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.skyboxgraphicspipeline, pii);
 	}
-
-	//lines
-	{
-		VkVertexInputBindingDescription vibd {
-				0,
-				sizeof(Vertex),
-				VK_VERTEX_INPUT_RATE_VERTEX
-		};
-		VkVertexInputAttributeDescription viad {
-				0,
-				0,
-				VK_FORMAT_R32G32B32_SFLOAT,
-				0
-		};
-		VkPipelineVertexInputStateCreateInfo pvisci {
-				VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-				nullptr,
-				0,
-				1,
-				&vibd,
-				1,
-				&viad
-		};
-		VkDescriptorSetLayoutCreateInfo dslci[2] {
-				scenedslcreateinfo,
-				{
-						VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-						nullptr,
-						0,
-						0,
-						nullptr
-				}};
-		const char* shaderfilepaths[2] {
-				WORKING_DIRECTORY "/resources/shaders/SPIRV/linevert.spv",
-				WORKING_DIRECTORY "/resources/shaders/SPIRV/linefrag.spv"
-		};
-		VKSubInitPipeline(
-				&GraphicsHandler::vulkaninfo.linegraphicspipeline,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				&shaderfilepaths[0],
-				&dslci[0],
-				{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)},
-				pvisci,
-				false,
-                GraphicsHandler::vulkaninfo.primaryrenderpass);
-	}
 }
 
 void GraphicsHandler::VKSubInitWindow () {
@@ -1245,9 +1199,7 @@ void GraphicsHandler::VKSubInitPipeline (
 			nullptr,
 			0,
 			(shaderstages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) ?
-			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST :
-			((pipelineinfo == &GraphicsHandler::vulkaninfo.linegraphicspipeline) ?
-			 VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 			VK_FALSE
 	};
 	VkPipelineTessellationStateCreateInfo tessstatecreateinfo {
@@ -1550,15 +1502,12 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 						   &pipelinelayoutcreateinfo,
 						   nullptr,
 						   &pipelineinfo->pipelinelayout);
-
+	if (pii.stages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) pii.topo = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
 	VkPipelineInputAssemblyStateCreateInfo inputassemblystatecreateinfo {
 			VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			nullptr,
 			0,
-			(pii.stages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) ?
-			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST :
-			((pipelineinfo == &GraphicsHandler::vulkaninfo.linegraphicspipeline) ?
-			 VK_PRIMITIVE_TOPOLOGY_LINE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+			pii.topo,
 			VK_FALSE
 	};
 	VkPipelineTessellationStateCreateInfo tessstatecreateinfo {

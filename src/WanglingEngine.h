@@ -54,17 +54,17 @@ private:
 	ParticleSystem<GrassParticle>* grass;
 	Text* troubleshootingtext;
 	TextureMonitor texmon;
-	std::vector<glm::vec3> troubleshootinglines;
+	Lines troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
 	VkCommandBuffer* skyboxcommandbuffers, * troubleshootinglinescommandbuffers;
 	std::thread recordingthreads[NUM_RECORDING_THREADS];
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet skyboxds, texmonds;
+	VkDescriptorSet skyboxds;
 	static VkDescriptorSet* scenedescriptorsets;
-	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
-	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
+	VkBuffer* lightuniformbuffers;
+	VkDeviceMemory* lightuniformbuffermemories;
 	uint64_t multiverseseed;
 	std::queue<cbRecTask> recordingtasks;
 	std::queue<cbCollectInfo> secondarybuffers;
@@ -83,10 +83,8 @@ private:
 	 */
 	void initSceneData ();
 	void initSkybox ();
-	void initTroubleshootingLines ();
 	void updateSkyboxDescriptorSets ();
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
 	void enqueueRecordingTasks ();
 	static void processRecordingTasks (
 			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference

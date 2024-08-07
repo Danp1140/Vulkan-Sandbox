@@ -58,13 +58,8 @@ WanglingEngine::WanglingEngine () {
 	*/
 
 	initSceneData();
-	initTroubleshootingLines();
 
-	// texmon.updateDescriptorSet(*lights[0]->getShadowmapPtr());
-	texmon.updateDescriptorSet(*meshes[0]->getDiffuseTexturePtr());
-	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchdepthbuffer);
-	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.depthbuffer);
-	// updateTexMonDescriptorSets(GraphicsHandler::vulkaninfo.scratchbuffer);
+	texmon.updateDescriptorSet(CompositingOp::getScratchDepthDII());
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
@@ -147,9 +142,11 @@ void WanglingEngine::staticInits () {
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
 	TextureMonitor::init();
+	Lines::init();
 }
 
 void WanglingEngine::staticTerminates () {
+	Lines::terminate();
 	TextureMonitor::terminate();
 }
 
@@ -278,6 +275,8 @@ void WanglingEngine::genScene () {
 void WanglingEngine::updatePCsAndBuffers() {
 	testterrain->getGenPushConstantsPtr()->cameravp = primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix(); 
 	testterrain->getGenPushConstantsPtr()->numleaves = testterrain->getNumLeaves();
+
+	troubleshootinglines.updatePCs({primarycamera->getProjectionMatrix() * primarycamera->getViewMatrix()});
 
 	if (GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_POSITION_CHANGE_FLAG_BIT
 		|| GraphicsHandler::changeflags[GraphicsHandler::swapchainimageindex] & CAMERA_LOOK_CHANGE_FLAG_BIT) {
@@ -449,67 +448,6 @@ void WanglingEngine::initSkybox () {
 	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descsetallocinfo, &skyboxds);
 }
 
-void WanglingEngine::initTroubleshootingLines () {
-	std::vector<Vertex> troubleshootinglinespoints;
-//	std::vector<glm::vec3> controlpoints {
-//			glm::vec3(11., 0., 11.),
-//			glm::vec3(10., 0., -8.),
-//			glm::vec3(4., 0., -6.),
-//			glm::vec3(4., 0., 4.),
-//			glm::vec3(-4., 0., 6.),
-//			glm::vec3(-6., 0., 4.),
-//			glm::vec3(-10., 0., -4),
-//			glm::vec3(-11., 0., 4.)
-//	};
-//	glm::vec3 splinePos;
-//	for (uint8_t p1 = 1; p1 + 2 < controlpoints.size(); p1++) {
-//		for (uint8_t x = 0; x < 25; x++) {
-//			splinePos = PhysicsHandler::catmullRomSplineAtMatrified(
-//					controlpoints,
-//					p1,
-//					0.5,
-//					float_t(x) / 24.f);
-//			troubleshootinglinespoints.push_back({
-//														 splinePos,
-//														 glm::vec3(0., 0., 0.),
-//														 glm::vec2(0., 0.)
-//												 });
-//			troubleshootinglinespoints.push_back({
-//														 splinePos,
-//														 glm::vec3(0., 0., 0.),
-//														 glm::vec2(0., 0.)
-//												 });
-//
-//		}
-//	}
-//	troubleshootinglinespoints.erase(troubleshootinglinespoints.begin());
-//	troubleshootinglinespoints.erase(troubleshootinglinespoints.end() - 1);
-
-	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-	troubleshootinglinespoints.push_back({glm::vec3(0.5, 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-	troubleshootinglinespoints.push_back({glm::vec3(0., 0.5, 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-	troubleshootinglinespoints.push_back({glm::vec3(0., 0., 0.5), glm::vec3(0., 0., 0.), glm::vec2(0., 0.)});
-
-
-	GraphicsHandler::VKHelperInitVertexBuffer(
-			troubleshootinglinespoints,
-			&troubleshootinglinesvertexbuffer,
-			&troubleshootinglinesvertexbuffermemory);
-
-	troubleshootinglinescommandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
-	};
-	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo,
-							 troubleshootinglinescommandbuffers);
-}
-
 void WanglingEngine::updateSkyboxDescriptorSets () {
 	GraphicsHandler::updateDescriptorSet(
 		skyboxds,
@@ -557,53 +495,6 @@ void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer
 	vkCmdDraw(
 			cb,
 			36,
-			1,
-			0,
-			0);
-	vkEndCommandBuffer(cb);
-}
-
-void WanglingEngine::recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb) {
-	VkCommandBufferInheritanceInfo cbii {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-			nullptr,
-			data.renderpass,
-			0,
-			data.framebuffer,
-			VK_FALSE,
-			0,
-			0
-	};
-	VkCommandBufferBeginInfo cbbi {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-			&cbii
-	};
-	vkBeginCommandBuffer(
-			cb,
-			&cbbi);
-	vkCmdBindPipeline(
-			cb,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			data.pipeline.pipeline);
-	vkCmdPushConstants(
-			cb,
-			data.pipeline.pipelinelayout,
-			VK_SHADER_STAGE_VERTEX_BIT,
-			0,
-			sizeof(glm::mat4),
-			&GraphicsHandler::vulkaninfo.grasspushconstants);        // this is odd
-	VkDeviceSize offsettemp = 0u;
-	vkCmdBindVertexBuffers(
-			cb,
-			0,
-			1,
-			&data.vertexbuffer,
-			&offsettemp);
-	vkCmdDraw(
-			cb,
-			254,        // so is this
 			1,
 			0,
 			0);
@@ -772,11 +663,11 @@ void WanglingEngine::enqueueRecordingTasks () {
 	/*
 	 * Troubleshooting Lines
 	 */
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.linegraphicspipeline;
-	tempdata.vertexbuffer = troubleshootinglinesvertexbuffer;
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-		recordTroubleshootingLinesCommandBuffers(tempdata, c);
-	}));
+	tempdata.pipeline = Lines::getPipeline();
+	tempdata.pushconstantdata = static_cast<void*>(troubleshootinglines.getPCPtr());
+	tempdata.vertexbuffer = troubleshootinglines.getVertexBuffer();
+	tempdata.numtris = troubleshootinglines.getNumVertices();
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Lines::recordDraw(tempdata, c);}));
 
 	/*
 	 * Troubleshooting Voxels
@@ -1075,7 +966,7 @@ void WanglingEngine::draw () {
 									GraphicsHandler::swapchainimageindex);
 	GraphicsHandler::troubleshootingsstrm = std::stringstream(std::string());
 
-	updatePCsAndBuffers();
+	//updatePCsAndBuffers();
 
 	glfwPollEvents();
 	

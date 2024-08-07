@@ -129,6 +129,8 @@ typedef struct PipelineInitInfo {
 	VkRenderPass renderpass = VK_NULL_HANDLE; // defaults to primary via VKSubInitPipeline
 	VkExtent2D extent = {0, 0}; // defaults to swapchain extent via VKSubInitPipeline
 	VkCullModeFlags culling = VK_CULL_MODE_BACK_BIT;
+	VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // defaults to patch list via VKSubInitPipeline
+									// if tess control is indicated in stages
 } PipelineInitInfo;
 
 typedef struct PipelineInfo {
@@ -359,8 +361,6 @@ typedef struct VulkanInfo {
 			oceangraphicspipeline,
 			oceancomputepipeline,
 			grassgraphicspipeline,
-			texmongraphicspipeline,
-			linegraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline,
 			postprocpipeline,
