@@ -29,7 +29,7 @@ void main() {
 
 // commented out to troubleshoot ssrr, add back later
     vertexposition.y+=calculateHeight(vertexuv);
-//    vertexposition.y += 1.5f;
+    // vertexposition.y += 1.5f;
     //do we really have to do this vp multiplication every time???
     gl_Position=constants.cameravpmatrices*vertexposition;
     uvthru=vertexuv;

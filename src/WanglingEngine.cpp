@@ -10,11 +10,7 @@ VkDescriptorSet* WanglingEngine::scenedescriptorsets = nullptr;
 
 WanglingEngine::WanglingEngine () {
 	bloom = false;
-	TextureHandler::init();
-	CompositingOp::init();
 	Text::createPipeline();
-	Ocean::createComputePipeline();
-	Ocean::createGraphicsPipeline();
 	Terrain::createComputePipeline();
 	Terrain::createGraphicsPipeline();
 	ParticleSystem<GrassParticle>::createPipeline();
@@ -22,12 +18,6 @@ WanglingEngine::WanglingEngine () {
 	testterrain = new Terrain();
 	testterrain->getGenPushConstantsPtr()->camerapos = primarycamera->getPosition() + glm::vec3(0., 0.5, 0.);
 	physicshandler = PhysicsHandler(primarycamera);
-
-	// diff btwn normalmap and normaltex??????
-	//TextureInfo* textemp = ocean->getNormalMapPtr();
-	//texturehandler.generateOceanTextures(&textemp, 1);
-	TextureHandler::generateTextures({*ocean->getNormalMapPtr()}, TextureHandler::oceanTexGenSet);
-	ocean->rewriteTextureDescriptorSets();
 
 	troubleshootingtext = new Text(
 			"troubleshooting text",
@@ -131,6 +121,7 @@ WanglingEngine::WanglingEngine () {
 	GraphicsHandler::swapchainimageindex = 0;
 
 	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
+	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
 }
 
 WanglingEngine::~WanglingEngine () {
@@ -141,11 +132,15 @@ void WanglingEngine::staticInits () {
 	// TODO: figure out best value for below arg
 	GraphicsHandler::VKInit(200);
 	GraphicsHandler::VKInitPipelines();
+	TextureHandler::init();
+	CompositingOp::init();
 	TextureMonitor::init();
 	Lines::init();
+	Ocean::init();
 }
 
 void WanglingEngine::staticTerminates () {
+	Ocean::terminate();
 	Lines::terminate();
 	TextureMonitor::terminate();
 }
@@ -560,10 +555,10 @@ void WanglingEngine::enqueueRecordingTasks () {
 	/*
 	 * Ocean Compute
 	 */
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceancomputepipeline;
+	tempdata.pipeline = Ocean::getComputePipeline();
 	tempdata.descriptorset = ocean->getComputeDescriptorSet();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(physicshandler.getTPtr());
-	// recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
+	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {Ocean::recordCompute(tempdata, c);}));
 
 	/*
 	 * Shadowmap Renders
@@ -715,7 +710,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 
 	tempdata.renderpass = SSRR::getRenderpass();
 	tempdata.framebuffer = SSRR::getFramebuffer(GraphicsHandler::swapchainimageindex);
-	tempdata.pipeline = GraphicsHandler::vulkaninfo.oceangraphicspipeline;
+	tempdata.pipeline = Ocean::getGraphicsPipeline();
 	tempdata.pushconstantdata = reinterpret_cast<void*>(ocean->getPushConstantsPtr());
 	tempdata.descriptorset = ocean->getDescriptorSet();
 	tempdata.vertexbuffer = ocean->getVertexBuffer();

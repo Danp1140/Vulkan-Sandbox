@@ -24,7 +24,6 @@ typedef struct PrimaryGraphicsPushConstants {
 
 class Mesh {
 private:
-	TextureInfo diffusetexture, normaltexture, heighttexture;
 	static PipelineInfo graphicspipeline, shadowpipeline;
 	static size_t nummeshes;
 
@@ -38,6 +37,7 @@ protected:
 	VkBuffer vertexbuffer, indexbuffer;
 	BufferInfo uniformbuffer;
 	VkDeviceMemory vertexbuffermemory, indexbuffermemory;
+	TextureInfo diffusetexture, normaltexture, heighttexture;
 	VkDescriptorSet ds;
 	MeshUniformBuffer uniformbufferdata;
 	std::mutex dsmutex;

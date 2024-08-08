@@ -358,8 +358,6 @@ typedef struct VulkanInfo {
 	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass;
 	PipelineInfo textgraphicspipeline,
 			skyboxgraphicspipeline,
-			oceangraphicspipeline,
-			oceancomputepipeline,
 			grassgraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline,

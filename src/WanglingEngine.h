@@ -50,6 +50,7 @@ private:
 	Camera* primarycamera;
 	std::vector<Mesh*> meshes;
 	std::vector<Light*> lights;
+	// TODO: switch to object, not pointer!!
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
 	Text* troubleshootingtext;

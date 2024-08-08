@@ -69,6 +69,7 @@ Mesh::~Mesh () {
 }
 
 void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
+	// TODO: consider more compact normal & height formats
 	GraphicsHandler::VKHelperInitTexture(
 			&diffusetexture,
 			dir, 0,

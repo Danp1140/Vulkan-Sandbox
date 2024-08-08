@@ -161,14 +161,14 @@ TEX_FUNC_IMPL_HEIGHT(colorfulMarble) {}
 TEX_FUNC_IMPL_DIFFUSE(ocean) {}
 
 TEX_FUNC_IMPL_NORMAL(ocean) {
-//	BaseGenInfo geninfo {};
-//	BaseUseInfo<glm::vec4> useinfo {.interp = {{glm::vec4(1., 1., 0., 0.), glm::vec4(-1., 1., 0., 0)}}};
-//	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
-//		geninfo.wave = {WAVE_TYPE_TRI, 20.f, 100.f * generateTurbulence(x, y, texdst, geninfo)};
-////		datadst[x * texdst.resolution.height + y]
-//		// perhaps we need a setTexel method
-//		addTexel(texdst, datadst[x * texdst.resolution.height + y], generateWave, geninfo, interp, useinfo, x, y);
-//	}
+	BaseGenInfo geninfo {};
+	BaseUseInfo<glm::vec4> useinfo {.interp = {{glm::vec4(1., 1., 0., 0.), glm::vec4(-1., 1., 0., 0)}}};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		geninfo.wave = {WAVE_TYPE_TRI, 20.f, 100.f * generateTurbulence(x, y, texdst, geninfo)};
+		datadst[x * texdst.resolution.height + y] = glm::vec4(0);
+		// perhaps we need a setTexel method
+		addTexel(texdst, datadst[x * texdst.resolution.height + y], generateWave, geninfo, interp, useinfo, x, y);
+	}
 }
 
 TEX_FUNC_IMPL_HEIGHT(ocean) {}

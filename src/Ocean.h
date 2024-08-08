@@ -20,16 +20,14 @@ class Ocean : public Mesh {
 private:
 	glm::vec2 bounds;
 	Mesh*shore;
-	// height & normal are duplicate with Mesh's own textures...why???
-	TextureInfo heightmap, normalmap, velocitymap;
+	TextureInfo velocitymap;
 	VkDescriptorSet computeds;
-	VkCommandBuffer* computecommandbuffers;
 	TextureInfo seabeddepthmap;
 	OceanPushConstants pushconstants;
 
-	void initDescriptorSets (const VkDescriptorSetLayout objdsl) override;
+	static PipelineInfo graphicspipeline, computepipeline;
 
-	void initComputeCommandBuffers ();
+	void initDescriptorSets (const VkDescriptorSetLayout objdsl) override;
 
 public:
 	/*
@@ -41,9 +39,6 @@ public:
 	 * Member Access
 	 */
 	VkDescriptorSet getComputeDescriptorSet () const {return computeds;}
-	VkCommandBuffer* getComputeCommandBuffers () {return computecommandbuffers;}
-	TextureInfo* getHeightMapPtr () {return &heightmap;}
-	TextureInfo* getNormalMapPtr () {return &normalmap;}
 	TextureInfo* getDepthMapPtr () {return &seabeddepthmap;}
 	OceanPushConstants* getPushConstantsPtr () {return &pushconstants;}
 
@@ -53,11 +48,14 @@ public:
 	/*
 	 * Vulkan Utilities
 	 */
+	static void init ();
+	static void terminate ();
 	static void createComputePipeline ();
 	static void createGraphicsPipeline ();
+	static const PipelineInfo& getGraphicsPipeline () {return graphicspipeline;}
+	static const PipelineInfo& getComputePipeline () {return computepipeline;}
 	static void recordDraw (cbRecData data, VkCommandBuffer& cb);
 	static void recordCompute (cbRecData data, VkCommandBuffer& cb);
-	};
-
+};
 
 #endif //VULKANSANDBOX_OCEAN_H

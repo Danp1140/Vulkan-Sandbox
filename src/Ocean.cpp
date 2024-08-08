@@ -4,15 +4,15 @@
 
 #include "Ocean.h"
 
+PipelineInfo Ocean::graphicspipeline = {};
+PipelineInfo Ocean::computepipeline = {};
+
 Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : 
-	Mesh(pos), 
+	Mesh(pos, glm::vec3(1), glm::quat(0, 0, 0, 1), 1, 2048, 512), 
 	bounds(b),
 	shore(s),
-	heightmap({}),
-	normalmap({}),
 	velocitymap({}),
 	computeds(VK_NULL_HANDLE),
-	computecommandbuffers(nullptr),
 	seabeddepthmap({}),
 	pushconstants({}) {
 	float subdivwidth = 1.0 / (float)OCEAN_PRE_TESS_SUBDIV;
@@ -36,14 +36,7 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 		}
 	}
 	cleanUpVertsAndTris();
-	//consider using smaller formats
-	GraphicsHandler::VKHelperInitImage(&heightmap,
-		512, 512,
-		VK_FORMAT_R32_SFLOAT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_VIEW_TYPE_2D);
+
 	GraphicsHandler::VKHelperInitImage(&velocitymap,
 		512, 512,
 		VK_FORMAT_R32G32B32A32_SFLOAT,
@@ -52,17 +45,8 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_VIEW_TYPE_2D);
 
-	glm::vec4* datatemp = (glm::vec4*)malloc(512 * 512 * sizeof(glm::vec4));
-	memset((void*)datatemp, 0, 512 * 512 * sizeof(glm::vec4));
-	GraphicsHandler::VKHelperInitTexture(&normalmap,
-		2048, 0,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		TEXTURE_TYPE_NORMAL,
-		VK_IMAGE_VIEW_TYPE_2D,
-		GraphicsHandler::genericsampler);
-	free(datatemp);
-//	TextureHandler::generateTextures({normalmap}, TextureHandler::oceanTexGenSet);
+	TextureHandler::generateTextures({normaltexture}, TextureHandler::oceanTexGenSet);
+
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
 			vertices,
 			tris,
@@ -70,8 +54,8 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 			&vertexbuffermemory,
 			&indexbuffer,
 			&indexbuffermemory);
-	initComputeCommandBuffers();
-	initDescriptorSets(GraphicsHandler::vulkaninfo.oceangraphicspipeline.objectdsl);
+	initDescriptorSets(graphicspipeline.objectdsl);
+	rewriteTextureDescriptorSets();
 }
 
 // this was originally intended to help calculate waves, we'll see if we ever get around to it lol
@@ -158,6 +142,16 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 												   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
+void Ocean::init () {
+	createGraphicsPipeline();
+	createComputePipeline();
+}
+
+void Ocean::terminate () {
+	GraphicsHandler::destroyPipeline(computepipeline);
+	GraphicsHandler::destroyPipeline(graphicspipeline);
+}
+
 void Ocean::createComputePipeline () {
 	VkDescriptorSetLayoutBinding objdslbindings[2] {{
 			0,
@@ -192,7 +186,7 @@ void Ocean::createComputePipeline () {
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)};
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceancomputepipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&computepipeline, pii);
 }
 
 void Ocean::createGraphicsPipeline () {
@@ -256,7 +250,7 @@ void Ocean::createGraphicsPipeline () {
 	pii.depthtest = true;
 	pii.renderpass = SSRR::getRenderpass();
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.oceangraphicspipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&graphicspipeline, pii);
 }
 
 void Ocean::initDescriptorSets (const VkDescriptorSetLayout objdsl) {
@@ -270,49 +264,36 @@ void Ocean::initDescriptorSets (const VkDescriptorSetLayout objdsl) {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		nullptr,
 		GraphicsHandler::vulkaninfo.descriptorpool,
-		1, &GraphicsHandler::vulkaninfo.oceancomputepipeline.objectdsl 
+		1, &computepipeline.objectdsl 
 	};
 	vkAllocateDescriptorSets(
 		GraphicsHandler::vulkaninfo.logicaldevice,
 		&descriptorsetallocinfo,
 		&computeds);
-
-}
-
-void Ocean::initComputeCommandBuffers () {
-	computecommandbuffers = new VkCommandBuffer[MAX_FRAMES_IN_FLIGHT];
-	VkCommandBufferAllocateInfo cmdbufallocinfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.commandpool,
-			VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-			MAX_FRAMES_IN_FLIGHT
-	};
-	vkAllocateCommandBuffers(GraphicsHandler::vulkaninfo.logicaldevice, &cmdbufallocinfo, computecommandbuffers);
 }
 
 void Ocean::rewriteTextureDescriptorSets () {
-	// Ocean doesn't own the skybox. i think it gets written elsewhere but this is probably a sub-optimal
-	// way of doing things
 	GraphicsHandler::updateDescriptorSet(
 		ds,
-		{1, 2, 3},
+		{0, 1, 2, 3},
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
-		{normalmap.getDescriptorImageInfo(),
+		{heighttexture.getDescriptorImageInfo(),
+		normaltexture.getDescriptorImageInfo(),
 		CompositingOp::getScratchDII(),
 		CompositingOp::getScratchDepthDII()},
-		{{}, {}, {}});
+		{{}, {}, {}, {}});
 
 	GraphicsHandler::updateDescriptorSet(
 		computeds,
 		{0, 1},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE},
-		{heightmap.getDescriptorImageInfo(),
+		{heighttexture.getDescriptorImageInfo(),
 		velocitymap.getDescriptorImageInfo()},
-		{{}, {}, {}, {}});
+		{{}, {}});
 }
 
 void Ocean::recordDraw (cbRecData data, VkCommandBuffer& cb) {
@@ -357,7 +338,7 @@ void Ocean::recordDraw (cbRecData data, VkCommandBuffer& cb) {
 	vkCmdBindDescriptorSets(
 			cb,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			GraphicsHandler::vulkaninfo.oceangraphicspipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			1,
 			1, &data.descriptorset,
 			0, nullptr);
@@ -409,7 +390,7 @@ void Ocean::recordCompute (cbRecData data, VkCommandBuffer& cb) {
 	float timetemp = (float)glfwGetTime();
 	vkCmdPushConstants(
 			cb,
-			GraphicsHandler::vulkaninfo.oceancomputepipeline.pipelinelayout,
+			data.pipeline.pipelinelayout,
 			VK_SHADER_STAGE_COMPUTE_BIT,
 			0,
 			sizeof(float), data.pushconstantdata);
