@@ -91,10 +91,18 @@ typedef enum TextureType {
 	TEXTURE_TYPE_MAX
 } TextureType;
 
+// unsure of this, but defining a specific interim CB one too
 const VkCommandBufferBeginInfo cmdbufferbegininfo {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		nullptr,
 		0,        // could make this one time submit???
+		nullptr
+};
+
+const VkCommandBufferBeginInfo interimcbbegininfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		nullptr
 };
 
@@ -161,13 +169,21 @@ public:
 	VkFormat format = VK_FORMAT_UNDEFINED;
 	VkImageUsageFlags usage = 0x00000000;
 	VkExtent2D resolution = {0, 0};
-	VkMemoryPropertyFlags memoryprops = 0x00000000;
+	VkMemoryPropertyFlags memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 	TextureType type = TEXTURE_TYPE_MAX;
 	glm::mat3 uvmatrix = glm::mat3(1);
 	VkImageViewType viewtype = VK_IMAGE_VIEW_TYPE_2D;
+	uint32_t numlayers = 1;
 
 	inline const VkDescriptorImageInfo getDescriptorImageInfo () const {
 		return {sampler, imageview, layout};
+	}
+
+	inline const VkImageSubresourceRange getDefaultSubresourceRange () const {
+		return {
+			format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+			0, 1, 0, numlayers
+		};
 	}
 
 	void setUVScale (glm::vec2 s) {
@@ -549,6 +565,7 @@ public:
 			VkFormat format,
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
+	static void transitionImageLayout (TextureInfo& t, VkImageLayout newlayout);
 	static void VKHelperInitImage (
 			TextureInfo* imgdst,
 			uint32_t horires, uint32_t vertres,

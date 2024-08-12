@@ -1939,6 +1939,89 @@ void GraphicsHandler::VKHelperTransitionImageLayout (
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
 
+void GraphicsHandler::transitionImageLayout (TextureInfo& t, VkImageLayout newlayout) {
+	VkImageMemoryBarrier imgmembarrier {
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		nullptr,
+		0,
+		0,
+		t.layout,
+		newlayout,
+		VK_QUEUE_FAMILY_IGNORED,
+		VK_QUEUE_FAMILY_IGNORED,
+		t.image,
+		t.getDefaultSubresourceRange()
+	};
+	VkPipelineStageFlags srcmask, dstmask;
+	switch (t.layout) {
+		case VK_IMAGE_LAYOUT_UNDEFINED:
+			imgmembarrier.srcAccessMask = 0;
+			srcmask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			break;
+		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+			imgmembarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			srcmask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+			imgmembarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			srcmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			break;
+		case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			imgmembarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT 
+							| VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			srcmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			break;
+		case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+			imgmembarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			srcmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			break;
+		default:
+			std::cout << "unknown initial layout for img transition" << std::endl;
+	}
+	switch (newlayout) {
+		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+			imgmembarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			dstmask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			break;
+		case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+			imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			dstmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			imgmembarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | 
+							VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			dstmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+		case VK_IMAGE_LAYOUT_GENERAL:
+			imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			dstmask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		default:
+			std::cout << "unknown final layout for img transition" << std::endl;
+	}
+
+	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &interimcbbegininfo);
+	vkCmdPipelineBarrier(
+		vulkaninfo.interimcommandbuffer, 
+		srcmask, dstmask, 
+		0, 
+		0, nullptr, 
+		0, nullptr,
+		1, &imgmembarrier);
+	vkEndCommandBuffer(vulkaninfo.interimcommandbuffer);
+	VkSubmitInfo subinfo {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		nullptr,
+		0,
+		nullptr,
+		nullptr,
+		1,
+		&vulkaninfo.interimcommandbuffer,
+		0,
+		nullptr
+	};
+	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
+	t.layout = newlayout;
+	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
+}
+
 void GraphicsHandler::VKHelperInitVertexAndIndexBuffers (
 		const std::vector<Vertex>& vertices,
 		const std::vector<Tri>& tris,
@@ -2306,6 +2389,7 @@ void GraphicsHandler::VKHelperUpdateWholeTexture (
 				texdst->format,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		texdst->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	}
 }
 

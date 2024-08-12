@@ -20,6 +20,9 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 	uniformbuffer({}),
 	vertexbuffermemory(VK_NULL_HANDLE),
 	indexbuffermemory(VK_NULL_HANDLE),
+	diffusetexture({}),
+	normaltexture({}),
+	heighttexture({}),
 	ds(VK_NULL_HANDLE),
 	uniformbufferdata({}),
 	dsmutex() {
@@ -70,6 +73,25 @@ Mesh::~Mesh () {
 
 void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
 	// TODO: consider more compact normal & height formats
+	diffusetexture.sampler = GraphicsHandler::genericsampler;
+	diffusetexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	diffusetexture.resolution = {dir, dir};
+	diffusetexture.type = TEXTURE_TYPE_DIFFUSE;
+	GraphicsHandler::VKHelperInitTexture(diffusetexture);
+
+	normaltexture.sampler = GraphicsHandler::linearminmagsampler;
+	normaltexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	normaltexture.resolution = {nir, nir};
+	normaltexture.type = TEXTURE_TYPE_NORMAL;
+	GraphicsHandler::VKHelperInitTexture(normaltexture);
+
+	heighttexture.sampler = GraphicsHandler::linearminmagsampler;
+	heighttexture.format = VK_FORMAT_R32_SFLOAT;
+	heighttexture.resolution = {hir, hir};
+	heighttexture.type = TEXTURE_TYPE_HEIGHT;
+	GraphicsHandler::VKHelperInitTexture(heighttexture);
+
+	/*
 	GraphicsHandler::VKHelperInitTexture(
 			&diffusetexture,
 			dir, 0,
@@ -94,6 +116,7 @@ void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
 			TEXTURE_TYPE_HEIGHT,
 			VK_IMAGE_VIEW_TYPE_2D,
 			GraphicsHandler::linearminmagsampler);
+			*/
 }
 
 /*
