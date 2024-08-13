@@ -137,9 +137,7 @@ void Ocean::renderDepthMap (Mesh* seabed) {
 
 //	vkDestroyFramebuffer(GraphicsHandler::vulkaninfo.logicaldevice, framebuffertemp, nullptr);
 
-	GraphicsHandler::VKHelperTransitionImageLayout(seabeddepthmap.image, 1, VK_FORMAT_D32_SFLOAT,
-												   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-												   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	GraphicsHandler::transitionImageLayout(seabeddepthmap, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Ocean::init () {

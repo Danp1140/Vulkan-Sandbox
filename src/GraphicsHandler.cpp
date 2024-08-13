@@ -1662,71 +1662,10 @@ void GraphicsHandler::destroyPipeline(PipelineInfo& p) {
 }
 
 void GraphicsHandler::VKSubInitDepthBuffer () {
-	VkImageCreateInfo imgcreateinfo {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			nullptr,
-			0,
-			VK_IMAGE_TYPE_2D,
-			VK_FORMAT_D32_SFLOAT,
-			{vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height, 1},
-			1,
-			1,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL,        //apparently this development device's implementation doesn't support tiling linear
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-			VK_SHARING_MODE_EXCLUSIVE,
-			0,
-			nullptr,
-			VK_IMAGE_LAYOUT_UNDEFINED
-	};
-	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &vulkaninfo.depthbuffer.image);
-
-	VkMemoryRequirements memrequirements {};
-	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, vulkaninfo.depthbuffer.image, &memrequirements);
-	VkPhysicalDeviceMemoryProperties physicaldevicememprops {};
-	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
-	uint32_t memindex = -1u;
-	for (uint32_t x = 0; x < physicaldevicememprops.memoryTypeCount; x++) {
-		if (memrequirements.memoryTypeBits & (1 << x)
-			&& ((physicaldevicememprops.memoryTypes[x].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ==
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
-			memindex = x;
-			break;
-		}
-	}
-	VkMemoryAllocateInfo memallocateinfo {
-			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			nullptr,
-			memrequirements.size,
-			memindex
-	};
-	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocateinfo, nullptr, &(vulkaninfo.depthbuffer.memory));
-	vkBindImageMemory(vulkaninfo.logicaldevice, vulkaninfo.depthbuffer.image, vulkaninfo.depthbuffer.memory, 0);
-
-	VkImageViewCreateInfo imgviewcreateinfo {
-			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			nullptr,
-			0,
-			vulkaninfo.depthbuffer.image,
-			VK_IMAGE_VIEW_TYPE_2D,
-			VK_FORMAT_D32_SFLOAT,
-			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-			 VK_COMPONENT_SWIZZLE_IDENTITY},
-			{
-					VK_IMAGE_ASPECT_DEPTH_BIT,
-					0,
-					1,
-					0,
-					1
-			}
-	};
-	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &vulkaninfo.depthbuffer.imageview);
-
-	GraphicsHandler::VKHelperTransitionImageLayout(vulkaninfo.depthbuffer.image,
-												   1,
-												   VK_FORMAT_D32_SFLOAT,
-												   VK_IMAGE_LAYOUT_UNDEFINED,
-												   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	vulkaninfo.depthbuffer.format = DEPTH_IMAGE_FORMAT;
+	vulkaninfo.depthbuffer.type = TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER;
+	vulkaninfo.depthbuffer.resolution = {vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height};
+	VKHelperInitTexture(vulkaninfo.depthbuffer);
 }
 
 void GraphicsHandler::VKHelperCreateAndAllocateBuffer (
@@ -1858,87 +1797,6 @@ void GraphicsHandler::VKHelperCpyBufferToImage (
 	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
 }
 
-void GraphicsHandler::VKHelperTransitionImageLayout (
-		VkImage image,
-		uint32_t numlayers,
-		VkFormat format,
-		VkImageLayout oldlayout,
-		VkImageLayout newlayout) {
-	VkCommandBufferBeginInfo cmdbuffbegininfo {
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			nullptr,
-			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			nullptr
-	};
-	VkImageMemoryBarrier imgmembarrier {
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-			nullptr,
-			0,
-			0,
-			oldlayout,
-			newlayout,
-			VK_QUEUE_FAMILY_IGNORED,
-			VK_QUEUE_FAMILY_IGNORED,
-			image,
-			{
-					format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-					0,
-					1,
-					0,
-					numlayers
-			}
-	};
-	VkPipelineStageFlags srcmask, dstmask;
-	if (oldlayout == VK_IMAGE_LAYOUT_UNDEFINED) {
-		imgmembarrier.srcAccessMask = 0;
-		srcmask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-	} else if (oldlayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		imgmembarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		srcmask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	} else if (oldlayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		imgmembarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		srcmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	} else if (oldlayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		imgmembarrier.srcAccessMask =
-				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		srcmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	} else if (oldlayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
-		imgmembarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		srcmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	if (newlayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		imgmembarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		dstmask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	} else if (newlayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		dstmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	} else if (newlayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		imgmembarrier.dstAccessMask =
-				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		dstmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	} else if (newlayout == VK_IMAGE_LAYOUT_GENERAL) {
-		imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		dstmask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	vkBeginCommandBuffer(vulkaninfo.interimcommandbuffer, &cmdbuffbegininfo);
-	vkCmdPipelineBarrier(vulkaninfo.interimcommandbuffer, srcmask, dstmask, 0, 0, nullptr, 0, nullptr, 1,
-						 &imgmembarrier);
-	vkEndCommandBuffer(vulkaninfo.interimcommandbuffer);
-	VkSubmitInfo subinfo {
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			nullptr,
-			0,
-			nullptr,
-			nullptr,
-			1,
-			&(vulkaninfo.interimcommandbuffer),
-			0,
-			nullptr
-	};
-	vkQueueSubmit(vulkaninfo.graphicsqueue, 1, &subinfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(vulkaninfo.graphicsqueue);
-}
-
 void GraphicsHandler::transitionImageLayout (TextureInfo& t, VkImageLayout newlayout) {
 	VkImageMemoryBarrier imgmembarrier {
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1986,13 +1844,16 @@ void GraphicsHandler::transitionImageLayout (TextureInfo& t, VkImageLayout newla
 		case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 			imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			dstmask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			break;
 		case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
 			imgmembarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | 
 							VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 			dstmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			break;
 		case VK_IMAGE_LAYOUT_GENERAL:
 			imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 			dstmask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			break;
 		default:
 			std::cout << "unknown final layout for img transition" << std::endl;
 	}
@@ -2108,24 +1969,26 @@ void GraphicsHandler::VKHelperInitImage (
 						 || format == VK_FORMAT_D32_SFLOAT
 						 || imgdst->type == TEXTURE_TYPE_SUBPASS;
 
+	imgdst->numlayers = imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
 	VkImageCreateInfo imgcreateinfo {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			nullptr,
-			VkImageCreateFlags(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0),
-			VK_IMAGE_TYPE_2D,
-			imgdst->format,
-			{imgdst->resolution.width, imgdst->resolution.height, 1},
-			1,
-			uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1),
-			VK_SAMPLE_COUNT_1_BIT,
-			VkImageTiling(tilingoptimal ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR),
-			usage,
-			VK_SHARING_MODE_EXCLUSIVE,
-			0,
-			nullptr,
-			VK_IMAGE_LAYOUT_UNDEFINED
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		nullptr,
+		VkImageCreateFlags(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0),
+		VK_IMAGE_TYPE_2D,
+		imgdst->format,
+		{imgdst->resolution.width, imgdst->resolution.height, 1},
+		1,
+		imgdst->numlayers,
+		VK_SAMPLE_COUNT_1_BIT,
+		VkImageTiling(tilingoptimal ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR),
+		usage,
+		VK_SHARING_MODE_EXCLUSIVE,
+		0,
+		nullptr,
+		VK_IMAGE_LAYOUT_UNDEFINED
 	};
 	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &imgdst->image);
+	imgdst->layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VkMemoryRequirements memrequirements {};
 	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, imgdst->image, &memrequirements);
@@ -2149,13 +2012,7 @@ void GraphicsHandler::VKHelperInitImage (
 	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocinfo, nullptr, &imgdst->memory);
 	vkBindImageMemory(vulkaninfo.logicaldevice, imgdst->image, imgdst->memory, 0);
 
-	VKHelperTransitionImageLayout(
-			imgdst->image,
-			imgdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1,
-			imgdst->format,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			finallayout);
-	imgdst->layout = finallayout;
+	transitionImageLayout(*imgdst, finallayout);
 
 	VkImageViewCreateInfo imgviewcreateinfo {
 			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2166,8 +2023,7 @@ void GraphicsHandler::VKHelperInitImage (
 			imgdst->format,
 			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
 			 VK_COMPONENT_SWIZZLE_IDENTITY},
-			{format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
-			 uint32_t(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1)}
+			imgdst->getDefaultSubresourceRange()
 	};
 	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &imgdst->imageview);
 }
@@ -2263,6 +2119,9 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 			texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 			texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
 		}
+	} else if (texturedst.type == TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
+		texturedst.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	} else if (texturedst.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
 		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2302,7 +2161,8 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 
 	if (texturedst.type != TEXTURE_TYPE_SHADOWMAP 
 		&& texturedst.type != TEXTURE_TYPE_SUBPASS 
-		&& texturedst.type != TEXTURE_TYPE_SSRR_BUFFER) {
+		&& texturedst.type != TEXTURE_TYPE_SSRR_BUFFER
+		&& texturedst.type != TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
 		char* emptydata = new char[size];
 		memset(emptydata, 0, size);
 		VKHelperUpdateWholeTexture(&texturedst, static_cast<void*>(emptydata));
@@ -2367,12 +2227,7 @@ void GraphicsHandler::VKHelperUpdateWholeTexture (
 	vkUnmapMemory(vulkaninfo.logicaldevice, devloc ? vulkaninfo.stagingbuffermemory : texdst->memory);
 	if (devloc) {
 		if (texdst->layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			VKHelperTransitionImageLayout(
-					texdst->image,
-					texdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1,
-					texdst->format,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			transitionImageLayout(*texdst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		}
 		VKHelperCpyBufferToImage(       //may have to factor layers into this mess
 				&vulkaninfo.stagingbuffer,
@@ -2383,13 +2238,7 @@ void GraphicsHandler::VKHelperUpdateWholeTexture (
 				texdst->resolution.width, texdst->resolution.height);
 		vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
 		vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
-		VKHelperTransitionImageLayout(
-				texdst->image,
-				texdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1,
-				texdst->format,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		texdst->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		transitionImageLayout(*texdst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 }
 

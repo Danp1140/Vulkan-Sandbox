@@ -49,6 +49,7 @@
 #define NUM_RECORDING_THREADS 1 // TODO: fix multithreading; changing this to > 1 seems to cause heap corruption
 #define MAX_FRAMES_IN_FLIGHT 6 
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
+#define DEPTH_IMAGE_FORMAT VK_FORMAT_D32_SFLOAT
 #define MAX_LIGHTS 2
 
 #define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
@@ -88,6 +89,7 @@ typedef enum TextureType {
 	TEXTURE_TYPE_SHADOWMAP,
 	TEXTURE_TYPE_SUBPASS,
 	TEXTURE_TYPE_SSRR_BUFFER,
+	TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER,
 	TEXTURE_TYPE_MAX
 } TextureType;
 
@@ -559,12 +561,6 @@ public:
 			uint32_t numlayers,
 			uint32_t rowpitch,
 			uint32_t horires, uint32_t vertres);
-	static void VKHelperTransitionImageLayout (
-			VkImage image,
-			uint32_t numlayers,
-			VkFormat format,
-			VkImageLayout oldlayout,
-			VkImageLayout newlayout);
 	static void transitionImageLayout (TextureInfo& t, VkImageLayout newlayout);
 	static void VKHelperInitImage (
 			TextureInfo* imgdst,
