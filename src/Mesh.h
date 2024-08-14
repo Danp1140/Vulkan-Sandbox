@@ -43,7 +43,7 @@ protected:
 	std::mutex dsmutex;
 
 	virtual void initDescriptorSets (const VkDescriptorSetLayout objdsl);
-	void texInit (uint32_t dir, uint32_t nir, uint32_t hir);
+	void texInit (bool computedheight);
 
 	void triangulatePolygon (std::vector<glm::vec3> v, std::vector<glm::vec3>& dst);
 	void subdivide (uint8_t levels);
@@ -61,7 +61,8 @@ public:
 		glm::quat r = glm::quat(0, 0, 0, 1),
 		uint32_t dir = 64,
 		uint32_t nir = 64,
-		uint32_t hir = 64);
+		uint32_t hir = 64,
+		bool computedheight = false);
 	Mesh (
 		const char* filepath,
 		glm::vec3 p = glm::vec3(0),

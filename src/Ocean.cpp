@@ -8,7 +8,7 @@ PipelineInfo Ocean::graphicspipeline = {};
 PipelineInfo Ocean::computepipeline = {};
 
 Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) : 
-	Mesh(pos, glm::vec3(1), glm::quat(0, 0, 0, 1), 1, 2048, 512), 
+	Mesh(pos, glm::vec3(1), glm::quat(0, 0, 0, 1), 1, 2048, 512, true),
 	bounds(b),
 	shore(s),
 	velocitymap({}),

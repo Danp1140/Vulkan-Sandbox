@@ -1425,7 +1425,6 @@ void GraphicsHandler::VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineIni
 		std::string tempstr = std::string(WORKING_DIRECTORY "resources/shaders/SPIRV/").append(pii.shaderfilepathprefix).append(
 				"comp.spv");
 		const char* filepath = tempstr.c_str();
-		std::cout << filepath << std::endl;
 		VKSubInitShaders(VK_SHADER_STAGE_COMPUTE_BIT,
 						 &filepath,
 						 &shadermodule,
@@ -2106,27 +2105,29 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 	// probably change SSRR to SCRATCH
 	// a little confused by scratch/SSRR traits (usage & layout)
 	if (texturedst.type == TEXTURE_TYPE_SHADOWMAP) {
-		texturedst.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
-	else if (texturedst.type == TEXTURE_TYPE_SUBPASS) {
-		texturedst.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+	} else if (texturedst.type == TEXTURE_TYPE_DYNAMIC_HEIGHT) {
+		texturedst.usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
+	} else if (texturedst.type == TEXTURE_TYPE_SUBPASS) {
+		texturedst.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
 	} else if (texturedst.type == TEXTURE_TYPE_SSRR_BUFFER) {
-		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		if (texturedst.format != VK_FORMAT_D32_SFLOAT) {
 			texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 			texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
 		}
 	} else if (texturedst.type == TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
-		texturedst.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		texturedst.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	} else if (texturedst.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-		texturedst.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		texturedst.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	} else {
-		texturedst.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+		texturedst.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	}
 
@@ -2159,6 +2160,7 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 		size = subresourcelayout.size;
 	}
 
+	/*
 	if (texturedst.type != TEXTURE_TYPE_SHADOWMAP 
 		&& texturedst.type != TEXTURE_TYPE_SUBPASS 
 		&& texturedst.type != TEXTURE_TYPE_SSRR_BUFFER
@@ -2168,6 +2170,7 @@ void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
 		VKHelperUpdateWholeTexture(&texturedst, static_cast<void*>(emptydata));
 		delete[] emptydata;
 	}
+	*/
 	texturedst.setUVPosition(glm::vec2(0., 0.));
 	texturedst.setUVScale(glm::vec2(1., 1.));
 	texturedst.setUVRotation(0.);

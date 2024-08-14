@@ -9,7 +9,8 @@ PipelineInfo Mesh::shadowpipeline = {};
 size_t Mesh::nummeshes = 0;
 
 Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
-		uint32_t dir, uint32_t nir, uint32_t hir) : 
+		uint32_t dir, uint32_t nir, uint32_t hir,
+		bool computedheight) : 
 	position(p), 
 	scale(s), 
 	rotation(r), 
@@ -31,15 +32,18 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 		createShadowmapPipeline();
 	}
 	nummeshes++;
-	
+
 	recalculateModelMatrix();
 	initDescriptorSets(graphicspipeline.objectdsl);
 	
 	uniformbuffer.elemsize = sizeof(MeshUniformBuffer);
 	uniformbuffer.numelems = 1;
 	GraphicsHandler::VKSubInitUniformBuffer(uniformbuffer);
-	
-	texInit(dir, nir, hir);
+
+	diffusetexture.resolution = {dir, dir};
+	normaltexture.resolution = {nir, nir};
+	heighttexture.resolution = {hir, hir};
+	texInit(computedheight);
 	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
 	rewriteTextureDescriptorSets();
 }
@@ -71,52 +75,22 @@ Mesh::~Mesh () {
 	}
 }
 
-void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
+void Mesh::texInit (bool computedheight) {
 	// TODO: consider more compact normal & height formats
 	diffusetexture.sampler = GraphicsHandler::genericsampler;
 	diffusetexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	diffusetexture.resolution = {dir, dir};
 	diffusetexture.type = TEXTURE_TYPE_DIFFUSE;
 	GraphicsHandler::VKHelperInitTexture(diffusetexture);
 
 	normaltexture.sampler = GraphicsHandler::linearminmagsampler;
 	normaltexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	normaltexture.resolution = {nir, nir};
 	normaltexture.type = TEXTURE_TYPE_NORMAL;
 	GraphicsHandler::VKHelperInitTexture(normaltexture);
 
 	heighttexture.sampler = GraphicsHandler::linearminmagsampler;
 	heighttexture.format = VK_FORMAT_R32_SFLOAT;
-	heighttexture.resolution = {hir, hir};
-	heighttexture.type = TEXTURE_TYPE_HEIGHT;
+	heighttexture.type = computedheight ? TEXTURE_TYPE_DYNAMIC_HEIGHT : TEXTURE_TYPE_HEIGHT;
 	GraphicsHandler::VKHelperInitTexture(heighttexture);
-
-	/*
-	GraphicsHandler::VKHelperInitTexture(
-			&diffusetexture,
-			dir, 0,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_DIFFUSE,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::genericsampler);
-	GraphicsHandler::VKHelperInitTexture(
-			&normaltexture,
-			nir, 0,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_NORMAL,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::linearminmagsampler);
-	GraphicsHandler::VKHelperInitTexture(
-			&heighttexture,
-			hir, 0,
-			VK_FORMAT_R32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_HEIGHT,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::linearminmagsampler);
-			*/
 }
 
 /*
