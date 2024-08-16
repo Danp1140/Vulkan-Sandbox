@@ -29,14 +29,12 @@ WanglingEngine::WanglingEngine () {
 
 	initSkybox();
 
-	GraphicsHandler::VKHelperInitTexture(
-			&skyboxtexture,
-			128, 0,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_CUBEMAP,
-			VK_IMAGE_VIEW_TYPE_CUBE,
-			GraphicsHandler::linearminmagsampler);
+	skyboxtexture.resolution = {128, 128};
+	skyboxtexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	skyboxtexture.type = TEXTURE_TYPE_CUBEMAP;
+	skyboxtexture.sampler = GraphicsHandler::linearminmagsampler;
+	skyboxtexture.viewtype = VK_IMAGE_VIEW_TYPE_CUBE;
+	GraphicsHandler::createTexture(skyboxtexture);
 	texturehandler.generateSkyboxTexture(&skyboxtexture);
 	updateSkyboxDescriptorSets();
 

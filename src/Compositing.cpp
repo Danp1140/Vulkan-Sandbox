@@ -19,14 +19,14 @@ void CompositingOp::init() {
 	scratchbuffer.format = SWAPCHAIN_IMAGE_FORMAT;
 	scratchbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
 	scratchbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	scratchbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
-	GraphicsHandler::VKHelperInitTexture(scratchbuffer);
+	scratchbuffer.type = TEXTURE_TYPE_SCRATCH_BUFFER;
+	GraphicsHandler::createTexture(scratchbuffer);
 	scratchdepthbuffer.sampler = GraphicsHandler::genericsampler;
 	scratchdepthbuffer.format = COMPOSITING_SCRATCH_DEPTH_BUFFER_FORMAT;
 	scratchdepthbuffer.resolution = GraphicsHandler::vulkaninfo.swapchainextent;
 	scratchdepthbuffer.memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	scratchdepthbuffer.type = TEXTURE_TYPE_SSRR_BUFFER;
-	GraphicsHandler::VKHelperInitTexture(scratchdepthbuffer);
+	scratchdepthbuffer.type = TEXTURE_TYPE_SCRATCH_BUFFER;
+	GraphicsHandler::createTexture(scratchdepthbuffer);
 
 	SSRR::init();
 }

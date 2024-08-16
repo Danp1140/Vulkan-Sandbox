@@ -80,17 +80,17 @@ void Mesh::texInit (bool computedheight) {
 	diffusetexture.sampler = GraphicsHandler::genericsampler;
 	diffusetexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	diffusetexture.type = TEXTURE_TYPE_DIFFUSE;
-	GraphicsHandler::VKHelperInitTexture(diffusetexture);
+	GraphicsHandler::createTexture(diffusetexture);
 
 	normaltexture.sampler = GraphicsHandler::linearminmagsampler;
 	normaltexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	normaltexture.type = TEXTURE_TYPE_NORMAL;
-	GraphicsHandler::VKHelperInitTexture(normaltexture);
+	GraphicsHandler::createTexture(normaltexture);
 
 	heighttexture.sampler = GraphicsHandler::linearminmagsampler;
 	heighttexture.format = VK_FORMAT_R32_SFLOAT;
 	heighttexture.type = computedheight ? TEXTURE_TYPE_DYNAMIC_HEIGHT : TEXTURE_TYPE_HEIGHT;
-	GraphicsHandler::VKHelperInitTexture(heighttexture);
+	GraphicsHandler::createTexture(heighttexture);
 }
 
 /*

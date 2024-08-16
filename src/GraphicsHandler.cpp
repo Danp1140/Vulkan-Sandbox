@@ -1664,7 +1664,7 @@ void GraphicsHandler::VKSubInitDepthBuffer () {
 	vulkaninfo.depthbuffer.format = DEPTH_IMAGE_FORMAT;
 	vulkaninfo.depthbuffer.type = TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER;
 	vulkaninfo.depthbuffer.resolution = {vulkaninfo.swapchainextent.width, vulkaninfo.swapchainextent.height};
-	VKHelperInitTexture(vulkaninfo.depthbuffer);
+	createTexture(vulkaninfo.depthbuffer);
 }
 
 void GraphicsHandler::VKHelperCreateAndAllocateBuffer (
@@ -1853,6 +1853,10 @@ void GraphicsHandler::transitionImageLayout (TextureInfo& t, VkImageLayout newla
 			imgmembarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 			dstmask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			break;
+		case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+			imgmembarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | 
+							VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			dstmask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		default:
 			std::cout << "unknown final layout for img transition" << std::endl;
 	}
@@ -1951,229 +1955,99 @@ void GraphicsHandler::VKHelperInitVertexBuffer (
 	vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
 }
 
-void GraphicsHandler::VKHelperInitImage (
-		TextureInfo* imgdst,
-		uint32_t horires, uint32_t vertres,
-		VkFormat format,
-		VkMemoryPropertyFlags memprops,
-		VkImageUsageFlags usage,
-		VkImageLayout finallayout,
-		VkImageViewType imgviewtype) {
-	imgdst->resolution = {horires, vertres};
-	if (horires == 0) imgdst->resolution.width = imgdst->resolution.height;
-	else if (vertres == 0) imgdst->resolution.height = imgdst->resolution.width;
-	imgdst->format = format;
-	imgdst->memoryprops = memprops;
-	bool tilingoptimal = imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE
-						 || format == VK_FORMAT_D32_SFLOAT
-						 || imgdst->type == TEXTURE_TYPE_SUBPASS;
+void GraphicsHandler::createTexture (TextureInfo& t) {
+	if (t.type == TEXTURE_TYPE_SHADOWMAP) {
+		t.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		t.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	} else if (t.type == TEXTURE_TYPE_DYNAMIC_HEIGHT) {
+		t.usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		t.layout = VK_IMAGE_LAYOUT_GENERAL;
+	} else if (t.type == TEXTURE_TYPE_SCRATCH_BUFFER) {
+		t.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		t.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		if (t.format != VK_FORMAT_D32_SFLOAT) {
+			t.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+			t.layout = VK_IMAGE_LAYOUT_GENERAL;
+		}
+	} else if (t.type == TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
+		t.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		t.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	} else if (t.type == TEXTURE_TYPE_CUSTOM) {}
+	else if (t.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+		t.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		t.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	} else {
+		t.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		t.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	}
 
-	imgdst->numlayers = imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
+	t.numlayers = t.viewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
+	bool tilingoptimal = t.viewtype == VK_IMAGE_VIEW_TYPE_CUBE || t.format == VK_FORMAT_D32_SFLOAT;
 	VkImageCreateInfo imgcreateinfo {
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		nullptr,
-		VkImageCreateFlags(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0),
+		VkImageCreateFlags(t.viewtype == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0),
 		VK_IMAGE_TYPE_2D,
-		imgdst->format,
-		{imgdst->resolution.width, imgdst->resolution.height, 1},
+		t.format,
+		{t.resolution.width, t.resolution.height, 1},
 		1,
-		imgdst->numlayers,
+		t.numlayers,
 		VK_SAMPLE_COUNT_1_BIT,
 		VkImageTiling(tilingoptimal ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR),
-		usage,
+		t.usage,
 		VK_SHARING_MODE_EXCLUSIVE,
 		0,
 		nullptr,
 		VK_IMAGE_LAYOUT_UNDEFINED
 	};
-	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &imgdst->image);
-	imgdst->layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	vkCreateImage(vulkaninfo.logicaldevice, &imgcreateinfo, nullptr, &t.image);
+	VkImageLayout finallayout = t.layout;
+	t.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VkMemoryRequirements memrequirements {};
-	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, imgdst->image, &memrequirements);
+	vkGetImageMemoryRequirements(vulkaninfo.logicaldevice, t.image, &memrequirements);
 	VkPhysicalDeviceMemoryProperties physicaldevicememprops {};
 	vkGetPhysicalDeviceMemoryProperties(vulkaninfo.physicaldevice, &physicaldevicememprops);
 	uint32_t memindex = -1u;
 	for (uint32_t x = 0; x < physicaldevicememprops.memoryTypeCount; x++) {
 		if (memrequirements.memoryTypeBits & (1 << x)
-			&&
-			((physicaldevicememprops.memoryTypes[x].propertyFlags & imgdst->memoryprops) == imgdst->memoryprops)) {
+			&& ((physicaldevicememprops.memoryTypes[x].propertyFlags & t.memoryprops) 
+				== t.memoryprops)) {
 			memindex = x;
 			break;
 		}
 	}
 	VkMemoryAllocateInfo memallocinfo {
-			VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			nullptr,
-			memrequirements.size,
-			memindex
+		VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		nullptr,
+		memrequirements.size,
+		memindex
 	};
-	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocinfo, nullptr, &imgdst->memory);
-	vkBindImageMemory(vulkaninfo.logicaldevice, imgdst->image, imgdst->memory, 0);
+	vkAllocateMemory(vulkaninfo.logicaldevice, &memallocinfo, nullptr, &t.memory);
+	vkBindImageMemory(vulkaninfo.logicaldevice, t.image, t.memory, 0);
 
-	transitionImageLayout(*imgdst, finallayout);
+	transitionImageLayout(t, finallayout);
 
 	VkImageViewCreateInfo imgviewcreateinfo {
-			VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			nullptr,
-			0,
-			imgdst->image,
-			imgviewtype,
-			imgdst->format,
-			{VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-			 VK_COMPONENT_SWIZZLE_IDENTITY},
-			imgdst->getDefaultSubresourceRange()
+		VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		nullptr,
+		0,
+		t.image,
+		t.viewtype,
+		t.format,
+		{
+			VK_COMPONENT_SWIZZLE_IDENTITY, 
+			VK_COMPONENT_SWIZZLE_IDENTITY, 
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY
+		},
+		t.getDefaultSubresourceRange()
 	};
-	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &imgdst->imageview);
-}
+	vkCreateImageView(vulkaninfo.logicaldevice, &imgviewcreateinfo, nullptr, &t.imageview);
 
-void GraphicsHandler::VKHelperInitTexture (
-		TextureInfo* texturedst,
-		uint32_t horires, uint32_t vertres,
-		VkFormat format,
-		VkMemoryPropertyFlags memprops,
-		TextureType textype,
-		VkImageViewType imgviewtype,
-		VkSampler sampler) {
-	texturedst->type = textype;
-	VkImageUsageFlags usage;
-	VkImageLayout layout;
-	if (textype == TEXTURE_TYPE_SHADOWMAP) {
-		usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
-		// TODO: reevaluate TEXTURE_TYPE_SUBPASS usefulness
-	else if (textype == TEXTURE_TYPE_SUBPASS) { // entire subpass textype may be useless eventually
-		usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-		layout = VK_IMAGE_LAYOUT_GENERAL;
-	} else if (textype == TEXTURE_TYPE_SSRR_BUFFER) { // TODO: change this to scratch buffer, review properties
-		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		if (format != VK_FORMAT_D32_SFLOAT) usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-		layout = VK_IMAGE_LAYOUT_GENERAL; // is this layout correct?
-	} else if (memprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-		usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	} else {
-		usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-		layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	}
-
-	VKHelperInitImage(
-			texturedst,
-			horires,
-			vertres,
-			format,
-			memprops,
-			usage,
- 	layout,
-			imgviewtype);
-
-	VkDeviceSize size =
-			texturedst->resolution.width * texturedst->resolution.height * VKHelperGetPixelSize(format) *
-			(imgviewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1);
-	//below stuff has redundant code in updatewholeimages...is it necessary?
-	if (imgviewtype != VK_IMAGE_VIEW_TYPE_CUBE && format != VK_FORMAT_D32_SFLOAT &&
-		textype != TEXTURE_TYPE_SUBPASS) {
-		VkSubresourceLayout subresourcelayout;
-		VkImageSubresource imgsubresource {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice,
-									texturedst->image,
-									&imgsubresource,
-									&subresourcelayout);
-		size = subresourcelayout.size;
-	}
-
-	if (textype != TEXTURE_TYPE_SHADOWMAP && textype != TEXTURE_TYPE_SUBPASS && textype != TEXTURE_TYPE_SSRR_BUFFER) {
-		char* emptydata = new char[size];
-		memset(emptydata, 0, size);
-		VKHelperUpdateWholeTexture(texturedst, reinterpret_cast<void*>(emptydata));
-		delete[] emptydata;
-	}
-//	texturedst->layout=textype==TEXTURE_TYPE_SUBPASS?VK_IMAGE_LAYOUT_GENERAL|VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	texturedst->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	// wait what?? why isn't layout = layout???
-	// TODO: come back here when program is functional to fiddle
-	texturedst->sampler = sampler;
-	texturedst->setUVPosition(glm::vec2(0., 0.));
-	texturedst->setUVScale(glm::vec2(1., 1.));
-	texturedst->setUVRotation(0.);
-}
-
-void GraphicsHandler::VKHelperInitTexture (TextureInfo& texturedst) {
-	// TODO: reevaluate each of these texture types & consider adding viewtype to these if's as well
-	// probably remove SUBPASS
-	// probably change SSRR to SCRATCH
-	// a little confused by scratch/SSRR traits (usage & layout)
-	if (texturedst.type == TEXTURE_TYPE_SHADOWMAP) {
-		texturedst.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	} else if (texturedst.type == TEXTURE_TYPE_DYNAMIC_HEIGHT) {
-		texturedst.usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
-	} else if (texturedst.type == TEXTURE_TYPE_SUBPASS) {
-		texturedst.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
-	} else if (texturedst.type == TEXTURE_TYPE_SSRR_BUFFER) {
-		texturedst.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		if (texturedst.format != VK_FORMAT_D32_SFLOAT) {
-			texturedst.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-			texturedst.layout = VK_IMAGE_LAYOUT_GENERAL;
-		}
-	} else if (texturedst.type == TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
-		texturedst.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	} else if (texturedst.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-		texturedst.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	} else {
-		texturedst.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
-		texturedst.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	}
-
-	VKHelperInitImage(
-			&texturedst,
-			texturedst.resolution.width,
-			texturedst.resolution.height,
-			texturedst.format,
-			texturedst.memoryprops,
-			texturedst.usage,
-			texturedst.layout,
-			texturedst.viewtype);
-
-	VkDeviceSize size =
-			texturedst.resolution.width 
-			* texturedst.resolution.height 
-			* VKHelperGetPixelSize(texturedst.format) 
-			* (texturedst.viewtype == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1);
-	//below stuff has redundant code in updatewholeimages...is it necessary?
-	if (texturedst.viewtype != VK_IMAGE_VIEW_TYPE_CUBE 
-		&& texturedst.format != VK_FORMAT_D32_SFLOAT 
-		&& texturedst.type != TEXTURE_TYPE_SUBPASS) {
-		VkSubresourceLayout subresourcelayout;
-		VkImageSubresource imgsubresource {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-		vkGetImageSubresourceLayout(
-			vulkaninfo.logicaldevice,
-			texturedst.image,
-			&imgsubresource,
-			&subresourcelayout);
-		size = subresourcelayout.size;
-	}
-
-	/*
-	if (texturedst.type != TEXTURE_TYPE_SHADOWMAP 
-		&& texturedst.type != TEXTURE_TYPE_SUBPASS 
-		&& texturedst.type != TEXTURE_TYPE_SSRR_BUFFER
-		&& texturedst.type != TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER) {
-		char* emptydata = new char[size];
-		memset(emptydata, 0, size);
-		VKHelperUpdateWholeTexture(&texturedst, static_cast<void*>(emptydata));
-		delete[] emptydata;
-	}
-	*/
-	texturedst.setUVPosition(glm::vec2(0., 0.));
-	texturedst.setUVScale(glm::vec2(1., 1.));
-	texturedst.setUVRotation(0.);
+	t.setUVPosition(glm::vec2(0., 0.));
+	t.setUVScale(glm::vec2(1., 1.));
+	t.setUVRotation(0.);
 }
 
 void GraphicsHandler::destroyTexture(TextureInfo& t) {
@@ -2183,65 +2057,65 @@ void GraphicsHandler::destroyTexture(TextureInfo& t) {
 	t = (TextureInfo){};
 }
 
-void GraphicsHandler::VKHelperUpdateWholeTexture (
-		TextureInfo* texdst,
-		void* src) {
-	//having the cubemap ternary exp for layers everywhere feels wrong...maybe polish up later
-	//do we have any other uses for layers other than 6 for cubemap, 1 for everything else?
-	bool querysubresource = texdst->type != TEXTURE_TYPE_CUBEMAP && texdst->format != VK_FORMAT_D32_SFLOAT &&
-							texdst->type != TEXTURE_TYPE_SUBPASS;
-	uint32_t pixelsize = VKHelperGetPixelSize(texdst->format);
+void GraphicsHandler::VKHelperUpdateWholeTexture (TextureInfo& t, void* src) {
+	bool querysubresource = t.type != TEXTURE_TYPE_CUBEMAP && t.format != VK_FORMAT_D32_SFLOAT;
+	uint32_t pixelsize = VKHelperGetPixelSize(t.format);
 	VkSubresourceLayout subresourcelayout;
 	VkImageSubresource imgsubresource {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-	VkDeviceSize size = texdst->resolution.width * texdst->resolution.height * pixelsize *
-						(texdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1);
+	VkDeviceSize size = t.resolution.width * t.resolution.height * pixelsize * t.numlayers;
 	if (querysubresource) {
-		vkGetImageSubresourceLayout(vulkaninfo.logicaldevice, texdst->image, &imgsubresource, &subresourcelayout);
+		vkGetImageSubresourceLayout(
+			vulkaninfo.logicaldevice, 
+			t.image, 
+			&imgsubresource, 
+			&subresourcelayout);
 		size = subresourcelayout.size;
 	}
-	bool devloc = texdst->memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	bool devloc = t.memoryprops & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	if (devloc) {
 		GraphicsHandler::VKHelperCreateAndAllocateBuffer(
-				&(vulkaninfo.stagingbuffer),
-				size,
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				&(vulkaninfo.stagingbuffermemory),
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			&(vulkaninfo.stagingbuffer),
+			size,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			&(vulkaninfo.stagingbuffermemory),
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	}
 	void* dst;
-	vkMapMemory(
-			vulkaninfo.logicaldevice,
-			devloc ? vulkaninfo.stagingbuffermemory : texdst->memory,
-			0,
-			VK_WHOLE_SIZE,
-			0,
-			&dst);
+	vkMapMemory(vulkaninfo.logicaldevice,
+		devloc ? vulkaninfo.stagingbuffermemory : t.memory,
+		0,
+		VK_WHOLE_SIZE,
+		0,
+		&dst);
 	VkDeviceSize pitch;
 	if (querysubresource) pitch = subresourcelayout.rowPitch;
-	else pitch = texdst->resolution.width * pixelsize;
+	else pitch = t.resolution.width * pixelsize;
 	char* dstscan = reinterpret_cast<char*>(dst), * srcscan = reinterpret_cast<char*>(src);
-	for (uint32_t x = 0; x < texdst->resolution.height * (texdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1); x++) {
-		memcpy(reinterpret_cast<void*>(dstscan), reinterpret_cast<void*>(srcscan),
-			   texdst->resolution.width * pixelsize);
+	for (uint32_t x = 0; x < t.resolution.height * (t.type == TEXTURE_TYPE_CUBEMAP ? 6 : 1); x++) {
+		memcpy(reinterpret_cast<void*>(dstscan), 
+			reinterpret_cast<void*>(srcscan),
+			t.resolution.width * pixelsize);
 		dstscan += pitch;
-		srcscan += texdst->resolution.width * pixelsize;
+		srcscan += t.resolution.width * pixelsize;
 	}
-	vkUnmapMemory(vulkaninfo.logicaldevice, devloc ? vulkaninfo.stagingbuffermemory : texdst->memory);
+	vkUnmapMemory(vulkaninfo.logicaldevice, devloc ? vulkaninfo.stagingbuffermemory : t.memory);
+	VkImageLayout initlayout;
+	bool trans = t.layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	if (devloc) {
-		if (texdst->layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-			transitionImageLayout(*texdst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		if (trans) {
+			initlayout = t.layout;
+			transitionImageLayout(t, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		}
-		VKHelperCpyBufferToImage(       //may have to factor layers into this mess
-				&vulkaninfo.stagingbuffer,
-				&texdst->image,
-				texdst->format,
-				texdst->type == TEXTURE_TYPE_CUBEMAP ? 6 : 1,
-				pitch / pixelsize,
-				texdst->resolution.width, texdst->resolution.height);
+		VKHelperCpyBufferToImage(&vulkaninfo.stagingbuffer,
+			&t.image,
+			t.format,
+			t.numlayers,
+			pitch / pixelsize,
+			t.resolution.width, t.resolution.height);
 		vkFreeMemory(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffermemory, nullptr);
 		vkDestroyBuffer(vulkaninfo.logicaldevice, vulkaninfo.stagingbuffer, nullptr);
-		transitionImageLayout(*texdst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		if (trans) transitionImageLayout(t, initlayout);
 	}
 }
 

@@ -88,9 +88,9 @@ typedef enum TextureType {
 	TEXTURE_TYPE_DYNAMIC_HEIGHT,
 	TEXTURE_TYPE_CUBEMAP,
 	TEXTURE_TYPE_SHADOWMAP,
-	TEXTURE_TYPE_SUBPASS,
-	TEXTURE_TYPE_SSRR_BUFFER,
+	TEXTURE_TYPE_SCRATCH_BUFFER,
 	TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER,
+	TEXTURE_TYPE_CUSTOM, // allows usage & layout to pass through
 	TEXTURE_TYPE_MAX
 } TextureType;
 
@@ -563,27 +563,9 @@ public:
 			uint32_t rowpitch,
 			uint32_t horires, uint32_t vertres);
 	static void transitionImageLayout (TextureInfo& t, VkImageLayout newlayout);
-	static void VKHelperInitImage (
-			TextureInfo* imgdst,
-			uint32_t horires, uint32_t vertres,
-			VkFormat format,
-			VkMemoryPropertyFlags memprops,
-			VkImageUsageFlags usage,
-			VkImageLayout finallayout,
-			VkImageViewType imgviewtype);
-	static void VKHelperInitTexture (
-			TextureInfo* texturedst,
-			uint32_t horires, uint32_t vertres,
-			VkFormat format,
-			VkMemoryPropertyFlags memprops,
-			TextureType textype,
-			VkImageViewType imgviewtype,
-			VkSampler sampler);
-	static void VKHelperInitTexture (TextureInfo& texturedst);
+	static void createTexture (TextureInfo& t);
 	static void destroyTexture (TextureInfo& t);
-	static void VKHelperUpdateWholeTexture (
-			TextureInfo* texdst,
-			void* src);
+	static void VKHelperUpdateWholeTexture (TextureInfo& t, void* src);
 	static void VKHelperRecordImageTransition (
 			VkCommandBuffer cmdbuffer,
 			VkImage image,

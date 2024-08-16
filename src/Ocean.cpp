@@ -37,13 +37,12 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 	}
 	cleanUpVertsAndTris();
 
-	GraphicsHandler::VKHelperInitImage(&velocitymap,
-		512, 512,
-		VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		VK_IMAGE_USAGE_STORAGE_BIT,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_VIEW_TYPE_2D);
+	velocitymap.resolution = {512, 512};
+	velocitymap.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	velocitymap.usage = VK_IMAGE_USAGE_STORAGE_BIT;
+	velocitymap.layout = VK_IMAGE_LAYOUT_GENERAL;
+	velocitymap.type = TEXTURE_TYPE_CUSTOM;
+	GraphicsHandler::createTexture(velocitymap);
 
 	TextureHandler::generateTextures({normaltexture}, TextureHandler::oceanTexGenSet);
 
@@ -62,14 +61,11 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 void Ocean::renderDepthMap (Mesh* seabed) {
 	vkQueueWaitIdle(GraphicsHandler::vulkaninfo.graphicsqueue);
 
-	GraphicsHandler::VKHelperInitTexture(
-			&seabeddepthmap,
-			256, 0,
-			VK_FORMAT_D32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_SHADOWMAP,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::depthsampler);
+	seabeddepthmap.resolution = {256, 256};
+	seabeddepthmap.format = VK_FORMAT_D32_SFLOAT;
+	seabeddepthmap.type = TEXTURE_TYPE_SHADOWMAP;
+	seabeddepthmap.sampler = GraphicsHandler::depthsampler;
+	GraphicsHandler::createTexture(seabeddepthmap);
 
 	VkFramebuffer framebuffertemp;
 	VkFramebufferCreateInfo fbci {

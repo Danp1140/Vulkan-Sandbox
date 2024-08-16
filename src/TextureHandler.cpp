@@ -70,19 +70,19 @@ void TextureHandler::generateTextures (std::vector<TextureInfo> texdsts, const T
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
 			funcset.diffuse(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_NORMAL) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
 			funcset.normal(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_HEIGHT) {
 			float* data = reinterpret_cast<float*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
 			funcset.height(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
 	}
@@ -214,7 +214,7 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 					}
 				}
 			}
-			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(finaltex));
+			GraphicsHandler::VKHelperUpdateWholeTexture(*texdsts[texidx], reinterpret_cast<void*>(finaltex));
 			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) delete[] turbulentsquare[x];
 			delete[] turbulentsquare;
 			delete[] finaltex;
@@ -224,7 +224,7 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
 			glm::vec4* data = (glm::vec4*)malloc(size);
 			memset(data, 0, size);
-			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(*texdsts[texidx], reinterpret_cast<void*>(data));
 			free(data);
 		}
 	}
@@ -295,7 +295,7 @@ void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 			}
 		}
 	}
-	GraphicsHandler::VKHelperUpdateWholeTexture(texdst, data);
+	GraphicsHandler::VKHelperUpdateWholeTexture(*texdst, data);
 	delete[] data;
 }
 

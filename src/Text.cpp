@@ -156,15 +156,12 @@ void Text::regenFaces (bool init) {
 	}
 	if (init) {
 		for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-			GraphicsHandler::VKHelperInitTexture(
-					&textures[x],
-					hres,
-					vres,
-					VK_FORMAT_R32_SFLOAT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-					TEXTURE_TYPE_DIFFUSE,
-					VK_IMAGE_VIEW_TYPE_2D,
-					GraphicsHandler::genericsampler);
+			textures[x].resolution = {hres, vres};
+			textures[x].format = VK_FORMAT_R32_SFLOAT;
+			textures[x].memoryprops = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+			textures[x].type = TEXTURE_TYPE_DIFFUSE;
+			textures[x].sampler = GraphicsHandler::genericsampler;
+			GraphicsHandler::createTexture(textures[x]);
 		}
 	} else {
 		//could we just use VK_FORMAT_R8_UNORM? probably would need reformatting cause UNORM
@@ -172,7 +169,7 @@ void Text::regenFaces (bool init) {
 //				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
 //				reinterpret_cast<void*>(texturedata));
 		GraphicsHandler::VKHelperUpdateWholeTexture(
-				&textures[0],
+				textures[0],
 				reinterpret_cast<void*>(texturedata));
 	}
 	delete (texturedata);
