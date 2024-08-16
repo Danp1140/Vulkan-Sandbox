@@ -4,86 +4,93 @@
 
 #include "Mesh.h"
 
-Mesh::Mesh (
-		glm::vec3 p,
-		glm::vec3 s,
-		glm::quat r,
-		uint32_t dir,
-		uint32_t nir,
-		uint32_t hir) : position(p), scale(s), rotation(r), dsmutex() {
+PipelineInfo Mesh::graphicspipeline = {};
+PipelineInfo Mesh::shadowpipeline = {};
+size_t Mesh::nummeshes = 0;
+
+Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
+		uint32_t dir, uint32_t nir, uint32_t hir,
+		bool computedheight) : 
+	position(p), 
+	scale(s), 
+	rotation(r), 
+	vertices({}),
+	tris({}),
+	vertexbuffer(VK_NULL_HANDLE),
+	indexbuffer(VK_NULL_HANDLE),
+	uniformbuffer({}),
+	vertexbuffermemory(VK_NULL_HANDLE),
+	indexbuffermemory(VK_NULL_HANDLE),
+	diffusetexture({}),
+	normaltexture({}),
+	heighttexture({}),
+	ds(VK_NULL_HANDLE),
+	uniformbufferdata({}),
+	dsmutex() {
+	if (nummeshes == 0) {
+		createPipeline();
+		createShadowmapPipeline();
+	}
+	nummeshes++;
+
 	recalculateModelMatrix();
-	initDescriptorSets();
-	// hey man i really dont think we need a seperate buffer/memory per sci
-	GraphicsHandler::VKSubInitUniformBuffer(
-			&descriptorsets,
-			0,
-			sizeof(MeshUniformBuffer),
-			1,
-			&uniformbuffers,
-			&uniformbuffermemories,
-			GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl);
-	texInit(dir, nir, hir);
-	// TODO: make textures optional
+	initDescriptorSets(graphicspipeline.objectdsl);
+	
+	uniformbuffer.elemsize = sizeof(MeshUniformBuffer);
+	uniformbuffer.numelems = 1;
+	GraphicsHandler::VKSubInitUniformBuffer(uniformbuffer);
+
+	diffusetexture.resolution = {dir, dir};
+	normaltexture.resolution = {nir, nir};
+	heighttexture.resolution = {hir, hir};
+	texInit(computedheight);
 	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
 	rewriteTextureDescriptorSets();
 }
 
-Mesh::Mesh (
-		const char* filepath,
-		glm::vec3 p,
-		glm::vec3 s,
-		glm::quat r,
-		uint32_t dir,
-		uint32_t nir,
-		uint32_t hir) : Mesh(p, s, r, dir, nir, hir) {
+Mesh::Mesh (const char* filepath,
+		glm::vec3 p, glm::vec3 s, glm::quat r,
+		uint32_t dir, uint32_t nir, uint32_t hir) : 
+	Mesh(p, s, r, dir, nir, hir) {
 	loadOBJ(filepath);
 }
 
 Mesh::~Mesh () {
+	nummeshes--;
 	if (vertexbuffer != VK_NULL_HANDLE) {
 		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffer, nullptr);
 		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, vertexbuffermemory, nullptr);
 		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, indexbuffer, nullptr);
 		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, indexbuffermemory, nullptr);
 	}
-	vkFreeDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-						 GraphicsHandler::vulkaninfo.descriptorpool,
-						 GraphicsHandler::vulkaninfo.numswapchainimages,
-						 descriptorsets);
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
-		vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffers[scii], nullptr);
-		vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffermemories[scii], nullptr);
+	vkFreeDescriptorSets(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		GraphicsHandler::vulkaninfo.descriptorpool,
+		1, &ds);
+	vkFreeMemory(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.memory, nullptr);
+	vkDestroyBuffer(GraphicsHandler::vulkaninfo.logicaldevice, uniformbuffer.buffer, nullptr);
+	if (nummeshes == 0) {
+		GraphicsHandler::destroyPipeline(shadowpipeline);
+		GraphicsHandler::destroyPipeline(graphicspipeline);
 	}
-	delete[] descriptorsets;
-	delete[] uniformbuffers;
-	delete[] uniformbuffermemories;
 }
 
-void Mesh::texInit (uint32_t dir, uint32_t nir, uint32_t hir) {
-	GraphicsHandler::VKHelperInitTexture(
-			&diffusetexture,
-			dir, 0,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_DIFFUSE,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::genericsampler);
-	GraphicsHandler::VKHelperInitTexture(
-			&normaltexture,
-			nir, 0,
-			VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_NORMAL,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::linearminmagsampler);
-	GraphicsHandler::VKHelperInitTexture(
-			&heighttexture,
-			hir, 0,
-			VK_FORMAT_R32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_HEIGHT,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::linearminmagsampler);
+void Mesh::texInit (bool computedheight) {
+	// TODO: consider more compact normal & height formats
+	diffusetexture.sampler = GraphicsHandler::genericsampler;
+	diffusetexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	diffusetexture.type = TEXTURE_TYPE_DIFFUSE;
+	GraphicsHandler::createTexture(diffusetexture);
+
+	normaltexture.sampler = GraphicsHandler::linearminmagsampler;
+	normaltexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	normaltexture.type = TEXTURE_TYPE_NORMAL;
+	GraphicsHandler::createTexture(normaltexture);
+
+	heighttexture.sampler = GraphicsHandler::linearminmagsampler;
+	heighttexture.format = VK_FORMAT_R32_SFLOAT;
+	heighttexture.type = computedheight ? TEXTURE_TYPE_DYNAMIC_HEIGHT : TEXTURE_TYPE_HEIGHT;
+	GraphicsHandler::createTexture(heighttexture);
 }
 
 /*
@@ -107,29 +114,29 @@ void Mesh::subdivide (uint8_t levels) {
 		trisizeinit = tris.size();
 		for (size_t i = 0; i < trisizeinit; i++) {
 			vertices.push_back({
-									   (vertices[tris[0].vertexindices[1]].position +
-										vertices[tris[0].vertexindices[0]].position) * 0.5,
-									   (vertices[tris[0].vertexindices[1]].normal +
-										vertices[tris[0].vertexindices[0]].normal) * 0.5,
-									   (vertices[tris[0].vertexindices[1]].uv +
-										vertices[tris[0].vertexindices[0]].uv) * 0.5
-							   });
+				(vertices[tris[0].vertexindices[1]].position +
+					vertices[tris[0].vertexindices[0]].position) * 0.5,
+				(vertices[tris[0].vertexindices[1]].normal +
+					vertices[tris[0].vertexindices[0]].normal) * 0.5,
+				(vertices[tris[0].vertexindices[1]].uv +
+					vertices[tris[0].vertexindices[0]].uv) * 0.5
+			});
 			vertices.push_back({
-									   (vertices[tris[0].vertexindices[2]].position +
-										vertices[tris[0].vertexindices[1]].position) * 0.5,
-									   (vertices[tris[0].vertexindices[2]].normal +
-										vertices[tris[0].vertexindices[1]].normal) * 0.5,
-									   (vertices[tris[0].vertexindices[2]].uv +
-										vertices[tris[0].vertexindices[1]].uv) * 0.5
-							   });
+				(vertices[tris[0].vertexindices[2]].position +
+					vertices[tris[0].vertexindices[1]].position) * 0.5,
+				(vertices[tris[0].vertexindices[2]].normal +
+					vertices[tris[0].vertexindices[1]].normal) * 0.5,
+				(vertices[tris[0].vertexindices[2]].uv +
+					vertices[tris[0].vertexindices[1]].uv) * 0.5
+			});
 			vertices.push_back({
-									   (vertices[tris[0].vertexindices[0]].position +
-										vertices[tris[0].vertexindices[2]].position) * 0.5,
-									   (vertices[tris[0].vertexindices[0]].normal +
-										vertices[tris[0].vertexindices[2]].normal) * 0.5,
-									   (vertices[tris[0].vertexindices[0]].uv +
-										vertices[tris[0].vertexindices[2]].uv) * 0.5
-							   });
+				(vertices[tris[0].vertexindices[0]].position +
+					vertices[tris[0].vertexindices[2]].position) * 0.5,
+				(vertices[tris[0].vertexindices[0]].normal +
+					vertices[tris[0].vertexindices[2]].normal) * 0.5,
+				(vertices[tris[0].vertexindices[0]].uv +
+					vertices[tris[0].vertexindices[2]].uv) * 0.5
+			});
 			tris.push_back({});
 			tris.back().vertexindices[0] = tris[0].vertexindices[0];
 			tris.back().vertexindices[1] = vertices.size() - 3;
@@ -146,16 +153,16 @@ void Mesh::subdivide (uint8_t levels) {
 			tris.back().vertexindices[0] = vertices.size() - 3;
 			tris.back().vertexindices[1] = vertices.size() - 2;
 			tris.back().vertexindices[2] = vertices.size() - 1;
-//			tris.erase(tris.begin()+i);
 			tris.erase(tris.begin());
 		}
 	}
-	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(vertices,
-													   tris,
-													   &vertexbuffer,
-													   &vertexbuffermemory,
-													   &indexbuffer,
-													   &indexbuffermemory);
+	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
+		vertices,
+		tris,
+		&vertexbuffer,
+		&vertexbuffermemory,
+		&indexbuffer,
+		&indexbuffermemory);
 }
 
 void Mesh::generateSmoothVertexNormals () {
@@ -176,43 +183,49 @@ void Mesh::generateSmoothVertexNormals () {
 	}
 }
 
-void Mesh::initDescriptorSets () {
-	VkDescriptorSetLayout layoutstemp[MAX_FRAMES_IN_FLIGHT];
-	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++)
-		layoutstemp[x] = GraphicsHandler::vulkaninfo.primarygraphicspipeline.objectdsl;
-	if (descriptorsets)
-		vkFreeDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-							 GraphicsHandler::vulkaninfo.descriptorpool,
-							 MAX_FRAMES_IN_FLIGHT,
-							 descriptorsets);
-	delete[] descriptorsets;
-	descriptorsets = new VkDescriptorSet[MAX_FRAMES_IN_FLIGHT];
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
+void Mesh::initDescriptorSets (const VkDescriptorSetLayout objdsl) {
+	if (ds != VK_NULL_HANDLE)
+		vkFreeDescriptorSets(
+			GraphicsHandler::vulkaninfo.logicaldevice,
 			GraphicsHandler::vulkaninfo.descriptorpool,
-			MAX_FRAMES_IN_FLIGHT,
-			&layoutstemp[0]
+			1, &ds);
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.descriptorpool,
+		1, &objdsl 
 	};
-	std::cout << string_VkResult(vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-														  &descriptorsetallocinfo,
-														  &descriptorsets[0])) << std::endl;
+	vkAllocateDescriptorSets(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		&descriptorsetallocinfo,
+		&ds);
 }
 
 void Mesh::rewriteTextureDescriptorSets () {
+	// binding 4 (array of shadowmaps) is written in WE, since it has access to lights
+	GraphicsHandler::updateDescriptorSet(
+		ds,
+		{0, 1, 2, 3},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+		{{}, diffusetexture.getDescriptorImageInfo(),
+		normaltexture.getDescriptorImageInfo(),
+		heighttexture.getDescriptorImageInfo()},
+		{uniformbuffer.getDescriptorBufferInfo(), {}, {}, {}});
+/*
+			);
 	VkDescriptorImageInfo imginfo = diffusetexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
 		VkWriteDescriptorSet write {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				descriptorsets[x],
-				1,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			nullptr,
+			ds,
+			1, 0, 1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			&imginfo,
+			nullptr,
+			nullptr
 		};
 		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
 							   1,
@@ -259,128 +272,121 @@ void Mesh::rewriteTextureDescriptorSets () {
 				1,
 				&write,
 				0, nullptr);
-	}
+	}*/
 }
 
 void Mesh::createPipeline () {
 	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
-																  0,
-																  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-																  1,
-																  VK_SHADER_STAGE_VERTEX_BIT,
-																  nullptr
-														  }, {
-																  1,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  2,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  3,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  4,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  MAX_LIGHTS,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }};
+			0,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			2,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			3,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			4,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			MAX_LIGHTS,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+	}};
 	VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2] {
-			scenedslcreateinfo,
-			{
-					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-					nullptr,
-					0,
-					5,
-					&objecttexdslbindings[0]
-			}};
+		scenedslcreateinfo, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			5,
+			&objecttexdslbindings[0]
+	}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
-	VkVertexInputAttributeDescription vertinattribdesc[3] {{0,
-															0,
-															VK_FORMAT_R32G32B32_SFLOAT,
-															offsetof(Vertex, position)},
-														   {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
-														   {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}};
-
+	VkVertexInputAttributeDescription vertinattribdesc[3] {
+		{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)},
+		{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)},
+		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)}
+	};
 
 	PipelineInitInfo pii = {};
 	pii.stages = VK_SHADER_STAGE_VERTEX_BIT
-				 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-				 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-				 | VK_SHADER_STAGE_FRAGMENT_BIT;
+				| VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+				| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+				| VK_SHADER_STAGE_FRAGMENT_BIT;
 	pii.shaderfilepathprefix = "default";
 	pii.descsetlayoutcreateinfos = &descsetlayoutcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT
-							 | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
-							 | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
-							 | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)};
+					| VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+					| VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+					| VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PrimaryGraphicsPushConstants)};
 	pii.vertexinputstatecreateinfo = {
-			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			nullptr,
-			0,
-			1,
-			&vertinbindingdesc,
-			3,
-			&vertinattribdesc[0]
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&vertinbindingdesc,
+		3,
+		&vertinattribdesc[0]
 	};
 	pii.depthtest = true;
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.primarygraphicspipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&graphicspipeline, pii);
 }
 
 void Mesh::createShadowmapPipeline () {
 	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
-																  0,
-																  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-																  1,
-																  VK_SHADER_STAGE_VERTEX_BIT,
-																  nullptr
-														  }, {
-																  1,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  2,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  3,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  1,
-																  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }, {
-																  4,
-																  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																  MAX_LIGHTS,
-																  VK_SHADER_STAGE_FRAGMENT_BIT,
-																  nullptr
-														  }};
-	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {  //perhaps this much superfluous info is inefficient???
-			scenedslcreateinfo,
-			{
-					VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-					nullptr,
-					0,
-					5,
-					&objecttexdslbindings[0]
-			}
-	};
+			0,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		}, {
+			1,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			2,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			3,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+		}, {
+			4,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			MAX_LIGHTS,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
+	}};
+	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {
+		scenedslcreateinfo, {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			nullptr,
+			0,
+			5,
+			&objecttexdslbindings[0]
+	}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
 	VkVertexInputAttributeDescription vertinattribdesc {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position)};
 
@@ -390,17 +396,20 @@ void Mesh::createShadowmapPipeline () {
 	pii.descsetlayoutcreateinfos = &descriptorsetlayoutcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowmapPushConstants)};
 	pii.vertexinputstatecreateinfo = {
-			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			nullptr,
-			0,
-			1,
-			&vertinbindingdesc,
-			1,
-			&vertinattribdesc
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&vertinbindingdesc,
+		1,
+		&vertinattribdesc
 	};
 	pii.depthtest = true;
+	pii.extent = {4096, 4096};
+	pii.culling = VK_CULL_MODE_FRONT_BIT;
+	pii.renderpass = GraphicsHandler::vulkaninfo.templateshadowrenderpass;
 
-	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.shadowmapgraphicspipeline, pii);
+	GraphicsHandler::VKSubInitPipeline(&shadowpipeline, pii);
 }
 
 void Mesh::recordDraw (cbRecData data, VkCommandBuffer& cb) {
@@ -528,8 +537,7 @@ void Mesh::recordShadowDraw (cbRecData data, VkCommandBuffer& cb) {
 	vkEndCommandBuffer(cb);
 }
 
-void
-Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed) {
+void Mesh::generateSteppeMesh (std::vector<glm::vec3> area, std::vector<std::vector<glm::vec3>> waters, double seed) {
 	vertices = std::vector<Vertex>();
 	tris = std::vector<Tri>();
 	std::vector<glm::vec3> vertpostemp;

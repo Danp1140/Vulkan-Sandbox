@@ -35,7 +35,6 @@ private:
 	glm::vec4 color;
 	float intensity;
 	glm::mat4 projectionmatrix, viewmatrix, lspview, lspprojection;
-	uint32_t shadowmapresolution;
 	LightType type;
 	ShadowType shadowtype;
 	TextureInfo shadowmap;
@@ -70,7 +69,7 @@ private:
 public:
 	Light ();
 
-	Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType t);
+	Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, uint32_t smr, LightType t);
 
 	// TODO: consolidate gets and sets
 	// TODO: update functions that pass by pointer to pass by const &
@@ -87,7 +86,8 @@ public:
 
 	void updateMatrices (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
 
-	int getShadowmapResolution () {return shadowmapresolution;}
+	// for now assuming a square resolution to avoid annoying refactor lol
+	uint32_t getShadowmapResolution () {return shadowmap.resolution.width;}
 
 	glm::vec3 getPosition () {return position;}
 
@@ -107,6 +107,5 @@ public:
 
 	TextureInfo* getShadowmapPtr () {return &shadowmap;}
 };
-
 
 #endif //SANDBOX_LIGHT_H

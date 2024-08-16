@@ -79,17 +79,18 @@ void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 }
 
 void main() {
-    vec3 normaldir=normalize(normal+0.5*texture(normalsampler, 20. * uv).xyz);
+    vec3 normaldir=normalize(normal+texture(normalsampler, uv).xyz);
 //    vec3 halfwaydir=normalize(lightuniformbuffer[0].position-position+constants.cameraposition-position);
     vec3 halfwaydir=normalize(lightuniformbuffer[0].position+constants.cameraposition-position);
     vec4 specular=lightuniformbuffer[0].color*pow(max(dot(normaldir, halfwaydir), 0.), PHONG_EXPONENT);
 
 
 
-//    color=vec4(0.3, 0.3, 0.7, 1.0)*max(dot(normalize(lightuniformbuffer[0].position), normaldir), 0.)+specular;       //could scroll uvs w/ time (& rotate w/ wind) (combine into single matrix to send)
+    // color=vec4(0.3, 0.3, 0.7, 1.0)*max(dot(normalize(lightuniformbuffer[0].position), normaldir), 0.)+specular;       //could scroll uvs w/ time (& rotate w/ wind) (combine into single matrix to send)
 //    // TODO: implement binary search & parameterization for more precise sampling
 //    // TODO: implement blending when samples are not available; perhaps integrate with more advanced prediction of offscreen rays
     vec4 reflectsample, refractsample;
-//    sampleSSRR(color, 1. / 1.33, normaldir);
-	color = vec4(0.1, 0.2, 0.9, 0.5);
+    sampleSSRR(color, 1. / 1.33, normaldir);
+	//color = vec4(0.1, 0.2, 0.9, 0.5);
+	// color = vec4(1, texture(normalsampler, uv).xy, 1);
 }

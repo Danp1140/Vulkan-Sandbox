@@ -4,13 +4,11 @@
 
 #include "Text.h"
 
-Text::Text () {
-	message = "";
-	fontcolor = glm::vec4(0.5, 0.5, 0.5, 1);
-	fontsize = 12.0f;
-	pushconstants.position = glm::vec2(0, 0);
-	pushconstants.scale = glm::vec2(1.0f, 1.0f);
-	pushconstants.rotation = 0.0f;
+Text::Text () : 
+	message(""), 
+	fontcolor(glm::vec4(0.5, 0.5, 0.5, 1)), 
+	fontsize(12),
+	pushconstants({glm::vec2(0), glm::vec2(1), 0}) {
 	textures = new TextureInfo[GraphicsHandler::vulkaninfo.numswapchainimages];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
@@ -22,15 +20,13 @@ Text::Text () {
 	initDescriptorSet();
 }
 
-Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) {
-	message = m;
-	fontcolor = mc;
-	fontsize = fs;
-	horizontalres = hr;
-	verticalres = vr;
-	pushconstants.position = p;
-	pushconstants.scale = glm::vec2(2.0f / (float)hr, 2.0f / (float)vr);
-	pushconstants.rotation = 0.0f;
+Text::Text (std::string m, glm::vec2 p, glm::vec4 mc, float fs, int hr, int vr) :
+	message(m),
+	fontcolor(mc),
+	fontsize(fs),
+	horizontalres(hr),
+	verticalres(vr),
+	pushconstants({p, glm::vec2(2.0f / (float)hr, 2.0f / (float)vr), 0}) {
 	textures = new TextureInfo[MAX_FRAMES_IN_FLIGHT];
 	ftlib = FT_Library();
 	FT_Init_FreeType(&ftlib);
@@ -82,6 +78,7 @@ void Text::createPipeline() {
 	pii.shaderfilepathprefix = "text";
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
 	pii.pushconstantrange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TextPushConstants)};
+	pii.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 
 	GraphicsHandler::VKSubInitPipeline(&GraphicsHandler::vulkaninfo.textgraphicspipeline, pii);
 }
@@ -159,15 +156,12 @@ void Text::regenFaces (bool init) {
 	}
 	if (init) {
 		for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-			GraphicsHandler::VKHelperInitTexture(
-					&textures[x],
-					hres,
-					vres,
-					VK_FORMAT_R32_SFLOAT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-					TEXTURE_TYPE_DIFFUSE,
-					VK_IMAGE_VIEW_TYPE_2D,
-					GraphicsHandler::genericsampler);
+			textures[x].resolution = {hres, vres};
+			textures[x].format = VK_FORMAT_R32_SFLOAT;
+			textures[x].memoryprops = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+			textures[x].type = TEXTURE_TYPE_DIFFUSE;
+			textures[x].sampler = GraphicsHandler::genericsampler;
+			GraphicsHandler::createTexture(textures[x]);
 		}
 	} else {
 		//could we just use VK_FORMAT_R8_UNORM? probably would need reformatting cause UNORM
@@ -175,7 +169,7 @@ void Text::regenFaces (bool init) {
 //				&textures[GraphicsHandler::vulkaninfo.currentframeinflight],
 //				reinterpret_cast<void*>(texturedata));
 		GraphicsHandler::VKHelperUpdateWholeTexture(
-				&textures[0],
+				textures[0],
 				reinterpret_cast<void*>(texturedata));
 	}
 	delete (texturedata);

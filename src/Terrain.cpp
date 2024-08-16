@@ -4,7 +4,15 @@
 
 #include "Terrain.h"
 
-Terrain::Terrain () : Mesh() {
+Terrain::Terrain () : 
+	Mesh(),
+	treestoragebuffer({}),
+	voxelstoragebuffer({}),
+	meminfostoragebuffer({}),
+	genpushconstants({}),
+	computeds(VK_NULL_HANDLE),
+	memoryavailable(false),
+	compfif(0xff) {
 	numnodes = 4096u; // not sure how we reconcile this with the NODE_HEAP_SIZE macro in the .h
 	numleaves = 1u;
 	numvoxels = 3u;
@@ -12,64 +20,35 @@ Terrain::Terrain () : Mesh() {
 	memoryavailable = false;
 	// unsure of default compfif value
 
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.heapsize = numnodes;
+	genpushconstants.heapsize = numnodes;
 
-//	GraphicsHandler::VKSubInitStorageBuffer()
-	// would use VKSubInitStorageBuffer, but that requires as many sbs as scis
-	// could be experiencing trouble w/ not rounding up padding correctly
-	// best course of action is likely to make VKSubInitStorageBuffer more general (dw, refator will be small cuz we
-	// only ever use it once lol)
-	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		layoutstemp[x] = GraphicsHandler::vulkaninfo.terraingencomputepipeline.objectdsl;
-	computedss = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
-			&layoutstemp[0]
-	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo,
-							 &computedss[0]);
-	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 0, NODE_SIZE, numnodes, &treesb, &tsbmemory);
-	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 1, VOXEL_SIZE, numvoxels, &voxelsb, &vsbmemory);
-	GraphicsHandler::VKSubInitStorageBuffer(&computedss[0], 2, sizeof(uint32_t), 3 + ALLOC_INFO_BUF_SIZE, &meminfosb, &msbmemory); 
-	VkDescriptorBufferInfo descbuffinfo;
-	VkWriteDescriptorSet writetemp {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-									nullptr,
-									VK_NULL_HANDLE,
-									0,
-									0,
-									1,
-									VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-									nullptr,
-									&descbuffinfo,
-									nullptr};
-	for (uint8_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++) {
-		writetemp.dstSet = computedss[x];
-		writetemp.dstBinding = 0;
-		descbuffinfo = {treesb, 0, NODE_SIZE * numnodes};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-							   1,
-							   &writetemp,
-							   0,
-							   nullptr);
-		writetemp.dstBinding = 1;
-		descbuffinfo = {treesb, 0, VOXEL_SIZE * numvoxels};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-							   1,
-							   &writetemp,
-							   0,
-							   nullptr);
-		writetemp.dstBinding = 2;
-		descbuffinfo = {meminfosb, 0, sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE)};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-				       1,
-				       &writetemp,
-				       0,
-				       nullptr);
-	}
+	// unsure if this is the right objdsl to be handing over to Mesh for default init
+	// in fact im pretty sure its not
+	// TODO: change this objdsl to that of the generated terrain later
+	initDescriptorSets(VK_NULL_HANDLE);
+
+	treestoragebuffer.elemsize = NODE_SIZE;
+	treestoragebuffer.numelems = numnodes;
+	GraphicsHandler::VKSubInitStorageBuffer(treestoragebuffer);
+	voxelstoragebuffer.elemsize = VOXEL_SIZE;
+	voxelstoragebuffer.numelems = numvoxels;
+	GraphicsHandler::VKSubInitStorageBuffer(voxelstoragebuffer);
+	meminfostoragebuffer.elemsize = sizeof(uint32_t);
+	meminfostoragebuffer.numelems = 3 + ALLOC_INFO_BUF_SIZE;
+	GraphicsHandler::VKSubInitStorageBuffer(meminfostoragebuffer);
+
+	// note: in previous code, we updated the tree SB twice, and never the voxel SB...
+	// i think i was just being stupid but making a note in case very odd problems arise lol
+	GraphicsHandler::updateDescriptorSet(
+		computeds,
+		{0, 1, 2},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+		{{}, {}, {}},
+		{treestoragebuffer.getDescriptorBufferInfo(),
+		voxelstoragebuffer.getDescriptorBufferInfo(),
+		meminfostoragebuffer.getDescriptorBufferInfo()});
 
 	setupHeap();
 }
@@ -86,7 +65,7 @@ void Terrain::setupHeap() {
 	void* heap;
 	vkMapMemory(
 			GraphicsHandler::vulkaninfo.logicaldevice,
-			tsbmemory,
+			treestoragebuffer.memory,
 			0u,
 			numnodes * NODE_SIZE,
 			0,
@@ -103,10 +82,10 @@ void Terrain::setupHeap() {
 	nodeheap[0].parent = 1u;
 	nodeheap[0].childidx = 1u;
 	subdivide(0u, nodeheap);
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, treestoragebuffer.memory);
 	void *tmp;
 	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
-		msbmemory,
+		meminfostoragebuffer.memory,
 		0u,
 		sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE),
 		0,
@@ -115,7 +94,7 @@ void Terrain::setupHeap() {
 	*meminfo = 0u; *(meminfo + 1) = 0u; *(meminfo + 2) = 0u;
 	*(meminfo + 3) = -1u;
 	*(meminfo + 3 + ALLOC_INFO_BUF_SIZE / 2) = -1u;
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, msbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, meminfostoragebuffer.memory);
 }
 
 void Terrain::createComputePipeline () {
@@ -266,7 +245,6 @@ void Terrain::recordCompute (cbRecData data, VkCommandBuffer& cb) {
 }
 
 void Terrain::recordTroubleshootDraw (cbRecData data, VkCommandBuffer& cb) {
-
 	VkCommandBufferInheritanceInfo cmdbufinherinfo {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
 		nullptr,
@@ -303,17 +281,36 @@ void Terrain::recordTroubleshootDraw (cbRecData data, VkCommandBuffer& cb) {
 	vkEndCommandBuffer(cb);
 }
 
+void Terrain::initDescriptorSets (VkDescriptorSetLayout objdsl) {
+	if (computeds != VK_NULL_HANDLE)
+		vkFreeDescriptorSets(
+			GraphicsHandler::vulkaninfo.logicaldevice,
+			GraphicsHandler::vulkaninfo.descriptorpool,
+			1, &computeds);
+	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		nullptr,
+		GraphicsHandler::vulkaninfo.descriptorpool,
+		1, &GraphicsHandler::vulkaninfo.terraingencomputepipeline.objectdsl
+	};
+	vkAllocateDescriptorSets(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		&descriptorsetallocinfo,
+		&computeds);
+
+}
+
 // TODO: delete this function
 void* Terrain::getNodeHeapPtr () {
 	void* ptr;
 	vkMapMemory(
 			GraphicsHandler::vulkaninfo.logicaldevice,
-			tsbmemory,
+			treestoragebuffer.memory,
 			0u,
 			numnodes * NODE_SIZE,
 			0,
 			&ptr);
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, treestoragebuffer.memory);
 	return ptr;
 }
 
@@ -321,7 +318,7 @@ void Terrain::updateNumLeaves () {
 	Node* root = reinterpret_cast<Node*>(getNodeHeapPtr());
 	if (root->childidx == 0) return;
 	numleaves = root->childidx;
-	GraphicsHandler::vulkaninfo.terraingenpushconstants.numleaves = numleaves;
+	genpushconstants.numleaves = numleaves;
 }
 
 glm::vec3 childDirection (uint8_t childidx) {
@@ -472,17 +469,17 @@ void Terrain::updateVoxels (glm::vec3 camerapos) {
 	// if we were getting really silly with it we could add a dynamic resizing here too lol
 	void* tempptr, * heap;
 	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
-		    msbmemory,
-		    0u,
-		    sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE),
-		    0,
-		    &tempptr);
+		meminfostoragebuffer.memory,
+		0u,
+		sizeof(uint32_t) * (3 + ALLOC_INFO_BUF_SIZE),
+		0,
+		&tempptr);
 	vkMapMemory(GraphicsHandler::vulkaninfo.logicaldevice,
-		    tsbmemory,
-		    0u,
-		    numnodes * NODE_SIZE,
-		    0,
-		    &heap);
+		treestoragebuffer.memory,
+		0u,
+		numnodes * NODE_SIZE,
+		0,
+		&heap);
 
 	Node* nodeheap = reinterpret_cast<Node*>(heap);
 	uint32_t* meminfo = reinterpret_cast<uint32_t*>(tempptr);
@@ -525,8 +522,8 @@ void Terrain::updateVoxels (glm::vec3 camerapos) {
 	}
 	// std::cout << "bottom of free size loop" << std::endl;
 
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, msbmemory);
-	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, tsbmemory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, meminfostoragebuffer.memory);
+	vkUnmapMemory(GraphicsHandler::vulkaninfo.logicaldevice, treestoragebuffer.memory);
 	
 	memoryavailable = true;
 }

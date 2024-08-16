@@ -10,8 +10,6 @@
 #ifndef SANDBOX_VIEWPORT_H
 #define SANDBOX_VIEWPORT_H
 
-#pragma clang diagnostic ignored "-Wdeprecated-volatile"
-
 #include <fstream>
 #include <sstream>
 #include <chrono>
@@ -39,20 +37,27 @@
 #define ANSI_WHITE_FORE "\033[37;97m"
 #define ANSI_RESET_FORE "\033[37m"
 
-#define PRINT_DOUBLE(vec2) std::cout<<'('<<vec2[0]<<", "<<vec2[1]<<")\n"
-#define PRINT_TRIPLE(vec3) std::cout<<'('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<")\n"
-#define PRINT_QUAD(vec4) std::cout<<'('<<std::fixed<<std::setprecision(2)<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<")\n"
+#define PRINT_DOUBLE(vec2) std::cout << '(' << vec2[0] << ", " << vec2[1] << ")\n"
+#define PRINT_TRIPLE(vec3) std::cout << '(' << vec3[0] << ", " << vec3[1] << ", " << vec3[2] << ")\n"
+#define PRINT_QUAD(vec4) std::cout << '(' << std::fixed << std::setprecision(2) << vec4[0] << ", " << vec4[1] << ", " << vec4[2] << ", " << vec4[3] << ")\n"
 #define PRINT_4MAT(mat4) PRINT_QUAD(mat4[0]); PRINT_QUAD(mat4[1]); PRINT_QUAD(mat4[2]); PRINT_QUAD(mat4[3]);
-#define SHIFT_DOUBLE(vec2) '('<<vec2[0]<<", "<<vec2[1]<<')'
-#define SHIFT_TRIPLE(vec3) '('<<vec3[0]<<", "<<vec3[1]<<", "<<vec3[2]<<')'
-#define SHIFT_QUAD(vec4) '('<<vec4[0]<<", "<<vec4[1]<<", "<<vec4[2]<<", "<<vec4[3]<<')'
+#define SHIFT_DOUBLE(vec2) '(' << vec2[0] << ", " << vec2[1] << ')'
+#define SHIFT_TRIPLE(vec3) '(' << vec3[0] << ", " << vec3[1] << ", " << vec3[2] << ')'
+#define SHIFT_QUAD(vec4) '(' << vec4[0] << ", " << vec4[1] << ", " << vec4[2] << ", " << vec4[3] << ')'
 
 #define WORKING_DIRECTORY "/Users/danp/Desktop/C Coding/VulkanSandbox/"
-#define NUM_RECORDING_THREADS 1
-#define MAX_FRAMES_IN_FLIGHT 6  // TODO: take a much closer look at our fif system. why does the
-// number change so fast and never wait to catch up w/ scii?
+#define NUM_RECORDING_THREADS 1 // TODO: fix multithreading; changing this to > 1 seems to cause heap corruption
+#define MAX_FRAMES_IN_FLIGHT 6 
 #define SWAPCHAIN_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
+#define DEPTH_IMAGE_FORMAT VK_FORMAT_D32_SFLOAT
 #define MAX_LIGHTS 2
+
+#define VK_INIT_GUARD {if (GraphicsHandler::vulkaninfo.logicaldevice == VK_NULL_HANDLE) return;}
+
+/*
+ * Consts, Typedefs, and the Like
+ */
+
 #define NUM_SHADER_STAGES_SUPPORTED 5
 const VkShaderStageFlagBits supportedshaderstages[NUM_SHADER_STAGES_SUPPORTED] = {
 		VK_SHADER_STAGE_COMPUTE_BIT,
@@ -76,35 +81,73 @@ typedef enum ChangeFlagBits {
 } ChangeFlagBits;
 typedef int ChangeFlag;
 
-typedef enum PostProcOps {
-	POST_PROC_OP_TONEMAP,
-	POST_PROC_OP_LUMINANCE_CUTOFF,
-	POST_PROC_OP_BLOOM,
-	POST_PROC_OP_DOWNSAMPLE,
-	POST_PROC_OP_UPSAMPLE
-} PostProcOps;
-typedef int PostProcOp;
-
 typedef enum TextureType {
 	TEXTURE_TYPE_DIFFUSE,
 	TEXTURE_TYPE_NORMAL,
 	TEXTURE_TYPE_HEIGHT,
+	TEXTURE_TYPE_DYNAMIC_HEIGHT,
 	TEXTURE_TYPE_CUBEMAP,
 	TEXTURE_TYPE_SHADOWMAP,
-	TEXTURE_TYPE_SUBPASS,
-	TEXTURE_TYPE_SSRR_BUFFER,
+	TEXTURE_TYPE_SCRATCH_BUFFER,
+	TEXTURE_TYPE_SWAPCHAIN_DEPTH_BUFFER,
+	TEXTURE_TYPE_CUSTOM, // allows usage & layout to pass through
 	TEXTURE_TYPE_MAX
 } TextureType;
 
-typedef struct KeyInfo {
-	int currentvalue, lastvalue;
-	bool up, down;
-} KeyInfo;
+// unsure of this, but defining a specific interim CB one too
+const VkCommandBufferBeginInfo cmdbufferbegininfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		0,        // could make this one time submit???
+		nullptr
+};
+
+const VkCommandBufferBeginInfo interimcbbegininfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		nullptr
+};
+
+const VkDescriptorSetLayoutBinding scenedslbindings[2] {{
+		0,
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		MAX_LIGHTS,
+		VK_SHADER_STAGE_FRAGMENT_BIT |
+		VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+		nullptr
+	}, {
+		1,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+}};
+
+/*
+ * Vulkan Type Wrappers
+ */
+
+typedef struct PipelineInitInfo {
+	VkShaderStageFlags stages = 0u;
+	const char* shaderfilepathprefix = nullptr;
+	VkDescriptorSetLayoutCreateInfo* descsetlayoutcreateinfos = nullptr;
+	VkPushConstantRange pushconstantrange = {};
+	VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+	bool depthtest = false;
+	VkSpecializationInfo specinfo = {};
+	VkRenderPass renderpass = VK_NULL_HANDLE; // defaults to primary via VKSubInitPipeline
+	VkExtent2D extent = {0, 0}; // defaults to swapchain extent via VKSubInitPipeline
+	VkCullModeFlags culling = VK_CULL_MODE_BACK_BIT;
+	VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // defaults to patch list via VKSubInitPipeline
+									// if tess control is indicated in stages
+} PipelineInitInfo;
 
 typedef struct PipelineInfo {
-	VkDescriptorSetLayout scenedsl, objectdsl;
-	VkPipelineLayout pipelinelayout;
-	VkPipeline pipeline;
+	VkDescriptorSetLayout scenedsl = VK_NULL_HANDLE, objectdsl = VK_NULL_HANDLE;
+	VkPipelineLayout pipelinelayout = VK_NULL_HANDLE;
+	VkPipeline pipeline = VK_NULL_HANDLE;
 } PipelineInfo;
 
 typedef struct TextureInfo {
@@ -121,19 +164,29 @@ private:
 	}
 
 public:
-	VkImage image;
-	VkDeviceMemory memory;
-	VkImageView imageview;
-	VkSampler sampler;
-	VkImageLayout layout;
-	VkFormat format;
-	VkExtent2D resolution;
-	VkMemoryPropertyFlags memoryprops;
-	TextureType type;
-	glm::mat3 uvmatrix;
+	VkImage image = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkImageView imageview = VK_NULL_HANDLE;
+	VkSampler sampler = VK_NULL_HANDLE;
+	VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkFormat format = VK_FORMAT_UNDEFINED;
+	VkImageUsageFlags usage = 0x00000000;
+	VkExtent2D resolution = {0, 0};
+	VkMemoryPropertyFlags memoryprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	TextureType type = TEXTURE_TYPE_MAX;
+	glm::mat3 uvmatrix = glm::mat3(1);
+	VkImageViewType viewtype = VK_IMAGE_VIEW_TYPE_2D;
+	uint32_t numlayers = 1;
 
-	VkDescriptorImageInfo getDescriptorImageInfo () const {
+	inline const VkDescriptorImageInfo getDescriptorImageInfo () const {
 		return {sampler, imageview, layout};
+	}
+
+	inline const VkImageSubresourceRange getDefaultSubresourceRange () const {
+		return {
+			format == VK_FORMAT_D32_SFLOAT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+			0, 1, 0, numlayers
+		};
 	}
 
 	void setUVScale (glm::vec2 s) {
@@ -152,38 +205,29 @@ public:
 	}
 } TextureInfo;
 
-typedef struct TextPushConstants {
-	glm::vec2 position, scale;
-	float rotation;
-} TextPushConstants;
+typedef struct BufferInfo {
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkDeviceSize elemsize = 0, roundedelemsize = 0;
+	uint32_t numelems = 0;
+	VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkMemoryPropertyFlags memprops = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	inline const VkDescriptorBufferInfo getDescriptorBufferInfo() const {return {buffer, 0, VK_WHOLE_SIZE};}
+} BufferInfo;
 
 typedef struct SkyboxPushConstants {
 	glm::mat4 cameravpmatrices;
 	alignas(16) glm::vec3 sunposition;
 } SkyboxPushConstants;
 
-typedef struct OceanPushConstants {
-	glm::mat4 cameravpmatrices;
-	alignas(16) glm::vec3 cameraposition;
-	uint32_t numlights;
-} OceanPushConstants;
-
 typedef struct ShadowmapPushConstants {
 	glm::mat4 lightvpmatrices, lspmatrix;
 } ShadowmapPushConstants;
 
-typedef struct PostProcPushConstants {
-	PostProcOp op;
-	float exposure;
-	glm::uvec2 numinvocs, scext;
-	uint32_t dfdepth; // would like to make this a uint8_t if possible
-} PostProcPushConstants;
-
-typedef struct TerrainGenPushConstants {
-	uint32_t numleaves, heapsize, phase;
-	glm::mat4 cameravp;
-	alignas(16) glm::vec3 camerapos;
-} TerrainGenPushConstants;
+/*
+ * Uniform Buffer Structs
+ */
 
 typedef struct LightUniformBuffer {
 	glm::mat4 vpmatrix, lspmatrix;
@@ -204,6 +248,10 @@ typedef struct MeshUniformBuffer {
 // TODO: clean up these typedefs to maximize efficiency
 // clean up naming too
 
+/*
+ * Command Buffer Recording Infrastructure
+ */
+
 typedef struct cbRecData {
 	VkRenderPass renderpass;
 	VkFramebuffer framebuffer;
@@ -218,7 +266,9 @@ typedef struct cbRecData {
 typedef std::function<void (VkCommandBuffer&)> cbRecFunc;
 
 typedef struct cbRecTask {
-	cbRecTask () : type(CB_REC_TASK_TYPE_UNINITIALIZED), data() {}
+	cbRecTask () : 
+		type(CB_REC_TASK_TYPE_UNINITIALIZED), 
+		data() {}
 
 	explicit cbRecTask (cbRecFunc f) : type(CB_REC_TASK_TYPE_COMMAND_BUFFER) {
 		new(&data.func) cbRecFunc(f);
@@ -272,17 +322,24 @@ typedef struct cbRecTask {
 } cbRecTask;
 
 typedef struct cbCollectInfo {
-	explicit cbCollectInfo (const VkCommandBuffer& c) : type(CB_COLLECT_INFO_TYPE_COMMAND_BUFFER), data {.cmdbuf = c} {}
+	explicit cbCollectInfo (const VkCommandBuffer& c) : 
+		type(CB_COLLECT_INFO_TYPE_COMMAND_BUFFER), 
+		data {.cmdbuf = c} {}
 
-	explicit cbCollectInfo (const VkRenderPassBeginInfo& r) : type(CB_COLLECT_INFO_TYPE_RENDERPASS), data {.rpbi = r} {}
+	explicit cbCollectInfo (const VkRenderPassBeginInfo& r) : 
+		type(CB_COLLECT_INFO_TYPE_RENDERPASS), 
+		data {.rpbi = r} {}
 
-	explicit cbCollectInfo (const VkDependencyInfoKHR& d) : type(CB_COLLECT_INFO_TYPE_DEPENDENCY), data {.di = d} {}
+	explicit cbCollectInfo (const VkDependencyInfoKHR& d) : 
+		type(CB_COLLECT_INFO_TYPE_DEPENDENCY), 
+		data {.di = d} {}
 
 	enum cbCollectInfoType {
 		CB_COLLECT_INFO_TYPE_COMMAND_BUFFER,
 		CB_COLLECT_INFO_TYPE_RENDERPASS,
 		CB_COLLECT_INFO_TYPE_DEPENDENCY
 	} type;
+
 	union cbCollectInfoData {
 		VkCommandBuffer cmdbuf;
 		VkRenderPassBeginInfo rpbi;
@@ -291,12 +348,17 @@ typedef struct cbCollectInfo {
 } cbCollectInfo;
 
 // this is one per thread, so no sync required :)
-typedef
-struct cbSet {
+typedef struct cbSet {
 	VkCommandPool pool = VK_NULL_HANDLE;
 	std::vector<VkCommandBuffer> buffers {};
 } cbSet;
 
+/*
+ * Mega-Struct holding most of the data relevent to Vulkan goings-on (but not all of it).
+ * This struct was originally created to allow passing a pointer to it around, but now
+ * that GraphicsHandler members are so public, its barely neccesarry anymore.
+ * TODO: figure out where all this stuff should really live lol
+ */
 typedef struct VulkanInfo {
 	GLFWwindow* window;
 	int horizontalres, verticalres, width, height;
@@ -304,7 +366,7 @@ typedef struct VulkanInfo {
 	VkSurfaceKHR surface;
 	VkDebugUtilsMessengerEXT debugmessenger;
 	VkPhysicalDevice physicaldevice;
-	VkDevice logicaldevice;
+	VkDevice logicaldevice = VK_NULL_HANDLE;
 	VkQueue graphicsqueue, presentationqueue;
 	uint32_t graphicsqueuefamilyindex, presentqueuefamilyindex, transferqueuefamilyindex;
 	VkSwapchainKHR swapchain;
@@ -312,46 +374,39 @@ typedef struct VulkanInfo {
 	VkImage* swapchainimages;
 	VkImageView* swapchainimageviews;
 	VkExtent2D swapchainextent;     //  extent is redundant with hori/vertres variables
-	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass, ssrrrenderpass;
-	PipelineInfo primarygraphicspipeline,
-			textgraphicspipeline,
+	VkRenderPass primaryrenderpass, templateshadowrenderpass, compositingrenderpass;
+	PipelineInfo textgraphicspipeline,
 			skyboxgraphicspipeline,
-			oceangraphicspipeline,
-			oceancomputepipeline,
 			grassgraphicspipeline,
-			shadowmapgraphicspipeline,
-			texmongraphicspipeline,
-			linegraphicspipeline,
 			terraingencomputepipeline,
 			voxeltroubleshootingpipeline,
 			postprocpipeline,
 			postprocgraphicspipeline;    // is it good to have this many pipelines? some can be combined if we want/need to
-	VkFramebuffer* primaryframebuffers, * ssrrframebuffers, * compositingframebuffers; // TODO: is ssrrframebuffers deprecated?
+	VkFramebuffer* primaryframebuffers, * compositingframebuffers;
 	VkClearValue primaryclears[2], shadowmapclear;
 	VkCommandPool commandpool;
 	cbSet threadCbSets[NUM_RECORDING_THREADS][MAX_FRAMES_IN_FLIGHT];
 	VkCommandBuffer* commandbuffers, interimcommandbuffer;
-	VkSemaphore imageavailablesemaphores[MAX_FRAMES_IN_FLIGHT], renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
+	VkSemaphore* imageavailablesemaphores, renderfinishedsemaphores[MAX_FRAMES_IN_FLIGHT];
 	// TODO: remove recordinginvalidfences
 	VkFence* submitfinishedfences, * recordinginvalidfences, * presentfinishedfences, tempfence;
 	int currentframeinflight;
 	VkBuffer stagingbuffer;
 	VkDeviceMemory stagingbuffermemory;
 	VkDescriptorPool descriptorpool;
-	// what are below for??
+	// TODO: delete
 	VkDescriptorSetLayout scenedsl, defaultdsl, textdsl, oceangraphdsl, oceancompdsl, particledsl, shadowmapdsl, texmondsl, linesdsl;
-	VkDescriptorSet* postprocds;
-	TextureInfo depthbuffer, scratchdepthbuffer, scratchbuffer;
+	TextureInfo depthbuffer;
 	VkBuffer* lightuniformbuffers;
 	VkDeviceMemory* lightuniformbuffermemories;
-	// perhaps move push constants to wangling engine???
-	// figure a better way to handle these tbh
 	SkyboxPushConstants skyboxpushconstants;
-	OceanPushConstants oceanpushconstants;
 	glm::mat4 grasspushconstants;
 	glm::mat4 terrainpushconstants;
-	TerrainGenPushConstants terraingenpushconstants, terraingenpushconstants2;
 } VulkanInfo;
+
+/*
+ * Geometry Structs
+ */
 
 typedef struct Vertex {
 	glm::vec3 position, normal;
@@ -369,37 +424,10 @@ typedef struct Tri {
 	glm::vec3 algebraicnormal;
 } Tri;
 
-typedef struct PipelineInitInfo {
-	VkShaderStageFlags stages = 0u;
-	const char* shaderfilepathprefix = nullptr;
-	VkDescriptorSetLayoutCreateInfo* descsetlayoutcreateinfos = nullptr;
-	VkPushConstantRange pushconstantrange = {};
-	VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-	bool depthtest = false;
-	VkSpecializationInfo specinfo = {};
-} PipelineInitInfo;
-
-const VkCommandBufferBeginInfo cmdbufferbegininfo {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		nullptr,
-		0,        // could make this one time submit???
-		nullptr
-};
-
-const VkDescriptorSetLayoutBinding scenedslbindings[2] {{
-																0,
-																VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-																MAX_LIGHTS,
-																VK_SHADER_STAGE_FRAGMENT_BIT |
-																VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-																nullptr
-														},
-														{
-																1,
-																VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-																1,
-																VK_SHADER_STAGE_FRAGMENT_BIT,
-																nullptr}};
+typedef struct KeyInfo {
+	int currentvalue, lastvalue;
+	bool up, down;
+} KeyInfo;
 
 const VkDescriptorSetLayoutCreateInfo scenedslcreateinfo {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -439,7 +467,6 @@ private:
 			VkPipelineVertexInputStateCreateInfo vertexinputstatecreateinfo,
 			bool depthtest,
 			VkRenderPass renderpass);
-
 	static void VKSubInitShaders (
 			VkShaderStageFlags stages,
 			const char** filepaths,
@@ -466,26 +493,25 @@ public:
 			clamptobordersampler,
 			depthsampler;
 
+	/*
+	 * Constructors & Destructors
+	 */
 	GraphicsHandler ();
-
 	~GraphicsHandler ();
 
-	/* The following two public init functions, VKInit and VKInitPipelines, call the above private init functions to
-	 * set up Vulkan's innards.
-	 * TODO: make VKInitPipelines a private VKSubInitPipelines called by public VKInit
+	/*
+	 * Initialization Functions (MUST BE CALLED BEFORE ANY OTHER GRAPHICS OBJECTS ARE INSTANTIATED)
 	 */
 	static void VKInit (uint32_t nummeshes);
-
+	// TODO: destroy this function once and for all, cast it into the flames
 	static void VKInitPipelines ();
-
-	// after u get this working, refactor pipelineinfo as a reference, not a ptr
 	static void VKSubInitPipeline (PipelineInfo* pipelineinfo, PipelineInitInfo pii);
+	static void destroyPipeline(PipelineInfo& p);
 
-	/* Below are several helper functions that serve to make processes dealing with ugly Vulkan stuff easier and
-	 * prettier.
-	 * TODO: make sure function naming and arguement types are consistent and best
-	 * TODO: add VKHelperUpdateVertexBuffer and VKHelperUpdateVertexAndIndexBuffers functions
+	/*
+	 * Buffer Utilities
 	 */
+	static void VKHelperCreateAndAllocateBuffer (BufferInfo& b);
 	static void VKSubInitUniformBuffer (
 			VkDescriptorSet** descsets,
 			uint32_t binding,
@@ -494,43 +520,18 @@ public:
 			VkBuffer** buffers,
 			VkDeviceMemory** memories,
 			VkDescriptorSetLayout descsetlayout);
-
-	// TODO: refactor naming of buffers and memories args to agree with count
-	static void VKSubInitStorageBuffer (
-			VkDescriptorSet* descriptorsets,
-			uint32_t binding,
-			VkDeviceSize elementsize,
-			uint32_t elementcount,
-			VkBuffer* buffers,
-			VkDeviceMemory* memories);
-
+	static void VKSubInitUniformBuffer (BufferInfo& b);
+	static void VKSubInitStorageBuffer (BufferInfo& b);
 	static void VKHelperCreateAndAllocateBuffer (
 			VkBuffer* buffer,
 			VkDeviceSize buffersize,
 			VkBufferUsageFlags bufferusage,
 			VkDeviceMemory* buffermemory,
 			VkMemoryPropertyFlags reqprops);
-
 	static void VKHelperCpyBufferToBuffer (
 			VkBuffer* src,
-			VkBuffer* dst,
+			const VkBuffer* const dst,
 			VkDeviceSize size);
-
-	static void VKHelperCpyBufferToImage (
-			VkBuffer* src,
-			VkImage* dst,
-			VkFormat format,
-			uint32_t numlayers,
-			uint32_t rowpitch,
-			uint32_t horires, uint32_t vertres);
-
-	static void VKHelperTransitionImageLayout (
-			VkImage image,
-			uint32_t numlayers,
-			VkFormat format,
-			VkImageLayout oldlayout,
-			VkImageLayout newlayout);
-
 	static void VKHelperInitVertexAndIndexBuffers (
 			const std::vector<Vertex>& vertices,
 			const std::vector<Tri>& tris,
@@ -538,98 +539,82 @@ public:
 			VkDeviceMemory* vertexbuffermemorydst,
 			VkBuffer* indexbufferdst,
 			VkDeviceMemory* indexbuffermemorydst);
-
 	static void VKHelperInitVertexBuffer (
 			const std::vector<Vertex>& vertices,
 			VkBuffer* vertexbufferdst,
 			VkDeviceMemory* vertexbuffermemorydst);
-
-	static void VKHelperInitImage (
-			TextureInfo* imgdst,
-			uint32_t horires, uint32_t vertres,
-			VkFormat format,
-			VkMemoryPropertyFlags memprops,
-			VkImageUsageFlags usage,
-			VkImageLayout finallayout,
-			VkImageViewType imgviewtype);
-
-	static void VKHelperInitTexture (
-			TextureInfo* texturedst,
-			uint32_t horires, uint32_t vertres,
-			VkFormat format,
-			VkMemoryPropertyFlags memprops,
-			TextureType textype,
-			VkImageViewType imgviewtype,
-			VkSampler sampler);
-
-	static void VKHelperUpdateWholeTexture (
-			TextureInfo* texdst,
-			void* src);
-
 	static void VKHelperUpdateUniformBuffer (
 			uint32_t elementcount,
 			VkDeviceSize elementsize,
 			VkDeviceMemory buffermemory,
 			void* data);
+	// TODO: change below to UpdateDeviceLocal and UpdateHostCoherent cuz thats what they really are
+	static void VKHelperUpdateUniformBuffer (const BufferInfo& b, void* data);
+	static void VKHelperUpdateStorageBuffer (const BufferInfo& b, void* data);
 
-	static void VKHelperUpdateStorageBuffer (
-			uint32_t elementcount,
-			VkDeviceSize elementsize,
-			VkBuffer* buffer,
-			VkDeviceMemory buffermemory,
-			void* data);
-
+	/*
+	 * Image Utilities
+	 */
+	static void VKHelperCpyBufferToImage (
+			VkBuffer* src,
+			VkImage* dst,
+			VkFormat format,
+			uint32_t numlayers,
+			uint32_t rowpitch,
+			uint32_t horires, uint32_t vertres);
+	static void transitionImageLayout (TextureInfo& t, VkImageLayout newlayout);
+	static void createTexture (TextureInfo& t);
+	static void destroyTexture (TextureInfo& t);
+	static void VKHelperUpdateWholeTexture (TextureInfo& t, void* src);
 	static void VKHelperRecordImageTransition (
 			VkCommandBuffer cmdbuffer,
 			VkImage image,
 			VkImageLayout oldlayout,
 			VkImageLayout newlayout);
+	static void recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb);
+	static void pipelineBarrierFromKHR (const VkDependencyInfoKHR& di);
+
+	/* Expects all vectors to be of same length (and doesn't error check so could end up
+	 * a bad access if you're not careful). Unneeded img or buf infos can be whatever, but 
+	 * should be there as placeholders for indexing.
+	 */
+	static void updateDescriptorSet (
+			const VkDescriptorSet ds, 
+			const std::vector<uint32_t>& bindings,
+			const std::vector<VkDescriptorType>& types,
+			const std::vector<VkDescriptorImageInfo>& imginfos,
+			const std::vector<VkDescriptorBufferInfo>& bufinfos);
 
 	static void submitAndPresent ();
 
-	static void recordImgCpy (cbRecData data, VkCopyImageInfo2 cpyinfo, VkCommandBuffer& cb);
-
-	static void initPostProc ();
-
-	static void recordPostProcCompute (cbRecData data, std::vector<PostProcPushConstants> pcs, VkCommandBuffer& cb);
-
-	static void recordPostProcGraphics (cbRecData data, VkCommandBuffer& cb);
-
 	// TODO: find the right place for these two functions (mat4TransfomVec3 and makeRectPrism) (maybe PhysicsHandler)
 	static glm::vec3 mat4TransformVec3 (glm::mat4 M, glm::vec3 v);
-
 	static glm::mat4 projectFromView (glm::mat4 P, glm::vec3 p, glm::vec3 c, glm::vec3 u);
-
 	static void makeRectPrism (glm::vec3** dst, glm::vec3 min, glm::vec3 max);
-
 	static VkDeviceSize VKHelperGetPixelSize (VkFormat format);
 
-	/* Functions to handle Vulkan validation layers debugger creation, destruction, and behavior
-	 * TODO: reorder functions to reflect above comment's implied order
+	/*
+	 * Debug Utilities
 	 */
+	static VkResult CreateDebugUtilsMessengerEXT (
+			VkInstance instance,
+			const VkDebugUtilsMessengerCreateInfoEXT* createinfo,
+			const VkAllocationCallbacks* allocator,
+			VkDebugUtilsMessengerEXT* debugutilsmessenger);
+	static void DestroyDebugUtilsMessengerEXT (
+			VkInstance instance,
+			VkDebugUtilsMessengerEXT debugutilsmessenger,
+			const VkAllocationCallbacks* allocator);
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (
 			VkDebugUtilsMessageSeverityFlagBitsEXT severity,
 			VkDebugUtilsMessageTypeFlagsEXT type,
 			const VkDebugUtilsMessengerCallbackDataEXT* callbackdata,
 			void* userdata);
 
-	static VkResult CreateDebugUtilsMessengerEXT (
-			VkInstance instance,
-			const VkDebugUtilsMessengerCreateInfoEXT* createinfo,
-			const VkAllocationCallbacks* allocator,
-			VkDebugUtilsMessengerEXT* debugutilsmessenger);
-
-	static void DestroyDebugUtilsMessengerEXT (
-			VkInstance instance,
-			VkDebugUtilsMessengerEXT debugutilsmessenger,
-			const VkAllocationCallbacks* allocator);
-
-	/* Functions dealing with GLFW.
-	 * TODO: Phase out GLFW in favor of another input handler, as GLFW causes frequent, seemingly uncontrollable crashes
-	 * The best looking alternative is SDL. May want to make this a priority, i.e. next thing to implement
+	/*
+	 * GLFW Utilities
 	 */
 	static void glfwErrorCallback (int error, const char* description);
-
 	static void keystrokeCallback (GLFWwindow* window, int key, int scancode, int action, int mods);
 };
 

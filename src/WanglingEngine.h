@@ -19,6 +19,7 @@
 #include "Ocean.h"
 #include "ParticleSystem.h"
 #include "Terrain.h"
+#include "Debug.h"
 
 #include <thread>
 #include <rapidjson/document.h>
@@ -44,53 +45,27 @@
 }
 #define NUM_FRAME_SAMPLES 60 // number of frames to sample for fps statistics
 
-typedef enum SettingTypes {
-	SETTING_TYPE_TOGGLE,
-	SETTING_TYPE_RANGE
-} SettingTypes;
-typedef int SettingType;
-typedef struct SettingDataToggle {
-	bool on;
-} SettingDataToggle;
-typedef struct SettingDataRange {
-	float min, max, value;
-} SettingDataRange;
-typedef union SettingData {
-	SettingDataToggle toggle;
-	SettingDataRange range;
-} SettingData;
-typedef struct Setting {
-	const char* name;
-	int hotkey;
-	SettingType type;
-	SettingData data;
-} Setting;
-typedef struct SettingsFolder {
-	const char* name;
-	int hotkey;
-	std::vector<SettingsFolder> folders;
-	std::vector<Setting> settings;
-} SettingsFolder;
-
 class WanglingEngine {
 private:
 	Camera* primarycamera;
 	std::vector<Mesh*> meshes;
 	std::vector<Light*> lights;
+	// TODO: switch to object, not pointer!!
 	Ocean* ocean;
 	ParticleSystem<GrassParticle>* grass;
-	Text* troubleshootingtext, * settingstext;
-	std::vector<glm::vec3> troubleshootinglines;
+	Text* troubleshootingtext;
+	TextureMonitor texmon;
+	Lines troubleshootinglines;
 	PhysicsHandler physicshandler;
 	TextureHandler texturehandler;
 	VkCommandBuffer* skyboxcommandbuffers, * troubleshootinglinescommandbuffers;
 	std::thread recordingthreads[NUM_RECORDING_THREADS];
 	TextureInfo skyboxtexture;
 	VkDescriptorSetLayout scenedsl;
-	VkDescriptorSet* skyboxdescriptorsets, * texmondescriptorsets;
+	VkDescriptorSet skyboxds;
 	static VkDescriptorSet* scenedescriptorsets;
-	VkBuffer* lightuniformbuffers, troubleshootinglinesvertexbuffer = VK_NULL_HANDLE;
-	VkDeviceMemory* lightuniformbuffermemories, troubleshootinglinesvertexbuffermemory;
+	VkBuffer* lightuniformbuffers;
+	VkDeviceMemory* lightuniformbuffermemories;
 	uint64_t multiverseseed;
 	std::queue<cbRecTask> recordingtasks;
 	std::queue<cbCollectInfo> secondarybuffers;
@@ -99,25 +74,18 @@ private:
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
 	bool bloom, ssrr;
-	SettingsFolder mainsettingsfolder, * currentsettingsfolder;
-	Setting* currentsetting;
 
-	void initSettings ();
+	// void initSettings ();
 
-	void updateSettings ();
+	// void updateSettings ();
 
 	/* Below are a few initialization functions that help with one-off elements (whole-scene descriptors, skybox,
 	 * troubleshooting texture monitor and line drawer).
 	 */
 	void initSceneData ();
 	void initSkybox ();
-	void initTroubleshootingLines ();
 	void updateSkyboxDescriptorSets ();
 	static void recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	static void recordTexMonCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	static void recordTroubleshootingLinesCommandBuffers (cbRecData data, VkCommandBuffer& cb);
-	void updateTexMonDescriptorSets (TextureInfo tex);
-	static void recordCommandBuffer (WanglingEngine* self, uint32_t fifindex);
 	void enqueueRecordingTasks ();
 	static void processRecordingTasks (
 			std::queue<cbRecTask>* tasks,    // see if you can pass these by reference
@@ -139,11 +107,13 @@ private:
 
 	void calcFrameStats (float sptime = 0.);
 
-	void updatePCsAndBuffers ();
-
 public:
 	WanglingEngine ();
+	~WanglingEngine ();
 
+	static void staticInits();
+	static void staticTerminates();
+	
 	/* draw() is –central– to how this entire program works, so it's crucial that it is clean and efficient. It is
 	 * currently not. Many parts of draw should be broken into sub-functions. For instance, flag checking, cmd buf
 	 * submission, swapchain presentation.
@@ -151,6 +121,7 @@ public:
 	void draw ();
 
 	bool shouldClose ();
+
 };
 
 

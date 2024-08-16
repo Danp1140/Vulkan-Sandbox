@@ -12,74 +12,47 @@ ParticleSystem<T>::ParticleSystem (
 
 	distributeParticles();
 	vertices.push_back({
-							   position + glm::vec3(0.01, 0.0, 0.0),
-							   glm::vec3(0.0, 0.0, 1.0),
-							   glm::vec2(1.0, 0.0)});
+		position + glm::vec3(0.01, 0.0, 0.0),
+		glm::vec3(0.0, 0.0, 1.0),
+		glm::vec2(1.0, 0.0)
+	});
 	vertices.push_back({
-							   position + glm::vec3(0.0, 0.5, 0.0),
-							   glm::vec3(0.0, 0.0, 1.0),
-							   glm::vec2(0.5, 1.0)});
+		position + glm::vec3(0.0, 0.5, 0.0),
+		glm::vec3(0.0, 0.0, 1.0),
+		glm::vec2(0.5, 1.0)
+	});
 	vertices.push_back({
-							   position + glm::vec3(-0.01, 0.0, 0.0),
-							   glm::vec3(0.0, 0.0, 1.0),
-							   glm::vec2(0.0, 0.0)});
+		position + glm::vec3(-0.01, 0.0, 0.0),
+		glm::vec3(0.0, 0.0, 1.0),
+		glm::vec2(0.0, 0.0)
+	});
 	tris.push_back({
-						   {0, 0, 0},
-						   {&vertices[vertices.size() - 3], &vertices[vertices.size() - 2],
-							&vertices[vertices.size() - 1]},
-						   std::vector<Tri*>(),
-						   glm::vec3(0.0, 0.0, 1.0)});
+		{0, 0, 0},
+		{&vertices[vertices.size() - 3], &vertices[vertices.size() - 2],
+		&vertices[vertices.size() - 1]
+		}, std::vector<Tri*>(),
+		glm::vec3(0.0, 0.0, 1.0)
+	});
 	tris.back().vertexindices[0] = vertices.size() - 3;
 	tris.back().vertexindices[1] = vertices.size() - 2;
 	tris.back().vertexindices[2] = vertices.size() - 1;
 
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
-			vertices,
-			tris,
-			&vertexbuffer,
-			&vertexbuffermemory,
-			&indexbuffer,
-			&indexbuffermemory);
-	initDescriptorSets();
-	particleuniformbuffers = new VkBuffer[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++)
-		particleuniformbuffers[scii] = VK_NULL_HANDLE;
-	particleuniformbuffermemories = new VkDeviceMemory[GraphicsHandler::vulkaninfo.numswapchainimages];
-	GraphicsHandler::VKSubInitStorageBuffer(
-			&descriptorsets,
-			0,
-			sizeof(glm::mat4),
-			numparticles,
-			&particleuniformbuffers,
-			&particleuniformbuffermemories);
+		vertices,
+		tris,
+		&vertexbuffer,
+		&vertexbuffermemory,
+		&indexbuffer,
+		&indexbuffermemory);
+	initDescriptorSets(GraphicsHandler::vulkaninfo.grassgraphicspipeline.objectdsl);
+
+	storagebuffer.elemsize = sizeof(glm::mat4);
+	storagebuffer.numelems = numparticles;
+	GraphicsHandler::VKSubInitStorageBuffer(storagebuffer);
 
 	glm::mat4 matstemp[numparticles];
 	for (uint32_t n = 0; n < numparticles; n++) matstemp[n] = particles[n].modelmatrix;
-	for (uint8_t scii = 0; scii < GraphicsHandler::vulkaninfo.numswapchainimages; scii++) {
-		// refine all of the naming here lmao its really bad, the GH functions too
-		GraphicsHandler::VKHelperUpdateStorageBuffer(
-				numparticles,
-				sizeof(glm::mat4),
-				&particleuniformbuffers[scii],
-				particleuniformbuffermemories[scii],
-				reinterpret_cast<void*>(&matstemp[0]));
-	}
-}
-
-template<class T>
-void ParticleSystem<T>::initDescriptorSets () {
-	VkDescriptorSetLayout layoutstemp[GraphicsHandler::vulkaninfo.numswapchainimages];
-	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
-		layoutstemp[x] = GraphicsHandler::vulkaninfo.grassgraphicspipeline.objectdsl;
-	descriptorsets = new VkDescriptorSet[GraphicsHandler::vulkaninfo.numswapchainimages];
-	VkDescriptorSetAllocateInfo descriptorsetallocinfo {
-			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			nullptr,
-			GraphicsHandler::vulkaninfo.descriptorpool,
-			GraphicsHandler::vulkaninfo.numswapchainimages,
-			&layoutstemp[0]
-	};
-	vkAllocateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice, &descriptorsetallocinfo, &descriptorsets[0]);
+	GraphicsHandler::VKHelperUpdateStorageBuffer(storagebuffer, static_cast<void*>(&matstemp[0]));
 }
 
 template<class T>

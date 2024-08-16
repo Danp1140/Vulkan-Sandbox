@@ -12,32 +12,27 @@ Light::Light () {
 	intensity = 5.0f;
 	type = LIGHT_TYPE_SUN;
 	shadowtype = SHADOW_TYPE_UNIFORM;
-	shadowmapresolution = 1024;
 	worldspacescenebb[0] = glm::vec3(-100., -100., -100.);
 	worldspacescenebb[1] = glm::vec3(100., 100., 100.);
 	for (uint32_t x = 0; x < GraphicsHandler::vulkaninfo.numswapchainimages; x++)
 		GraphicsHandler::changeflags[x] |= LIGHT_CHANGE_FLAG_BIT;
 	recalculateProjectionMatrix();
 	recalculateViewMatrix();
-	GraphicsHandler::VKHelperInitTexture(
-			&shadowmap,
-			shadowmapresolution, 0,
-			VK_FORMAT_D32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_SHADOWMAP,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::depthsampler);
+	shadowmap.resolution = {1024, 1024};
+	shadowmap.type = TEXTURE_TYPE_SHADOWMAP;
+	shadowmap.sampler = GraphicsHandler::depthsampler;
+	shadowmap.format = VK_FORMAT_D32_SFLOAT;
+	GraphicsHandler::createTexture(shadowmap);
 	initRenderpassAndFramebuffer();
 }
 
-Light::Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType t) {
+Light::Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, uint32_t smr, LightType t) {
 	position = p;
 	forward = f;
 	up = glm::vec3(0, 1, 0);
 	color = c;
 	intensity = i;
 	type = t;
-	shadowmapresolution = smr;
 	shadowtype = SHADOW_TYPE_UNIFORM;
 	worldspacescenebb[0] = glm::vec3(-100., -100., -100.);
 	worldspacescenebb[1] = glm::vec3(100., 100., 100.);
@@ -45,87 +40,86 @@ Light::Light (glm::vec3 p, glm::vec3 f, float i, glm::vec4 c, int smr, LightType
 		GraphicsHandler::changeflags[x] |= LIGHT_CHANGE_FLAG_BIT;
 	recalculateProjectionMatrix();
 	recalculateViewMatrix();
-	GraphicsHandler::VKHelperInitTexture(
-			&shadowmap,
-			shadowmapresolution, 0,
-			VK_FORMAT_D32_SFLOAT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			TEXTURE_TYPE_SHADOWMAP,
-			VK_IMAGE_VIEW_TYPE_2D,
-			GraphicsHandler::depthsampler);
+	shadowmap.resolution = {smr, smr};
+	shadowmap.type = TEXTURE_TYPE_SHADOWMAP;
+	shadowmap.sampler = GraphicsHandler::depthsampler;
+	shadowmap.format = VK_FORMAT_D32_SFLOAT;
+	GraphicsHandler::createTexture(shadowmap);
 	initRenderpassAndFramebuffer();
 }
 
 void Light::initRenderpassAndFramebuffer () {
 	VkAttachmentDescription shadowattachmentdescription {
-			0,
-			VK_FORMAT_D32_SFLOAT,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_ATTACHMENT_LOAD_OP_CLEAR,
-			VK_ATTACHMENT_STORE_OP_STORE,
-			VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-			VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		0,
+		VK_FORMAT_D32_SFLOAT,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_CLEAR,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
 	VkAttachmentReference shadowattachmentreference {0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 	VkSubpassDescription shadowsubpassdescription {
-			0,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			0,
-			nullptr,
-			0,
-			nullptr,
-			nullptr,
-			&shadowattachmentreference,
-			0,
-			nullptr
+		0,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		0,
+		nullptr,
+		0,
+		nullptr,
+		nullptr,
+		&shadowattachmentreference,
+		0,
+		nullptr
 	};
 	VkSubpassDependency shadowsubpassdependencies[2] {{
-															  VK_SUBPASS_EXTERNAL,
-															  0,
-															  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-															  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-															  VK_ACCESS_SHADER_READ_BIT,
-															  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-															  0
-													  }, {
-															  0,
-															  VK_SUBPASS_EXTERNAL,
-															  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-															  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-															  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-															  VK_ACCESS_SHADER_READ_BIT,
-															  0
-													  }};
+			VK_SUBPASS_EXTERNAL,
+			0,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			0
+		}, {
+			0,
+			VK_SUBPASS_EXTERNAL,
+			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			0
+	}};
 	VkRenderPassCreateInfo shadowrenderpasscreateinfo {
-			VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-			nullptr,
-			0,
-			1,
-			&shadowattachmentdescription,
-			1,
-			&shadowsubpassdescription,
-			2,
-			&shadowsubpassdependencies[0]
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&shadowattachmentdescription,
+		1,
+		&shadowsubpassdescription,
+		2,
+		&shadowsubpassdependencies[0]
 	};
-	vkCreateRenderPass(GraphicsHandler::vulkaninfo.logicaldevice,
-					   &shadowrenderpasscreateinfo,
-					   nullptr,
-					   &shadowrenderpass);
+	vkCreateRenderPass(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		&shadowrenderpasscreateinfo,
+		nullptr,
+		&shadowrenderpass);
 	VkFramebufferCreateInfo shadowframebuffercreateinfo {
-			VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-			nullptr,
-			0,
-			shadowrenderpass,
-			1,
-			&shadowmap.imageview,
-			shadowmapresolution, shadowmapresolution, 1
+		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+		nullptr,
+		0,
+		shadowrenderpass,
+		1,
+		&shadowmap.imageview,
+		shadowmap.resolution.width, shadowmap.resolution.height, 1
 	};
-	vkCreateFramebuffer(GraphicsHandler::vulkaninfo.logicaldevice,
-						&shadowframebuffercreateinfo,
-						nullptr,
-						&shadowframebuffer);
+	vkCreateFramebuffer(
+		GraphicsHandler::vulkaninfo.logicaldevice,
+		&shadowframebuffercreateinfo,
+		nullptr,
+		&shadowframebuffer);
 }
 
 void Light::recalculateProjectionMatrix () {

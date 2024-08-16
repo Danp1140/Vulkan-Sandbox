@@ -70,19 +70,19 @@ void TextureHandler::generateTextures (std::vector<TextureInfo> texdsts, const T
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
 			funcset.diffuse(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_NORMAL) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
 			funcset.normal(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_HEIGHT) {
 			float* data = reinterpret_cast<float*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
 			funcset.height(t, data);
-			GraphicsHandler::VKHelperUpdateWholeTexture(&t, reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
 	}
@@ -161,14 +161,14 @@ TEX_FUNC_IMPL_HEIGHT(colorfulMarble) {}
 TEX_FUNC_IMPL_DIFFUSE(ocean) {}
 
 TEX_FUNC_IMPL_NORMAL(ocean) {
-//	BaseGenInfo geninfo {};
-//	BaseUseInfo<glm::vec4> useinfo {.interp = {{glm::vec4(1., 1., 0., 0.), glm::vec4(-1., 1., 0., 0)}}};
-//	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
-//		geninfo.wave = {WAVE_TYPE_TRI, 20.f, 100.f * generateTurbulence(x, y, texdst, geninfo)};
-////		datadst[x * texdst.resolution.height + y]
-//		// perhaps we need a setTexel method
-//		addTexel(texdst, datadst[x * texdst.resolution.height + y], generateWave, geninfo, interp, useinfo, x, y);
-//	}
+	BaseGenInfo geninfo {};
+	BaseUseInfo<glm::vec4> useinfo {.interp = {{glm::vec4(1., 1., 0., 0.), glm::vec4(-1., 1., 0., 0)}}};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		geninfo.wave = {WAVE_TYPE_TRI, 20.f, 100.f * generateTurbulence(x, y, texdst, geninfo)};
+		datadst[x * texdst.resolution.height + y] = glm::vec4(0);
+		// perhaps we need a setTexel method
+		addTexel(texdst, datadst[x * texdst.resolution.height + y], generateWave, geninfo, interp, useinfo, x, y);
+	}
 }
 
 TEX_FUNC_IMPL_HEIGHT(ocean) {}
@@ -214,7 +214,7 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 					}
 				}
 			}
-			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(finaltex));
+			GraphicsHandler::VKHelperUpdateWholeTexture(*texdsts[texidx], reinterpret_cast<void*>(finaltex));
 			for (uint32_t x = 0; x < texdsts[texidx]->resolution.width; x++) delete[] turbulentsquare[x];
 			delete[] turbulentsquare;
 			delete[] finaltex;
@@ -224,7 +224,7 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 					texdsts[texidx]->resolution.width * texdsts[texidx]->resolution.height * sizeof(glm::vec4);
 			glm::vec4* data = (glm::vec4*)malloc(size);
 			memset(data, 0, size);
-			GraphicsHandler::VKHelperUpdateWholeTexture(texdsts[texidx], reinterpret_cast<void*>(data));
+			GraphicsHandler::VKHelperUpdateWholeTexture(*texdsts[texidx], reinterpret_cast<void*>(data));
 			free(data);
 		}
 	}
@@ -295,7 +295,7 @@ void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 			}
 		}
 	}
-	GraphicsHandler::VKHelperUpdateWholeTexture(texdst, data);
+	GraphicsHandler::VKHelperUpdateWholeTexture(*texdst, data);
 	delete[] data;
 }
 
