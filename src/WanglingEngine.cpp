@@ -38,7 +38,8 @@ WanglingEngine::WanglingEngine () {
 	texturehandler.generateSkyboxTexture(&skyboxtexture);
 	updateSkyboxDescriptorSets();
 
-/*	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
+	/*
+	meshes.push_back(new Mesh(WORKING_DIRECTORY "/resources/objs/smoothhipolysuzanne.obj",
 							  glm::vec3(0., -1., 5.),
 							  glm::vec3(1.),
 							  glm::quat(sin(1.57), 0., 0., cos(1.57)), 2048u));
@@ -243,6 +244,7 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 
 	std::vector<glm::vec3> steppearea = {glm::vec3(-10., 0., -10), glm::vec3(-10, 0., 10), glm::vec3(10., 0., 10.),
 										 glm::vec3(10., 0., -10.)};
+	/*
 	meshes[0]->generateSteppeMesh(steppearea,
 								  {{glm::vec3(11., 0., 11.),
 									glm::vec3(10., 0., -8.),
@@ -253,10 +255,11 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 									glm::vec3(-10., 0., -4),
 									glm::vec3(-11., 0., 4.)}},
 								  0.f);
-	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(.1f, .1f));
+								  */
+	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(10));
 	meshes[0]->rewriteTextureDescriptorSets();
 
-	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
+	ocean = new Ocean(glm::vec3(-15., -2., -15.), glm::vec2(30.), meshes[0]);
 //	grass = new ParticleSystem<GrassParticle>(GRASS, 100, ENFORCED_UNIFORM_ON_MESH, {meshes[0]});
 	lights[0]->setWorldSpaceSceneBB(meshes[0]->getMin(), meshes[0]->getMax());
 }
@@ -808,7 +811,7 @@ void WanglingEngine::enqueueRecordingTasks () {
 	 */
 	tempdata.descriptorset = texmon.getDescriptorSet();
 	tempdata.pipeline = TextureMonitor::getPipeline();
-	recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {TextureMonitor::recordDraw(tempdata, c);}));
+	// recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {TextureMonitor::recordDraw(tempdata, c);}));
 
 	/*
 	 * Upper Left Text

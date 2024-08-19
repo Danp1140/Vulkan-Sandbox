@@ -44,7 +44,7 @@ Ocean::Ocean (glm::vec3 pos, glm::vec2 b, Mesh* s) :
 	velocitymap.type = TEXTURE_TYPE_CUSTOM;
 	GraphicsHandler::createTexture(velocitymap);
 
-	TextureHandler::generateTextures({normaltexture}, TextureHandler::oceanTexGenSet);
+	// TextureHandler::generateTextures({normaltexture}, TextureHandler::oceanTexGenSet);
 
 	GraphicsHandler::VKHelperInitVertexAndIndexBuffers(
 			vertices,

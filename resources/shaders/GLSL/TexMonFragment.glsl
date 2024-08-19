@@ -17,5 +17,6 @@ void main(){
         color = vec4(1., 0., 0., 1.);
     }*/
 	color = texture(texturesampler, uv * vec2(1., -1.));
+	if (color.x == 1) color = vec4(1, 0, 0, 1);
 	color.a = 1.;
 }
