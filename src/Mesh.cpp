@@ -77,7 +77,7 @@ Mesh::~Mesh () {
 
 void Mesh::texInit (bool computedheight) {
 	// TODO: consider more compact normal & height formats
-	diffusetexture.sampler = GraphicsHandler::genericsampler;
+	diffusetexture.sampler = GraphicsHandler::linearminmagsampler;
 	diffusetexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	diffusetexture.type = TEXTURE_TYPE_DIFFUSE;
 	GraphicsHandler::createTexture(diffusetexture);

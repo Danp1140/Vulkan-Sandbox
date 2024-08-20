@@ -11,7 +11,7 @@
 
 #define NUM_COARSE_STEPS 50
 #define NUM_FINE_STEPS 50
-#define NUM_BIN_STEPS 10
+#define NUM_BIN_STEPS 20
 
 layout(location=0) in vec3 position;
 layout(location=1) in vec3 normal;      //could we calc this in compute shader???
@@ -44,7 +44,7 @@ vec3 proj(vec4 v) {
 }
 
 bool ssrOutOfBounds(vec3 r) {
-	return r.x < 0 || r.x > 1 || r.y < 0 || r.y > 1 || r.z < 0;
+	return r.x < 0 || r.x > 1 || r.y < 0 || r.y > 1 || r.z < 0 || r.z > 1;
 }
 
 void rayMarch(inout vec3 r, in float clipdist, in float marchstep) {
@@ -122,15 +122,21 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 	float diststep = clipdist / float(NUM_COARSE_STEPS), depthsample;
 	vec3 rx = vec3(0);
 	float a = diststep / float(NUM_COARSE_STEPS);
+	// float a = clipdist / log(NUM_COARSE_STEPS);
 	for (uint i = 0; i < NUM_COARSE_STEPS; i++) {
 		lastssrpreproj = ssrpreproj;
 		lastssr = ssr;
 		// rx += r * diststep; // linear
 		rx += r * a * pow(i, 2); // quadratic
+		// below would be ideal but unsure of how to handle the first step
+		/*
+		if (i > 0) rx += r * a * log(i); // logarithmic (i believe this distributes most evenly on screen, b/c proj uses z divide
+		else rx += r;
+		*/
 		ssrpreproj = vec4(position + rx, 1.);
 		ssr = proj(ssrpreproj);
 		depthsample = texture(ssrrdepthsampler, ssr.xy).r;
-		if (ssrOutOfBounds(ssr) || depthsample == 1 || depthsample < ssr.z) {
+		if (ssrOutOfBounds(ssr) || depthsample < ssr.z) {
 			vec4 midpreproj;
 			vec3 mid;
 			for (uint k = 0; k < NUM_BIN_STEPS; k++) {
@@ -141,14 +147,16 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 					lastssrpreproj = midpreproj;
 				}
 				else {
-					if (ssrOutOfBounds(mid) || depthsample == 1) {
+					// if (ssrOutOfBounds(mid) || depthsample == 1) {
+					if (ssrOutOfBounds(mid)) {
 						r = vec3(-1, 0, 0);
 						return;
 					}
 					ssrpreproj = midpreproj;
 				}
 			}
-			if (ssrOutOfBounds(mid) || depthsample == 1) {
+			// if (ssrOutOfBounds(mid) || depthsample == 1) {
+			if (ssrOutOfBounds(mid)) {
 				r = vec3(-1, 0, 0);
 				return;
 			}
@@ -165,15 +173,21 @@ void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 		refractray = refract(view, n, eta);
 	rayMarch2(reflectray, 1000.);
 	// refract can have a lower clip (oceans tend to attenuate light faster than atmospheres)
-	// rayMarch(refractray, 50., 1.);
+	rayMarch2(refractray, 50.);
 	float r0 = pow((1. - 1.33) / (1. + 1.33), 2.);
 	float fresnel = r0 + (1. - r0) * pow(1. - dot(view, n), 5.);
 	vec4 reflectcolor, refractcolor;
+	/*
 	if (reflectray.x == -1) combinedsample = vec4(0, 0.7, 0.7, 1);
 	else if (reflectray.y == -1) combinedsample = vec4(0.9, 0.3, 0.3, 1);
 	else combinedsample = texture(ssrrcolorsampler, reflectray.xy);
+	*/
 	// else combinedsample = vec4(reflectray.x, 0, reflectray.y, 1);
 	/*
+	if (refractray.x == -1) combinedsample = vec4(0, 0.7, 0.7, 1);
+	else if (refractray.y == -1) combinedsample = vec4(0.9, 0.3, 0.3, 1);
+	else combinedsample = texture(ssrrcolorsampler, refractray.xy);
+	*/
 	if (reflectray.x != -1.) {
 		reflectcolor = texture(ssrrcolorsampler, reflectray.xy);
 	}
@@ -182,14 +196,20 @@ void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 	}
 	if (refractray.x != -1.) {
 		refractcolor = texture(ssrrcolorsampler, refractray.xy);
+		/*
 		combinedsample = mix(refractcolor, reflectcolor, 1. / fresnel);
 		combinedsample.a = 1.;
+		*/
 	}
 	else {
+		vec3 p = proj(vec4(position, 1));
+		refractcolor = texture(ssrrcolorsampler, p.xy);
+		/*
 		combinedsample = fresnel * reflectcolor;
 		combinedsample.a = 1. / fresnel;
+		*/
 	}
-	*/
+	combinedsample = mix(refractcolor, reflectcolor, 1. / fresnel);
 }
 
 void main() {
@@ -198,8 +218,8 @@ void main() {
 	vec3 halfwaydir = normalize(lightuniformbuffer[0].position + constants.cameraposition - position);
 	vec4 specular = lightuniformbuffer[0].color * pow(max(dot(normaldir, halfwaydir), 0.), PHONG_EXPONENT);
 
-//    // TODO: implement binary search & parameterization for more precise sampling
 //    // TODO: implement blending when samples are not available; perhaps integrate with more advanced prediction of offscreen rays
+//    // TODO: attenuation with depth is available using the length of the refracted ray
 	vec4 reflectsample, refractsample;
 	sampleSSRR(color, 1. / 1.33, normaldir);
 }
