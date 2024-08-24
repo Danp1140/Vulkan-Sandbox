@@ -17,6 +17,7 @@
         static T funcname(float_t value, BaseUseInfo<T>& useinfo) \
 
 #define GEN_FUNC_T float (* genFunc)(uint32_t, uint32_t, const TextureInfo&, BaseGenInfo&)
+#define ANONYMOUS_GEN_FUNC_T float (*)(uint32_t, uint32_t, const TextureInfo&, BaseGenInfo&)
 #define GEN_FUNC_DECL(funcname) static float funcname(uint32_t x, uint32_t y, const TextureInfo& texinfo, BaseGenInfo& geninfo)
 #define GEN_FUNC_IMPL(funcname) float TextureHandler::funcname(uint32_t x, uint32_t y, const TextureInfo& texinfo, BaseGenInfo& geninfo)
 
@@ -48,17 +49,22 @@ struct InterpUseInfo {
 	T endpoints[2];
 };
 
+template<class T>
+struct CutoffUseInfo {
+	float cutoff;
+	T low, high;
+};
+
 typedef struct ColorMapUseInfo {
 	uint8_t numcolors;
 	std::vector<glm::vec4> colors;
 } ColorMapUseInfo;
 
-// TODO: add cutoff use
-
 template<class T>
 union BaseUseInfo {
 	InterpUseInfo<T> interp;
 	ColorMapUseInfo colormap;
+	CutoffUseInfo<T> cutoff;
 
 	// TODO: fix this destructor
 	~BaseUseInfo () {}
@@ -77,6 +83,15 @@ typedef struct WaveGenInfo {
 	// TODO: add linear/radial and angle for linear
 } WaveGenInfo;
 
+typedef struct VoronoiGenInfo {
+	size_t numpoints;
+	std::vector<glm::uvec2> points = {}; // initialized on first gen call
+	// mindist is minimum distance required between two members of VGI.points
+	// maxdist is the maximum possible distance a pixel can have from a member of VGI.points
+	// for normalization
+	float mindist = 0, maxdist = 0;
+} VoronoiGenInfo;
+
 typedef enum RandomType {
 	RANDOM_TYPE_UNIFORM
 } RandomType;
@@ -93,6 +108,10 @@ typedef struct RandomGenInfo {
 typedef union BaseGenInfo {
 	WaveGenInfo wave;
 	RandomGenInfo random;
+	VoronoiGenInfo voronoi;
+
+	BaseGenInfo() {}
+	~BaseGenInfo() {}
 } BaseGenInfo;
 
 class TextureHandler {
@@ -133,9 +152,46 @@ private:
 		dst += useFunc(genFunc(x, y, texinfo, geninfo), useinfo);
 	}
 
+	template<class T>
+	static void setTexel (
+			const TextureInfo& texinfo,
+			T& dst,
+			std::vector<ANONYMOUS_GEN_FUNC_T>& genfuncs,
+			std::vector<BaseGenInfo>& geninfos,
+			USE_FUNC_T,
+			BaseUseInfo<T>& useinfo,
+			uint32_t x, uint32_t y) {
+		float temp = 0;
+		for (uint8_t i = 0; i < genfuncs.size(); i++) {
+			temp += genfuncs[i](x, y, texinfo, geninfos[i]);
+		}
+		dst = useFunc(temp, useinfo);
+	}
+
+	template<class T>
+	static void alphaBlendTexel (
+			const TextureInfo& texinfo,
+			T& dst,
+			std::vector<ANONYMOUS_GEN_FUNC_T>& genfuncs,
+			std::vector<BaseGenInfo>& geninfos,
+			USE_FUNC_T,
+			BaseUseInfo<T>& useinfo,
+			uint32_t x, uint32_t y) {
+		float temp = 0;
+		for (uint8_t i = 0; i < genfuncs.size(); i++) {
+			temp += genfuncs[i](x, y, texinfo, geninfos[i]);
+		}
+		glm::vec4 outtexel = useFunc(temp, useinfo);
+		dst = outtexel * outtexel.w + dst * (1 - outtexel.w);
+	}
+
 	USE_FUNC_DECL(interp) {
 		// TODO: add more interp options than just linear
 		return value * useinfo.interp.endpoints[0] + (1.f - value) * useinfo.interp.endpoints[1];
+	}
+
+	USE_FUNC_DECL(cutoff) {
+		return value > useinfo.cutoff.cutoff ? useinfo.cutoff.high : useinfo.cutoff.low;
 	}
 
 	// this is the kind of place where we have a use function which implicitly only works for vec4, but we cant stop you
@@ -157,6 +213,8 @@ private:
 
 	GEN_FUNC_DECL(generateRandom);
 
+	GEN_FUNC_DECL(generateVoronoi);
+
 	GEN_FUNC_DECL(generateTurbulence);
 
 public:
@@ -176,7 +234,8 @@ public:
 
 	TEX_FUNC_SET_DECL(ocean);
 
-	// TODO: get rid of this. it is a crutch for required textures
+	TEX_FUNC_SET_DECL(coarseRock);
+
 	TEX_FUNC_SET_DECL(blank);
 
 	static void generateGraniteTextures (TextureInfo** texdsts, uint8_t numtexes);

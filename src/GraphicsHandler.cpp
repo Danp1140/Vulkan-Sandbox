@@ -1085,8 +1085,10 @@ void GraphicsHandler::VKSubInitSamplers () {
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminsampler);
 	samplercreateinfo.magFilter = VK_FILTER_LINEAR;
 	samplercreateinfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+	/*
 	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	*/
 	/*
 	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;

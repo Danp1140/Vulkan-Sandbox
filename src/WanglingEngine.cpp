@@ -47,7 +47,9 @@ WanglingEngine::WanglingEngine () {
 
 	initSceneData();
 
-	texmon.updateDescriptorSet(CompositingOp::getScratchDepthDII());
+	// texmon.updateDescriptorSet(CompositingOp::getScratchDepthDII());
+	// texmon.updateDescriptorSet(meshes.back()->getDiffuseTexturePtr()->getDescriptorImageInfo());
+	texmon.updateDescriptorSet(meshes.back()->getNormalTexturePtr()->getDescriptorImageInfo());
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
@@ -118,7 +120,7 @@ WanglingEngine::WanglingEngine () {
 	}
 	GraphicsHandler::swapchainimageindex = 0;
 
-	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
+	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr(), *meshes[0]->getNormalTexturePtr(), *meshes[0]->getHeightTexturePtr()}, TextureHandler::coarseRockTexGenSet);
 	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
 }
 
@@ -253,7 +255,10 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 									glm::vec3(-10., 0., -4),
 									glm::vec3(-11., 0., 4.)}},
 								  0.f);
-	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(.1f, .1f));
+	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(5));
+	meshes[0]->getNormalTexturePtr()->setUVScale(glm::vec2(5));
+	meshes[0]->getNormalTexturePtr()->setUVRotation(3.14 * 30 / 180);
+	meshes[0]->getHeightTexturePtr()->setUVScale(glm::vec2(5));
 	meshes[0]->rewriteTextureDescriptorSets();
 
 	ocean = new Ocean(glm::vec3(-10., -2., -10.), glm::vec2(20.), meshes[0]);
