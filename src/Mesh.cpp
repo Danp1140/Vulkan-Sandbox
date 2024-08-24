@@ -44,7 +44,7 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 	normaltexture.resolution = {nir, nir};
 	heighttexture.resolution = {hir, hir};
 	texInit(computedheight);
-	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
+	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet, nullptr);
 	rewriteTextureDescriptorSets();
 }
 
@@ -794,7 +794,7 @@ Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {
 		TextureHandler::generateTextures({result->diffusetexture,
 										  result->normaltexture,
 										  result->heighttexture},
-										 TextureHandler::colorfulMarbleTexGenSet);
+										 TextureHandler::colorfulMarbleTexGenSet, nullptr);
 		result->rewriteTextureDescriptorSets();
 	}
 	return result;

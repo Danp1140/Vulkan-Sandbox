@@ -64,24 +64,24 @@ void TextureHandler::deallocTex (void* ptr) {
 	free(ptr);
 }
 
-void TextureHandler::generateTextures (std::vector<TextureInfo> texdsts, const TexGenFuncSet& funcset) {
+void TextureHandler::generateTextures (std::vector<TextureInfo>&& texdsts, const TexGenFuncSet& funcset, void* genvars) {
 	for (auto& t: texdsts) {
 		if (t.type == TEXTURE_TYPE_DIFFUSE) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
-			funcset.diffuse(t, data);
+			funcset.diffuse(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_NORMAL) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
-			funcset.normal(t, data);
+			funcset.normal(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_HEIGHT) {
 			float* data = reinterpret_cast<float*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
-			funcset.height(t, data);
+			funcset.height(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
