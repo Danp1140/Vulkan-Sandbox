@@ -232,21 +232,23 @@ TEX_FUNC_IMPL_NORMAL(ocean) {
 TEX_FUNC_IMPL_HEIGHT(ocean) {}
 
 TEX_FUNC_IMPL_DIFFUSE(coarseRock) {
+	CoarseRockSetVars vars = genvars ? *static_cast<CoarseRockSetVars*>(genvars) : (CoarseRockSetVars){};
 	BaseUseInfo<glm::vec4> useinfos[3] {
-		{.interp = {glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 0.9, 1)}},
-		{.cutoff = {0.7, glm::vec4(0), glm::vec4(0.9, 0.9, 0.9, 1)}},
-		{.cutoff = {0.9, glm::vec4(1, 1, 1, 0), glm::vec4(0, 0, 0, 1)}}
+		{.interp = {vars.basecolor1, vars.basecolor2}},
+		{.cutoff = {0.9, glm::vec4(0), vars.intrusioncolor1}},
+		{.cutoff = {0.9, glm::vec4(0), vars.intrusioncolor2}}
 	};
 	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs[3] = {
 		{generateVoronoi},
-		{generateTurbulence},
+		{generateVoronoi, generateTurbulence},
 		{generateTurbulence}
 	};
 	std::vector<BaseGenInfo> geninfos[3];
 	geninfos[0] = std::vector<BaseGenInfo>(1);
-	geninfos[1] = std::vector<BaseGenInfo>(1);
+	geninfos[1] = std::vector<BaseGenInfo>(2);
 	geninfos[2] = std::vector<BaseGenInfo>(1);
 	geninfos[0][0].voronoi = {32, {}, 50.};
+	geninfos[1][0].voronoi = {32, {}, 50.};
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 		setTexel(
 			texdst, 
@@ -280,7 +282,7 @@ TEX_FUNC_IMPL_NORMAL(coarseRock) {
 	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs = {generateRandom};
 	std::vector<BaseGenInfo> geninfos(1);
 	geninfos[0].random = {RANDOM_TYPE_UNIFORM, r};
-	BaseUseInfo<glm::vec4> useinfo = {.interp = {glm::vec4(1, 1, 0, 1), glm::vec4(-1, 1, 0, 1)}};
+	BaseUseInfo<glm::vec4> useinfo = {.interp = {glm::vec4(0.5, 0.5, 0, 1), glm::vec4(-0.5, 0.5, 0, 1)}};
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 		setTexel(
 			texdst,

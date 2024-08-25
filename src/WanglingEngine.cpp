@@ -120,7 +120,6 @@ WanglingEngine::WanglingEngine () {
 	}
 	GraphicsHandler::swapchainimageindex = 0;
 
-	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr(), *meshes[0]->getNormalTexturePtr(), *meshes[0]->getHeightTexturePtr()}, TextureHandler::coarseRockTexGenSet, nullptr);
 	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
 }
 
@@ -255,7 +254,9 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 									glm::vec3(-10., 0., -4),
 									glm::vec3(-11., 0., 4.)}},
 								  0.f);
-	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(5));
+	CoarseRockSetVars v = {glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 0.9, 1), glm::vec4(0.9, 0.9, 0.9, 1), glm::vec4(0, 0, 0, 1)};
+	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr(), *meshes[0]->getNormalTexturePtr(), *meshes[0]->getHeightTexturePtr()}, TextureHandler::coarseRockTexGenSet, &v);
+	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1));
 	meshes[0]->getNormalTexturePtr()->setUVScale(glm::vec2(5));
 	meshes[0]->getNormalTexturePtr()->setUVRotation(3.14 * 30 / 180);
 	meshes[0]->getHeightTexturePtr()->setUVScale(glm::vec2(0.1));
