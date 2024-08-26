@@ -105,7 +105,7 @@ WanglingEngine::WanglingEngine () {
 					lights[x]->getShadowPushConstantsPtr()->lspmatrix,
 					lights[x]->getPosition(),
 					lights[x]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+					lights[x]->getForward(),
 					lights[x]->getType(),
 					lights[x]->getColor()
 			};
@@ -354,6 +354,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 //	}
 
 	// making this block execute no matter what for shadowmap troubleshooting
+	/*
 	{
 		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
@@ -368,7 +369,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
 					lights[i]->getPosition(),
 					lights[i]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+					lights[i]->getForward(),
 					lights[i]->getType(),
 					lights[i]->getColor()
 			};
@@ -379,6 +380,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
 				&lightuniformbuffertemp[0]);
 	}
+	*/
 
 	MeshUniformBuffer temp;
 	for (auto& m: meshes) {

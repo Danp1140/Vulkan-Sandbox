@@ -247,8 +247,8 @@ TEX_FUNC_IMPL_DIFFUSE(coarseRock) {
 	geninfos[0] = std::vector<BaseGenInfo>(1);
 	geninfos[1] = std::vector<BaseGenInfo>(2);
 	geninfos[2] = std::vector<BaseGenInfo>(1);
-	geninfos[0][0].voronoi = {32, {}, 50.};
-	geninfos[1][0].voronoi = {32, {}, 50.};
+	geninfos[0][0].voronoi = {32, {}, 1.};
+	geninfos[1][0].voronoi = {32, {}, 1.};
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 		setTexel(
 			texdst, 
@@ -282,7 +282,7 @@ TEX_FUNC_IMPL_NORMAL(coarseRock) {
 	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs = {generateRandom};
 	std::vector<BaseGenInfo> geninfos(1);
 	geninfos[0].random = {RANDOM_TYPE_UNIFORM, r};
-	BaseUseInfo<glm::vec4> useinfo = {.interp = {glm::vec4(0.5, 0.5, 0, 1), glm::vec4(-0.5, 0.5, 0, 1)}};
+	BaseUseInfo<glm::vec4> useinfo = {.interp = {glm::vec4(0.1, 0.1, 0, 1), glm::vec4(-0.1, 0.1, 0, 1)}};
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 		setTexel(
 			texdst,
