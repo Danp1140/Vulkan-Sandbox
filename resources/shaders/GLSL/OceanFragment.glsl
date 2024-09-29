@@ -69,10 +69,10 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 	vec3 ssr = proj(ssrpreproj), lastssr;
 	float diststep = clipdist / float(NUM_COARSE_STEPS), depthsample;
 	vec3 rx = vec3(0);
-	// float a;
-	// float a = diststep / float(NUM_COARSE_STEPS);
+	// float a = diststep / float(NUM_COARSE_STEPS); // linear
 	float a = clipdist / log(NUM_COARSE_STEPS + 1);
-	/* Coarse Search, Quadratically Distributed from 0 to clipdist */
+
+	/* Coarse Search, Logarithmically Distributed from 0 to clipdist */
 	for (uint i = 0; i < NUM_COARSE_STEPS; i++) {
 		lastssrpreproj = ssrpreproj;
 		lastssr = ssr;
@@ -85,6 +85,7 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 		depthsample = texture(ssrrdepthsampler, ssr.xy).r;
 		if (depthsample < ssr.z) break;
 	}
+
 	/* Binary Search, from last in-bounds sample to next out-of-bounds sample */
 	vec4 dir = normalize(ssrpreproj - lastssrpreproj);
 	a = distance(ssrpreproj.xyz, lastssrpreproj.xyz) * 0.5;
@@ -105,13 +106,24 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 	return;
 }
 
+vec4 blendBounds(vec3 uv, vec4 primary, vec4 secondary) {
+	vec4 result = primary;
+	if (uv.x > 0.9) result = mix(secondary, result, (1 - uv.x) / 0.1);
+	if (uv.y > 0.9) result = mix(secondary, result, (1 - uv.y) / 0.1);
+	if (uv.x < 0.1) result = mix(secondary, result, uv.x / 0.1);
+	if (uv.y < 0.1) result = mix(secondary, result, uv.y / 0.1);
+	if (uv.z < 0.1) result = mix(secondary, result, uv.z / 0.1);
+	return result;
+}
+
 void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 	vec3 view = normalize(position - constants.cameraposition);
 	vec3 reflectray = reflect(view, n),
 		refractray = refract(view, n, eta);
+	vec4 environmentsample = texture(environmentsampler, reflectray);
 	rayMarch2(reflectray, 50.);
 	// refract can have a lower clip (oceans tend to attenuate light faster than atmospheres)
-	rayMarch2(refractray, 50.);
+	rayMarch2(refractray, 20.);
 	float r0 = pow((1. - 1.33) / (1. + 1.33), 2.);
 	float fresnel = r0 + (1. - r0) * pow(1. - dot(view, n), 5.);
 	vec4 reflectcolor, refractcolor;
@@ -126,38 +138,29 @@ void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 	else if (refractray.y == -1) combinedsample = vec4(0.9, 0.3, 0.3, 1);
 	else combinedsample = texture(ssrrcolorsampler, refractray.xy);
 	*/
+	vec3 p = proj(vec4(position, 1));
+	vec4 passthroughsample = texture(ssrrcolorsampler, p.xy);
 	if (reflectray.x != -1.) {
 		reflectcolor = texture(ssrrcolorsampler, reflectray.xy);
+		reflectcolor = blendBounds(reflectray.xyz, reflectcolor, environmentsample);
 	}
 	else {
-		reflectcolor = texture(environmentsampler, reflectray);
+		reflectcolor = environmentsample;
 	}
 	if (refractray.x != -1.) {
 		refractcolor = texture(ssrrcolorsampler, refractray.xy);
-		/*
-		combinedsample = mix(refractcolor, reflectcolor, 1. / fresnel);
-		combinedsample.a = 1.;
-		*/
+		refractcolor = blendBounds(refractray.xyz, refractcolor, passthroughsample);
 	}
 	else {
-		vec3 p = proj(vec4(position, 1));
-		refractcolor = texture(ssrrcolorsampler, p.xy);
-		/*
-		combinedsample = fresnel * reflectcolor;
-		combinedsample.a = 1. / fresnel;
-		*/
+		refractcolor = passthroughsample;
 	}
 	combinedsample = mix(refractcolor, reflectcolor, 1. / fresnel);
 }
 
 void main() {
 	vec3 normaldir = normalize(normal + texture(normalsampler, uv).xyz);
-//    vec3 halfwaydir=normalize(lightuniformbuffer[0].position-position+constants.cameraposition-position);
-	vec3 halfwaydir = normalize(lightuniformbuffer[0].position + constants.cameraposition - position);
-	vec4 specular = lightuniformbuffer[0].color * pow(max(dot(normaldir, halfwaydir), 0.), PHONG_EXPONENT);
 
-//    // TODO: implement blending when samples are not available; perhaps integrate with more advanced prediction of offscreen rays
-//    // TODO: attenuation with depth is available using the length of the refracted ray
+//     TODO: attenuation with depth is available using the length of the refracted ray
 	vec4 reflectsample, refractsample;
-	sampleSSRR(color, 1. / 1.33, normaldir);
+	sampleSSRR(color, 1 / 1.33, normaldir);
 }
