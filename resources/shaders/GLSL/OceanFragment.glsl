@@ -9,8 +9,8 @@
 
 #define PHONG_EXPONENT 2
 
-#define NUM_COARSE_STEPS 50
-#define NUM_FINE_STEPS 50
+#define NUM_COARSE_STEPS 3
+#define NUM_FINE_STEPS 3
 #define NUM_BIN_STEPS 20
 
 layout(location=0) in vec3 position;
@@ -47,73 +47,21 @@ bool ssrOutOfBounds(vec3 r) {
 	return r.x < 0 || r.x > 1 || r.y < 0 || r.y > 1 || r.z < 0 || r.z > 1;
 }
 
-void rayMarch(inout vec3 r, in float clipdist, in float marchstep) {
-	vec4 lastssrpreproj, ssrpreproj = vec4(position, 1);
-	vec3 ssr = proj(ssrpreproj), lastssr;
-	float coarsedist = clipdist / float(NUM_COARSE_STEPS);
-	vec3 rx = vec3(0);
-	bool advance = false;
-	for (uint i = 0; i < NUM_COARSE_STEPS; i++) {
-		lastssr = ssr;
-		lastssrpreproj = ssrpreproj;
-		rx += r * coarsedist;
-		ssrpreproj = vec4(position + rx, 1.);
-		ssr = proj(ssrpreproj);
-		/*
-		if (ssr.z > 0.999) {
-			r = vec3(-1, 0, 0);
-			return;
-		}
-		*/
-		if (ssr.x < 0 || ssr.x > 1 || ssr.y < 0 || ssr.y > 1 || ssr.z > 0.999) {
-			advance = true;
-		}
-		if (advance || texture(ssrrdepthsampler, ssr.xy).r < ssr.z) {
-			advance = false;
-			float finedist = distance(lastssrpreproj, ssrpreproj) / float(NUM_FINE_STEPS);
-			rx = vec3(0);
-			vec3 newpos = lastssrpreproj.xyz;
-			for (uint j = 0; j < NUM_FINE_STEPS; j++) {
-				lastssr = ssr;
-				lastssrpreproj = ssrpreproj;
-				rx += r * finedist;
-				ssrpreproj = vec4(newpos + rx, 1);
-				ssr = proj(ssrpreproj);
-				if (ssr.x < 0 || ssr.x > 1 || ssr.y < 0 || ssr.y > 1 || ssr.z > 0.999) {
-					// r = vec3(-1, 0, 0);
-					// return;
-					advance = true;
-				}
-				if (advance || texture(ssrrdepthsampler, ssr.xy).r < ssr.z) {
-					// r = ssr.xyz;
-					// return;
-					vec4 midpreproj;
-					vec3 mid;
-					for (uint k = 0; k < NUM_BIN_STEPS; k++) {
-						midpreproj = lastssrpreproj + 0.5 * (ssrpreproj - lastssrpreproj);
-						mid = proj(midpreproj);
-						if (texture(ssrrdepthsampler, mid.xy).r > mid.z) {
-							if (ssrOutOfBounds(mid)) {
-								r = vec3(-1, 0, 0);
-								return;
-							}
-							lastssrpreproj = midpreproj;
-						}
-						else ssrpreproj = midpreproj;
-					}
-					/*
-					if (ssrOutOfBounds(mid)) {
-						r = vec3(-1, 0, 0);
-						return;
-					}
-					*/
-					r = mid;
-					return;
-				}
-			}
-		}
+bool clampSSR(inout vec3 r) {
+	if (r.x < 0) {
+		r.x = 0;
+	} if (r.x > 1) {
+		r.x = 1;
+	} if (r.y < 0) {
+		r.y = 0;
+	} if (r.y > 1) {
+		r.y = 1;
+	} if (r.z < 0) {
+		r.z = 0;
+	} if (r.z > 1) {
+		r.z = 1;
 	}
-	r = vec3(0, -1, 0);
+	return r.x < 0 || r.x > 1 || r.y < 0 || r.y > 1 || r.z < 0 || r.z > 1;
 }
 
 void rayMarch2(inout vec3 r, in float clipdist) {
@@ -121,57 +69,47 @@ void rayMarch2(inout vec3 r, in float clipdist) {
 	vec3 ssr = proj(ssrpreproj), lastssr;
 	float diststep = clipdist / float(NUM_COARSE_STEPS), depthsample;
 	vec3 rx = vec3(0);
-	float a = diststep / float(NUM_COARSE_STEPS);
-	// float a = clipdist / log(NUM_COARSE_STEPS);
+	// float a;
+	// float a = diststep / float(NUM_COARSE_STEPS);
+	float a = clipdist / log(NUM_COARSE_STEPS + 1);
+	/* Coarse Search, Quadratically Distributed from 0 to clipdist */
 	for (uint i = 0; i < NUM_COARSE_STEPS; i++) {
 		lastssrpreproj = ssrpreproj;
 		lastssr = ssr;
 		// rx += r * diststep; // linear
-		rx += r * a * pow(i, 2); // quadratic
-		// below would be ideal but unsure of how to handle the first step
-		/*
-		if (i > 0) rx += r * a * log(i); // logarithmic (i believe this distributes most evenly on screen, b/c proj uses z divide
-		else rx += r;
-		*/
+		// rx += r * a * pow(i, 2); // quadratic
+		rx += r * a * log(i + 1); // logarithmic
 		ssrpreproj = vec4(position + rx, 1.);
 		ssr = proj(ssrpreproj);
+		if (ssrOutOfBounds(ssr)) break;
 		depthsample = texture(ssrrdepthsampler, ssr.xy).r;
-		if (ssrOutOfBounds(ssr) || depthsample < ssr.z) {
-			vec4 midpreproj;
-			vec3 mid;
-			for (uint k = 0; k < NUM_BIN_STEPS; k++) {
-				midpreproj = lastssrpreproj + 0.5 * (ssrpreproj - lastssrpreproj);
-				mid = proj(midpreproj);
-				depthsample = texture(ssrrdepthsampler, mid.xy).r;
-				if (depthsample > mid.z) {
-					lastssrpreproj = midpreproj;
-				}
-				else {
-					// if (ssrOutOfBounds(mid) || depthsample == 1) {
-					if (ssrOutOfBounds(mid)) {
-						r = vec3(-1, 0, 0);
-						return;
-					}
-					ssrpreproj = midpreproj;
-				}
-			}
-			// if (ssrOutOfBounds(mid) || depthsample == 1) {
-			if (ssrOutOfBounds(mid)) {
-				r = vec3(-1, 0, 0);
-				return;
-			}
-			r = mid;
-			return;
-		}
+		if (depthsample < ssr.z) break;
 	}
-	r = vec3(0, -1, 0);
+	/* Binary Search, from last in-bounds sample to next out-of-bounds sample */
+	vec4 dir = normalize(ssrpreproj - lastssrpreproj);
+	a = distance(ssrpreproj.xyz, lastssrpreproj.xyz) * 0.5;
+	vec4 midpreproj = lastssrpreproj + a * dir;
+	vec3 mid;
+	for (uint k = 0; k < NUM_BIN_STEPS; k++) {
+		a *= 0.5;
+		mid = proj(midpreproj);
+		depthsample = texture(ssrrdepthsampler, mid.xy).r;
+		if (depthsample > mid.z) midpreproj += a * dir; 
+		else midpreproj -= a * dir;
+	}
+	if (ssrOutOfBounds(mid)) {
+		r = vec3(-1, 0, 0);
+		return;
+	}
+	r = mid;
+	return;
 }
 
 void sampleSSRR(out vec4 combinedsample, in float eta, in vec3 n) {
 	vec3 view = normalize(position - constants.cameraposition);
 	vec3 reflectray = reflect(view, n),
 		refractray = refract(view, n, eta);
-	rayMarch2(reflectray, 1000.);
+	rayMarch2(reflectray, 50.);
 	// refract can have a lower clip (oceans tend to attenuate light faster than atmospheres)
 	rayMarch2(refractray, 50.);
 	float r0 = pow((1. - 1.33) / (1. + 1.33), 2.);

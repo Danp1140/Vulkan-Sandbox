@@ -119,8 +119,8 @@ WanglingEngine::WanglingEngine () {
 	}
 	GraphicsHandler::swapchainimageindex = 0;
 
-	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
-	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
+	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
+	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
 }
 
 WanglingEngine::~WanglingEngine () {
@@ -256,7 +256,7 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 									glm::vec3(-11., 0., 4.)}},
 								  0.f);
 								  */
-	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(10));
+	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1));
 	meshes[0]->rewriteTextureDescriptorSets();
 
 	ocean = new Ocean(glm::vec3(-15., -2., -15.), glm::vec2(30.), meshes[0]);
