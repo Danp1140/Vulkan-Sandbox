@@ -32,21 +32,31 @@ typedef struct TexGenFuncSet {
 	TEX_FUNC_T(normal, glm::vec4);
 
 	TEX_FUNC_T(height, float);
+
+	TEX_FUNC_T(specular, float);
 } TexGenFuncSet;
 #define TEX_FUNC_DECL(funcname, textype, datatype) static void funcname##textype(TextureInfo& texdst, datatype* datadst, void* genvars)
 #define TEX_FUNC_DECL_DIFFUSE(funcname) TEX_FUNC_DECL(funcname, Diffuse, glm::vec4)
 #define TEX_FUNC_DECL_NORMAL(funcname) TEX_FUNC_DECL(funcname, Normal, glm::vec4)
 #define TEX_FUNC_DECL_HEIGHT(funcname) TEX_FUNC_DECL(funcname, Height, float)
+#define TEX_FUNC_DECL_SPECULAR(funcname) TEX_FUNC_DECL(funcname, Specular, float)
 #define TEX_FUNC_SET_DECL(funcname) \
         TEX_FUNC_DECL_DIFFUSE(funcname); \
         TEX_FUNC_DECL_NORMAL(funcname); \
         TEX_FUNC_DECL_HEIGHT(funcname); \
-        static const TexGenFuncSet constexpr funcname##TexGenSet {funcname##Diffuse, funcname##Normal, funcname##Height} \
+	TEX_FUNC_DECL_SPECULAR(funcname); \
+        static const TexGenFuncSet constexpr funcname##TexGenSet { \
+		funcname##Diffuse, \
+		funcname##Normal, \
+		funcname##Height, \
+		funcname##Specular \
+	} \
 
 #define TEX_FUNC_IMPL(funcname, textype, datatype) void TextureHandler::funcname##textype(TextureInfo& texdst, datatype* datadst, void* genvars)
 #define TEX_FUNC_IMPL_DIFFUSE(funcname) TEX_FUNC_IMPL(funcname, Diffuse, glm::vec4)
 #define TEX_FUNC_IMPL_NORMAL(funcname) TEX_FUNC_IMPL(funcname, Normal, glm::vec4)
 #define TEX_FUNC_IMPL_HEIGHT(funcname) TEX_FUNC_IMPL(funcname, Height, float)
+#define TEX_FUNC_IMPL_SPECULAR(funcname) TEX_FUNC_IMPL(funcname, Specular, float)
 
 /*
  * Use Info Structs
@@ -130,6 +140,8 @@ typedef struct CoarseRockSetVars {
 	// int1 is coarser, int2 is finer
 	glm::vec4 basecolor1, basecolor2, intrusioncolor1, intrusioncolor2;
 } CoarseRockSetVars;
+
+/* TODO: static, 1x1 pixel blank texture for any unused texture bindings! */
 
 class TextureHandler {
 private:

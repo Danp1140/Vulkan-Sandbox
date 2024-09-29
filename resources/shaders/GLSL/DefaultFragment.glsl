@@ -36,6 +36,7 @@ layout(set=1, binding=1) uniform sampler2D diffusesampler;
 layout(set=1, binding=2) uniform sampler2D normalsampler;
 layout(set=1, binding=3) uniform sampler2D heightsampler;
 layout(set=1, binding=4) uniform sampler2DShadow shadowsampler[MAX_LIGHTS];
+layout(set=1, binding=5) uniform sampler2D specularsampler;
 
 layout(location=0) out vec4 color;
 
@@ -58,7 +59,8 @@ void main() {
 			lambertian = max(dot(lightdir, normaldir), 0);
 			if (lambertian > 0) {
 				halfwaydir = normalize(lightdir + normalize(constants.camerapos - position));
-				specular = pow(max(dot(halfwaydir, normaldir), 0), PHONG_EXPONENT);
+				// stealing the normal uv for specular since they're closely related
+				specular = pow(max(dot(halfwaydir, normaldir), 0), texture(specularsampler, normaluv).r);
 				if (lub[x].lighttype != LIGHT_TYPE_SUN) {
 					float lightdistsq = pow(length(lub[x].position - position), 2);
 					lambertian /= lightdistsq;

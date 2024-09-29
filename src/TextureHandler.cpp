@@ -66,6 +66,8 @@ void TextureHandler::deallocTex (void* ptr) {
 
 void TextureHandler::generateTextures (std::vector<TextureInfo>&& texdsts, const TexGenFuncSet& funcset, void* genvars) {
 	for (auto& t: texdsts) {
+		// TODO: change these reinterpret_casts to static_casts
+		// TODO: change hard-coded, type-based pixel sizes to use VKHelperGetPixelSize from format
 		if (t.type == TEXTURE_TYPE_DIFFUSE) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
@@ -82,6 +84,12 @@ void TextureHandler::generateTextures (std::vector<TextureInfo>&& texdsts, const
 			float* data = reinterpret_cast<float*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
 			funcset.height(t, data, genvars);
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
+			deallocTex(reinterpret_cast<void*>(data));
+		} else if (t.type == TEXTURE_TYPE_SPECULAR) {
+			float* data = reinterpret_cast<float*>(allocTex(t));
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * GraphicsHandler::VKHelperGetPixelSize(t.format));
+			funcset.specular(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
@@ -215,7 +223,8 @@ TEX_FUNC_IMPL_NORMAL(colorfulMarble) {}
 
 TEX_FUNC_IMPL_HEIGHT(colorfulMarble) {}
 
-// TODO: add back ocean textures
+TEX_FUNC_IMPL_SPECULAR(colorfulMarble) {}
+
 TEX_FUNC_IMPL_DIFFUSE(ocean) {}
 
 TEX_FUNC_IMPL_NORMAL(ocean) {
@@ -313,6 +322,12 @@ TEX_FUNC_IMPL_HEIGHT(coarseRock) {
 	}
 }
 
+TEX_FUNC_IMPL_SPECULAR(coarseRock) {
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		datadst[x * texdst.resolution.height + y] = 64;
+	}
+}
+
 TEX_FUNC_IMPL_DIFFUSE(blank) {
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 			datadst[x * texdst.resolution.height + y] = glm::vec4(1.f);
@@ -322,6 +337,8 @@ TEX_FUNC_IMPL_DIFFUSE(blank) {
 TEX_FUNC_IMPL_NORMAL(blank) {}
 
 TEX_FUNC_IMPL_HEIGHT(blank) {}
+
+TEX_FUNC_IMPL_SPECULAR(blank) {}
 
 void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t numtexes) {
 	// granite may have several differnet colors
