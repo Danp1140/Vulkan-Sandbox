@@ -75,36 +75,24 @@ public:
 	// TODO: update functions that pass by pointer to pass by const &
 	// TODO: evaluate usefulness of updateMatrices
 	void setPosition (glm::vec3 p);
-
 	void setForward (glm::vec3 f);
-
 	void setWorldSpaceSceneBB (glm::vec3 min, glm::vec3 max);
-
 	glm::mat4 getProjectionMatrix () {return projectionmatrix;}
-
 	glm::mat4 getViewMatrix () {return viewmatrix;}
 
 	void updateMatrices (glm::vec3 cameraforward, glm::vec3 camerapos, glm::vec3* b, uint8_t numb);
-
 	// for now assuming a square resolution to avoid annoying refactor lol
 	uint32_t getShadowmapResolution () {return shadowmap.resolution.width;}
 
 	glm::vec3 getPosition () {return position;}
-
+	glm::vec3 getForward () {return forward;}
 	glm::vec4 getColor () {return color;}
-
 	float getIntensity () {return intensity;}
-
 	LightType getType () {return type;}
-
 	ShadowType getShadowType () {return shadowtype;}
-
 	VkRenderPass getShadowRenderPass () {return shadowrenderpass;}
-
 	VkFramebuffer getShadowFramebuffer () {return shadowframebuffer;}
-
 	ShadowmapPushConstants* getShadowPushConstantsPtr () {return &shadowpushconstants;}
-
 	TextureInfo* getShadowmapPtr () {return &shadowmap;}
 };
 

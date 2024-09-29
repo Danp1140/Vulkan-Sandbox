@@ -37,7 +37,7 @@ protected:
 	VkBuffer vertexbuffer, indexbuffer;
 	BufferInfo uniformbuffer;
 	VkDeviceMemory vertexbuffermemory, indexbuffermemory;
-	TextureInfo diffusetexture, normaltexture, heighttexture;
+	TextureInfo diffusetexture, normaltexture, heighttexture, speculartexture;
 	VkDescriptorSet ds;
 	MeshUniformBuffer uniformbufferdata;
 	std::mutex dsmutex;
@@ -100,9 +100,11 @@ public:
 	glm::vec3 getMin () {return min;}
 	glm::vec3 getMax () {return max;}
 	const VkDescriptorSet getDescriptorSet () const {return ds;}
+	// TODO: refactor to be more safe
 	TextureInfo* getDiffuseTexturePtr () {return &diffusetexture;}
 	TextureInfo* getNormalTexturePtr () {return &normaltexture;}
 	TextureInfo* getHeightTexturePtr () {return &heighttexture;}
+	TextureInfo* getSpecularTexturePtr () {return &speculartexture;}
 	VkBuffer getVertexBuffer () {return vertexbuffer;}
 	VkBuffer getIndexBuffer () {return indexbuffer;}
 	std::mutex* getDSMutexPtr () {return &dsmutex;}

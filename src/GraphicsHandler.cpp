@@ -1085,8 +1085,10 @@ void GraphicsHandler::VKSubInitSamplers () {
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminsampler);
 	samplercreateinfo.magFilter = VK_FILTER_LINEAR;
 	samplercreateinfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+	/*
 	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	*/
 	/*
 	samplercreateinfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -2251,7 +2253,6 @@ void GraphicsHandler::updateDescriptorSet (
 	vkUpdateDescriptorSets(vulkaninfo.logicaldevice, bindings.size(), &writes[0], 0, nullptr);
 }
 
-
 void GraphicsHandler::submitAndPresent () {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -2539,6 +2540,8 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 			return 4u;
 		case VK_FORMAT_B8G8R8A8_SRGB:
 			return 4u;
+		case VK_FORMAT_R16_SFLOAT:
+			return 2u;
 		case VK_FORMAT_R32_SFLOAT:
 			return 4u;
 		case VK_FORMAT_D32_SFLOAT:
