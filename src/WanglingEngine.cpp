@@ -48,7 +48,9 @@ WanglingEngine::WanglingEngine () {
 
 	initSceneData();
 
-	texmon.updateDescriptorSet(CompositingOp::getScratchDepthDII());
+	// texmon.updateDescriptorSet(CompositingOp::getScratchDepthDII());
+	// texmon.updateDescriptorSet(meshes.back()->getDiffuseTexturePtr()->getDescriptorImageInfo());
+	texmon.updateDescriptorSet(meshes.back()->getNormalTexturePtr()->getDescriptorImageInfo());
 
 	// TODO: move to shadowsamplerinit func
 	for (uint8_t fifi = 0; fifi < MAX_FRAMES_IN_FLIGHT; fifi++) {
@@ -104,7 +106,7 @@ WanglingEngine::WanglingEngine () {
 					lights[x]->getShadowPushConstantsPtr()->lspmatrix,
 					lights[x]->getPosition(),
 					lights[x]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+					lights[x]->getForward(),
 					lights[x]->getType(),
 					lights[x]->getColor()
 			};
@@ -119,8 +121,12 @@ WanglingEngine::WanglingEngine () {
 	}
 	GraphicsHandler::swapchainimageindex = 0;
 
+<<<<<<< HEAD
 	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::gridTexGenSet);
 	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
+=======
+	// TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr()}, TextureHandler::colorfulMarbleTexGenSet);
+>>>>>>> master
 }
 
 WanglingEngine::~WanglingEngine () {
@@ -256,7 +262,12 @@ void WanglingEngine::loadScene (const char* scenefilepath) {
 									glm::vec3(-11., 0., 4.)}},
 								  0.f);
 								  */
+	CoarseRockSetVars v = {glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 0.9, 1), glm::vec4(0.9, 0.9, 0.9, 1), glm::vec4(0, 0, 0, 1)};
+	TextureHandler::generateTextures({*meshes[0]->getDiffuseTexturePtr(), *meshes[0]->getNormalTexturePtr(), *meshes[0]->getHeightTexturePtr(), *meshes[0]->getSpecularTexturePtr()}, TextureHandler::coarseRockTexGenSet, &v);
 	meshes[0]->getDiffuseTexturePtr()->setUVScale(glm::vec2(1));
+	meshes[0]->getNormalTexturePtr()->setUVScale(glm::vec2(5));
+	meshes[0]->getNormalTexturePtr()->setUVRotation(3.14 * 30 / 180);
+	meshes[0]->getHeightTexturePtr()->setUVScale(glm::vec2(0.1));
 	meshes[0]->rewriteTextureDescriptorSets();
 
 	ocean = new Ocean(glm::vec3(-15., -2., -15.), glm::vec2(30.), meshes[0]);
@@ -351,6 +362,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 //	}
 
 	// making this block execute no matter what for shadowmap troubleshooting
+	/*
 	{
 		LightUniformBuffer lightuniformbuffertemp[lights.size()];
 		for (uint8_t i = 0; i < lights.size(); i++) {
@@ -365,7 +377,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 					lights[i]->getShadowPushConstantsPtr()->lspmatrix,
 					lights[i]->getPosition(),
 					lights[i]->getIntensity(),
-					glm::vec3(0.0f, 0.0f, 0.0f),    //remember to change this if we need a forward vec
+					lights[i]->getForward(),
 					lights[i]->getType(),
 					lights[i]->getColor()
 			};
@@ -376,6 +388,7 @@ void WanglingEngine::updatePCsAndBuffers() {
 				lightuniformbuffermemories[GraphicsHandler::swapchainimageindex],
 				&lightuniformbuffertemp[0]);
 	}
+	*/
 
 	MeshUniformBuffer temp;
 	for (auto& m: meshes) {

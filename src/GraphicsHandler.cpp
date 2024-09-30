@@ -2256,7 +2256,6 @@ void GraphicsHandler::updateDescriptorSet (
 	vkUpdateDescriptorSets(vulkaninfo.logicaldevice, bindings.size(), &writes[0], 0, nullptr);
 }
 
-
 void GraphicsHandler::submitAndPresent () {
 	VkPipelineStageFlags pipelinestageflags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -2544,6 +2543,8 @@ inline VkDeviceSize GraphicsHandler::VKHelperGetPixelSize (VkFormat format) {
 			return 4u;
 		case VK_FORMAT_B8G8R8A8_SRGB:
 			return 4u;
+		case VK_FORMAT_R16_SFLOAT:
+			return 2u;
 		case VK_FORMAT_R32_SFLOAT:
 			return 4u;
 		case VK_FORMAT_D32_SFLOAT:

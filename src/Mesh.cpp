@@ -43,8 +43,9 @@ Mesh::Mesh (glm::vec3 p, glm::vec3 s, glm::quat r,
 	diffusetexture.resolution = {dir, dir};
 	normaltexture.resolution = {nir, nir};
 	heighttexture.resolution = {hir, hir};
+	speculartexture.resolution = {256, 256}; // hard-coding for now
 	texInit(computedheight);
-	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture}, TextureHandler::blankTexGenSet);
+	TextureHandler::generateTextures({diffusetexture, normaltexture, heighttexture, speculartexture}, TextureHandler::blankTexGenSet, nullptr);
 	rewriteTextureDescriptorSets();
 }
 
@@ -91,6 +92,11 @@ void Mesh::texInit (bool computedheight) {
 	heighttexture.format = VK_FORMAT_R32_SFLOAT;
 	heighttexture.type = computedheight ? TEXTURE_TYPE_DYNAMIC_HEIGHT : TEXTURE_TYPE_HEIGHT;
 	GraphicsHandler::createTexture(heighttexture);
+
+	speculartexture.sampler = GraphicsHandler::linearminmagsampler;
+	speculartexture.format = VK_FORMAT_R32_SFLOAT; // could also use an R8_UNORM scaled against a max-value macro 
+	speculartexture.type = TEXTURE_TYPE_SPECULAR;
+	GraphicsHandler::createTexture(speculartexture);
 }
 
 /*
@@ -205,78 +211,21 @@ void Mesh::rewriteTextureDescriptorSets () {
 	// binding 4 (array of shadowmaps) is written in WE, since it has access to lights
 	GraphicsHandler::updateDescriptorSet(
 		ds,
-		{0, 1, 2, 3},
+		{0, 1, 2, 3, 5},
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
 		{{}, diffusetexture.getDescriptorImageInfo(),
 		normaltexture.getDescriptorImageInfo(),
-		heighttexture.getDescriptorImageInfo()},
-		{uniformbuffer.getDescriptorBufferInfo(), {}, {}, {}});
-/*
-			);
-	VkDescriptorImageInfo imginfo = diffusetexture.getDescriptorImageInfo();
-		VkWriteDescriptorSet write {
-			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			nullptr,
-			ds,
-			1, 0, 1,
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			&imginfo,
-			nullptr,
-			nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-							   1,
-							   &write,
-							   0,
-							   nullptr);
-	}
-	imginfo = normaltexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-		VkWriteDescriptorSet write {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				descriptorsets[x],
-				2,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(GraphicsHandler::vulkaninfo.logicaldevice,
-							   1,
-							   &write,
-							   0,
-							   nullptr);
-	}
-	imginfo = heighttexture.getDescriptorImageInfo();
-	for (uint32_t x = 0; x < MAX_FRAMES_IN_FLIGHT; x++) {
-		VkWriteDescriptorSet write {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				nullptr,
-				descriptorsets[x],
-				3,
-				0,
-				1,
-				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				&imginfo,
-				nullptr,
-				nullptr
-		};
-		vkUpdateDescriptorSets(
-				GraphicsHandler::vulkaninfo.logicaldevice,
-				1,
-				&write,
-				0, nullptr);
-	}*/
+		heighttexture.getDescriptorImageInfo(),
+		speculartexture.getDescriptorImageInfo()},
+		{uniformbuffer.getDescriptorBufferInfo(), {}, {}, {}, {}});
 }
 
 void Mesh::createPipeline () {
-	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
+	VkDescriptorSetLayoutBinding objecttexdslbindings[6] {{
 			0,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			1,
@@ -306,13 +255,19 @@ void Mesh::createPipeline () {
 			MAX_LIGHTS,
 			VK_SHADER_STAGE_FRAGMENT_BIT,
 			nullptr
+		}, {
+			5,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
 	}};
 	VkDescriptorSetLayoutCreateInfo descsetlayoutcreateinfos[2] {
 		scenedslcreateinfo, {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
 			0,
-			5,
+			6,
 			&objecttexdslbindings[0]
 	}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
@@ -348,7 +303,7 @@ void Mesh::createPipeline () {
 }
 
 void Mesh::createShadowmapPipeline () {
-	VkDescriptorSetLayoutBinding objecttexdslbindings[5] {{
+	VkDescriptorSetLayoutBinding objecttexdslbindings[6] {{
 			0,
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			1,
@@ -378,13 +333,19 @@ void Mesh::createShadowmapPipeline () {
 			MAX_LIGHTS,
 			VK_SHADER_STAGE_FRAGMENT_BIT,
 			nullptr
+		}, {
+			5,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			1,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr
 	}};
 	VkDescriptorSetLayoutCreateInfo descriptorsetlayoutcreateinfos[2] {
 		scenedslcreateinfo, {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			nullptr,
 			0,
-			5,
+			6,
 			&objecttexdslbindings[0]
 	}};
 	VkVertexInputBindingDescription vertinbindingdesc {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
@@ -794,7 +755,7 @@ Mesh* Mesh::generateBoulder (RockType type, glm::vec3 scale, uint seed) {
 		TextureHandler::generateTextures({result->diffusetexture,
 										  result->normaltexture,
 										  result->heighttexture},
-										 TextureHandler::colorfulMarbleTexGenSet);
+										 TextureHandler::colorfulMarbleTexGenSet, nullptr);
 		result->rewriteTextureDescriptorSets();
 	}
 	return result;

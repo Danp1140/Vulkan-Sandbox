@@ -64,24 +64,32 @@ void TextureHandler::deallocTex (void* ptr) {
 	free(ptr);
 }
 
-void TextureHandler::generateTextures (std::vector<TextureInfo> texdsts, const TexGenFuncSet& funcset) {
+void TextureHandler::generateTextures (std::vector<TextureInfo>&& texdsts, const TexGenFuncSet& funcset, void* genvars) {
 	for (auto& t: texdsts) {
+		// TODO: change these reinterpret_casts to static_casts
+		// TODO: change hard-coded, type-based pixel sizes to use VKHelperGetPixelSize from format
 		if (t.type == TEXTURE_TYPE_DIFFUSE) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
-			funcset.diffuse(t, data);
+			funcset.diffuse(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_NORMAL) {
 			glm::vec4* data = reinterpret_cast<glm::vec4*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(glm::vec4));
-			funcset.normal(t, data);
+			funcset.normal(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		} else if (t.type == TEXTURE_TYPE_HEIGHT) {
 			float* data = reinterpret_cast<float*>(allocTex(t));
 			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * sizeof(float));
-			funcset.height(t, data);
+			funcset.height(t, data, genvars);
+			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
+			deallocTex(reinterpret_cast<void*>(data));
+		} else if (t.type == TEXTURE_TYPE_SPECULAR) {
+			float* data = reinterpret_cast<float*>(allocTex(t));
+			memset(reinterpret_cast<void*>(data), 0, t.resolution.width * t.resolution.height * GraphicsHandler::VKHelperGetPixelSize(t.format));
+			funcset.specular(t, data, genvars);
 			GraphicsHandler::VKHelperUpdateWholeTexture(t, reinterpret_cast<void*>(data));
 			deallocTex(reinterpret_cast<void*>(data));
 		}
@@ -107,12 +115,70 @@ GEN_FUNC_IMPL(generateRandom) {
 	}
 }
 
+GEN_FUNC_IMPL(generateVoronoi) {
+	// ptr so we actually end up editing the data
+	VoronoiGenInfo* gi = &geninfo.voronoi;
+	glm::ivec2 pointtemp;
+	bool tooclose;
+	// assumes square tex...
+	std::uniform_real_distribution<float> unidist(0, (float)texinfo.resolution.width);
+	float disttemp;
+	while (gi->points.size() != gi->numpoints) {
+		pointtemp = glm::ivec2(unidist(randomengine), unidist(randomengine));
+		tooclose = false;
+		gi->maxdist = 0;
+		for (const glm::uvec2& p : gi->points) {
+			disttemp = sqrt(pow((float)pointtemp.x - (float)p.x, 2) + pow((float)pointtemp.y - (float)p.y, 2));
+			if (disttemp <= gi->mindist) {
+				tooclose = true;
+				break;
+			}
+			disttemp /= 2;
+			if (disttemp > gi->maxdist) gi->maxdist = disttemp;
+		}
+		if (!tooclose) {
+			gi->points.push_back(pointtemp);
+		}
+	}
+
+	// super close, but this doesnt quite tile seamlessly
+	float closestdist = std::numeric_limits<float>::infinity();
+	for (const glm::uvec2& p : gi->points) {
+		pointtemp = glm::ivec2(x, y);
+		disttemp = sqrt(pow((float)pointtemp.x - (float)p.x, 2) + pow((float)pointtemp.y - (float)p.y, 2));
+		if (disttemp < closestdist) closestdist = disttemp;
+
+		if (x * 2 < texinfo.resolution.width) {
+			pointtemp.x = (int)x + (int)texinfo.resolution.width;
+		}
+		else {
+			pointtemp.x = (int)x - (int)texinfo.resolution.width;
+		}
+		if (y * 2 < texinfo.resolution.height) {
+			pointtemp.y = (int)y + (int)texinfo.resolution.height;
+		}
+		else { 
+			pointtemp.y = (int)y - (int)texinfo.resolution.height;
+		}
+		disttemp = sqrt(pow((float)pointtemp.x - (float)p.x, 2) + pow((float)pointtemp.y - (float)p.y, 2));
+		if (disttemp < closestdist) closestdist = disttemp;
+		disttemp = sqrt(pow((float)x - (float)p.x, 2) + pow((float)pointtemp.y - (float)p.y, 2));
+		if (disttemp < closestdist) closestdist = disttemp;
+		disttemp = sqrt(pow((float)pointtemp.x - (float)p.x, 2) + pow((float)y - (float)p.y, 2));
+		if (disttemp < closestdist) closestdist = disttemp;
+	}
+	return closestdist / gi->maxdist;
+}
+
 GEN_FUNC_IMPL(generateTurbulence) {
-	return turbulence[x % turbulenceresolution][y % turbulenceresolution];
+	return turbulence
+		[(size_t)floor((float)x / (float)(texinfo.resolution.width - 1) * (float)(turbulenceresolution - 1))]
+		[(size_t)floor((float)y / (float)(texinfo.resolution.height - 1) * (float)(turbulenceresolution - 1))];
 }
 
 TEX_FUNC_IMPL_DIFFUSE(macroTest) {
-	BaseGenInfo geninfo {.wave = {WAVE_TYPE_SINE, texdst.resolution.width / 25.f, 0.f}};
+	BaseGenInfo geninfo;
+	geninfo.wave = {WAVE_TYPE_SINE, texdst.resolution.width / 25.f, 0.f};
 	BaseUseInfo<glm::vec4> useinfo {.interp = {glm::vec4(0.f, 0.f, 0.f, 1.f), glm::vec4(1.f, 1.f, 1.f, 1.f)}};
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 			geninfo.wave.offset = 100.f * generateTurbulence(x, y, texdst, geninfo);
@@ -157,7 +223,8 @@ TEX_FUNC_IMPL_NORMAL(colorfulMarble) {}
 
 TEX_FUNC_IMPL_HEIGHT(colorfulMarble) {}
 
-// TODO: add back ocean textures
+TEX_FUNC_IMPL_SPECULAR(colorfulMarble) {}
+
 TEX_FUNC_IMPL_DIFFUSE(ocean) {}
 
 TEX_FUNC_IMPL_NORMAL(ocean) {
@@ -173,16 +240,105 @@ TEX_FUNC_IMPL_NORMAL(ocean) {
 
 TEX_FUNC_IMPL_HEIGHT(ocean) {}
 
+TEX_FUNC_IMPL_DIFFUSE(coarseRock) {
+	CoarseRockSetVars vars = genvars ? *static_cast<CoarseRockSetVars*>(genvars) : (CoarseRockSetVars){};
+	BaseUseInfo<glm::vec4> useinfos[3] {
+		{.interp = {vars.basecolor1, vars.basecolor2}},
+		{.cutoff = {0.9, glm::vec4(0), vars.intrusioncolor1}},
+		{.cutoff = {0.9, glm::vec4(0), vars.intrusioncolor2}}
+	};
+	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs[3] = {
+		{generateVoronoi},
+		{generateVoronoi, generateTurbulence},
+		{generateTurbulence}
+	};
+	std::vector<BaseGenInfo> geninfos[3];
+	geninfos[0] = std::vector<BaseGenInfo>(1);
+	geninfos[1] = std::vector<BaseGenInfo>(2);
+	geninfos[2] = std::vector<BaseGenInfo>(1);
+	geninfos[0][0].voronoi = {32, {}, 1.};
+	geninfos[1][0].voronoi = {32, {}, 1.};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		setTexel(
+			texdst, 
+			datadst[x * texdst.resolution.height + y], 
+			genfuncs[0],
+			geninfos[0],
+			interp,
+			useinfos[0],
+			x, y);
+		alphaBlendTexel(
+			texdst, 
+			datadst[x * texdst.resolution.height + y], 
+			genfuncs[1],
+			geninfos[1],
+			cutoff,
+			useinfos[1],
+			x, y);
+		alphaBlendTexel(
+			texdst, 
+			datadst[x * texdst.resolution.height + y], 
+			genfuncs[2],
+			geninfos[2],
+			cutoff,
+			useinfos[2],
+			(x + 500) % texdst.resolution.width, (y + 500) % texdst.resolution.height);
+	}
+}
+
+TEX_FUNC_IMPL_NORMAL(coarseRock) {
+	RandomDistribution r = {.uniform = std::uniform_real_distribution<float_t>(0, 1)};
+	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs = {generateRandom};
+	std::vector<BaseGenInfo> geninfos(1);
+	geninfos[0].random = {RANDOM_TYPE_UNIFORM, r};
+	BaseUseInfo<glm::vec4> useinfo = {.interp = {glm::vec4(0.1, 0.1, 0, 1), glm::vec4(-0.1, 0.1, 0, 1)}};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		setTexel(
+			texdst,
+			datadst[x * texdst.resolution.height + y],
+			genfuncs,
+			geninfos,
+			interp,
+			useinfo,
+			x, y);
+	}
+}
+
+TEX_FUNC_IMPL_HEIGHT(coarseRock) {
+	RandomDistribution r = {.uniform = std::uniform_real_distribution<float_t>(0, 1)};
+	std::vector<ANONYMOUS_GEN_FUNC_T> genfuncs = {generateRandom};
+	std::vector<BaseGenInfo> geninfos(1);
+	geninfos[0].random = {RANDOM_TYPE_UNIFORM, r};
+	BaseUseInfo<float> useinfo = {.interp = {0, 0.05}};
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		setTexel(
+			texdst,
+			datadst[x * texdst.resolution.height + y],
+			genfuncs,
+			geninfos,
+			interp,
+			useinfo,
+			x, y);
+	}
+}
+
+TEX_FUNC_IMPL_SPECULAR(coarseRock) {
+	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
+		datadst[x * texdst.resolution.height + y] = 64;
+	}
+}
+
 TEX_FUNC_IMPL_DIFFUSE(blank) {
 	ITERATE_2D_U32(texdst.resolution.width, texdst.resolution.height) {
 			datadst[x * texdst.resolution.height + y] = glm::vec4(1.f);
-			datadst[x * texdst.resolution.height + y] = glm::vec4(0.1, 0.9, 0.2, 1.);
 		}
 }
 
 TEX_FUNC_IMPL_NORMAL(blank) {}
 
 TEX_FUNC_IMPL_HEIGHT(blank) {}
+
+TEX_FUNC_IMPL_SPECULAR(blank) {}
 
 void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t numtexes) {
 	// granite may have several differnet colors
