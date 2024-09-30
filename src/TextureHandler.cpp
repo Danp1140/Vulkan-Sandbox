@@ -388,70 +388,40 @@ void TextureHandler::generateGraniteTextures (TextureInfo** texdsts, uint8_t num
 
 void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 	//pass in sun for position info and color info diffusion
-	glm::vec4* data = new glm::vec4[texdst->resolution.width * texdst->resolution.height * sizeof(glm::vec4) *
-									6];
+	glm::vec4* data = new glm::vec4[texdst->resolution.width * texdst->resolution.height * sizeof(glm::vec4) * 6];
 	glm::vec3 directionvectortemp;
 	glm::vec2 uv;
 	for (uint32_t layer = 0; layer < 6; layer++) {
 		glm::vec4* tempptr = data + layer * texdst->resolution.height * texdst->resolution.width;
-//		normalizedColorMap(turbulence, &tempptr, 2048, 16);
 		for (uint32_t y = 0; y < texdst->resolution.height; y++) {
 			for (uint32_t x = 0; x < texdst->resolution.width; x++) {
 				uv = glm::vec2((float)x / (float)texdst->resolution.width,
-							   1. - (float)y / (float)texdst->resolution.height);
-				if (layer == 0) directionvectortemp = glm::vec3(1., uv.y * 2. - 1., (1. - uv.x) * 2. - 1.);
-				else if (layer == 1) directionvectortemp = glm::vec3(-1., uv.y * 2 - 1., uv.x * 2. - 1.);
-				else if (layer == 2) directionvectortemp = glm::vec3(uv.x * 2. - 1., 1., (1 - uv.y) * 2. - 1.);
-				else if (layer == 3) directionvectortemp = glm::vec3(uv.x * 2. - 1., -1., uv.y * 2. - 1.);
-				else if (layer == 4) directionvectortemp = glm::vec3(uv.x * 2. - 1., uv.y * 2. - 1., 1.);
-				else if (layer == 5)
-					directionvectortemp = glm::vec3((1. - uv.x) * 2. - 1.,
-													uv.y * 2. - 1.,
-													-1.);
-				else directionvectortemp = glm::vec3(0.);
+					1. - (float)y / (float)texdst->resolution.height);
+				if (layer == 0) 
+					directionvectortemp = glm::vec3(1, uv.y * 2 - 1, (1 - uv.x) * 2 - 1);
+				else if (layer == 1) 
+					directionvectortemp = glm::vec3(-1, uv.y * 2 - 1, uv.x * 2 - 1);
+				else if (layer == 2) 
+					directionvectortemp = glm::vec3(uv.x * 2 - 1, 1, (1 - uv.y) * 2 - 1);
+				else if (layer == 3) 
+					directionvectortemp = glm::vec3(uv.x * 2 - 1, -1, uv.y * 2 - 1);
+				else if (layer == 4) 
+					directionvectortemp = glm::vec3(uv.x * 2 - 1, uv.y * 2 - 1, 1);
+				else if (layer == 5) 
+					directionvectortemp = glm::vec3((1 - uv.x) * 2 - 1, uv.y * 2 - 1, -1);
+				else directionvectortemp = glm::vec3(0);
 				directionvectortemp = glm::normalize(directionvectortemp);
-				if (glm::length(directionvectortemp - glm::normalize(glm::vec3(0., 100., 500))) < 0.05) {
-					data[layer * texdst->resolution.height * texdst->resolution.width +
-						 y * texdst->resolution.width +
-						 x] = glm::vec4(1.);
-				} else {
-//					if(directionvectortemp.y<0.) data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]=glm::vec4(0.3, 0.3, 0.7, 1.);
-//					if(directionvectortemp.y<0.) data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]=glm::vec4(0.5, 0.5, 0.5, 1.);
-//					if(directionvectortemp.y<0.) data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]=glm::vec4(1., 0., 0., 1.);
-//					if(directionvectortemp.y<0.) data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]=glm::vec4(directionvectortemp.x, 1.+directionvectortemp.y, directionvectortemp.z, 1.);
-//					else{
-					const float R = 6371., h = 20.;
-					const glm::vec3 P = glm::vec3(0., R, 0.), L = directionvectortemp;
-					const float b = 2 * glm::dot(P, L);
-					float t = (-b + sqrt(b * b + 8. * R * h + 4. * h * h)) / 2.;
-					data[layer * texdst->resolution.height * texdst->resolution.width +
-						 y * texdst->resolution.width +
-						 x] = glm::vec4((1. - directionvectortemp.y) * 0.5,
-										(1. - directionvectortemp.y) * 0.5,
-										0.9,
-										1.);
-					/*
-					data[layer * texdst->resolution.height * texdst->resolution.width
-						+ y * texdst->resolution.width + x] = glm::vec4(fmod(directionvectortemp.y, 0.1) * 10., 0, 0, 1);
-						*/
-//						float lambda;
-//						for(uint8_t i=0;i<3;i++){
-//							lambda=i==0?750.:(i==1?500.:450.);
-//							lambda*=pow(10., -9.);
-//							std::cout<<lambda<<'\t'<<t<<std::endl;
-//							for(uint32_t d=t/5.;d>0;d--){
-//								std::cout<<pow(lambda, -4.)<<std::endl;
-//								data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x][i]
-//									+=(8.*pow(3.14, 4.)*pow(2.118*pow(10., -29.), 1.))
-//											/(pow(lambda, 4.))
-//											*(1.+pow(glm::dot(glm::normalize(glm::vec3(0., 100., 500.)), L), 2.));
-					//approximating sun w/ infinite distance, just normalize the sun's position
-//							}
-//						}
-//						data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x].a=1.;
-//						PRINT_QUAD(data[layer*texdst->resolution.height*texdst->resolution.width+y*texdst->resolution.width+x]);
-//					}
-				}
+				const float R = 6371., h = 20.;
+				const glm::vec3 P = glm::vec3(0., R, 0.), L = directionvectortemp;
+				const float b = 2 * glm::dot(P, L);
+				float t = (-b + sqrt(b * b + 8. * R * h + 4. * h * h)) / 2.;
+				// TODO: more advanced sun-dependent gradient of scattering
+				data[layer * texdst->resolution.height * texdst->resolution.width +
+					 y * texdst->resolution.width +
+					 x] = glm::vec4((1. - directionvectortemp.y) * 0.5,
+									(1. - directionvectortemp.y) * 0.5,
+									0.9,
+									1.);
 			}
 		}
 	}
