@@ -32,7 +32,7 @@ void main() {
 
 
 // switched for troubleshooting, add back later
-    imageStore(imageout, ivec2(gl_GlobalInvocationID.xy), vec4(1.5));
+    imageStore(imageout, ivec2(gl_GlobalInvocationID.xy), vec4(1.65));
     // before we implement wind modeling (or even after), if we wanna make this look nicer we can have a universal
     // brownian noise texture available on the GPU
 	/*

@@ -261,6 +261,7 @@ void GraphicsHandler::VKSubInitDevices () {
 	VkPhysicalDeviceFeatures physicaldevicefeatures {};
 	physicaldevicefeatures.tessellationShader = VK_TRUE;
 	physicaldevicefeatures.fillModeNonSolid = VK_TRUE;
+	physicaldevicefeatures.samplerAnisotropy = VK_TRUE;
 	VkPhysicalDeviceProperties pdprops;
 	vkGetPhysicalDeviceProperties(vulkaninfo.physicaldevice, &pdprops);
 	//dont forget about anisotropy
@@ -1058,11 +1059,11 @@ void GraphicsHandler::VKSubInitSamplers () {
 			VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			0.0,
 			VK_FALSE, // anisotropic filtering /could/ help with some diffuse texture issues...
-			1.0,
+			16.0,
 			VK_FALSE,
 			VK_COMPARE_OP_LESS,
 			0.0,
-			0.0,
+			VK_LOD_CLAMP_NONE,
 			VK_BORDER_COLOR_INT_OPAQUE_WHITE,
 			VK_FALSE
 	};
@@ -1070,6 +1071,7 @@ void GraphicsHandler::VKSubInitSamplers () {
 	samplercreateinfo.minFilter = VK_FILTER_LINEAR;
 	samplercreateinfo.magFilter = VK_FILTER_LINEAR;
 	samplercreateinfo.compareEnable = VK_TRUE;
+	samplercreateinfo.anisotropyEnable = VK_FALSE;
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &depthsampler);
 	samplercreateinfo.minFilter = VK_FILTER_NEAREST;
 	samplercreateinfo.magFilter = VK_FILTER_NEAREST;
@@ -1082,6 +1084,7 @@ void GraphicsHandler::VKSubInitSamplers () {
 	samplercreateinfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplercreateinfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplercreateinfo.minFilter = VK_FILTER_LINEAR;
+	samplercreateinfo.anisotropyEnable = VK_TRUE;
 	vkCreateSampler(vulkaninfo.logicaldevice, &samplercreateinfo, nullptr, &linearminsampler);
 	samplercreateinfo.magFilter = VK_FILTER_LINEAR;
 	samplercreateinfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;

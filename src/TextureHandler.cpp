@@ -430,6 +430,10 @@ void TextureHandler::generateSkyboxTexture (TextureInfo* texdst) {
 										(1. - directionvectortemp.y) * 0.5,
 										0.9,
 										1.);
+					/*
+					data[layer * texdst->resolution.height * texdst->resolution.width
+						+ y * texdst->resolution.width + x] = glm::vec4(fmod(directionvectortemp.y, 0.1) * 10., 0, 0, 1);
+						*/
 //						float lambda;
 //						for(uint8_t i=0;i<3;i++){
 //							lambda=i==0?750.:(i==1?500.:450.);

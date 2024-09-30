@@ -16,6 +16,7 @@ void main(){
     if (depth > 0.999f && depth < 1.f) {
         color = vec4(1., 0., 0., 1.);
     }*/
+	// color = texture(texturesampler, uv * vec2(1., -1.));
 	color = texture(texturesampler, 2 * uv * vec2(1., -1.));
 	color.a = 1.;
 }

@@ -12,7 +12,7 @@
   ],
   "meshes": [
     {
-      "filepath": "/Users/danp/Desktop/C Coding/VulkanSandbox/resources/objs/plane.obj",
+      "filepath": "/Users/danp/Desktop/C Coding/VulkanSandbox/resources/objs/reflectiontest.obj",
       "position": "0 0 0",
       "scale": "1 1 1",
       "rotation": "0 0 0 1",

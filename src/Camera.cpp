@@ -29,7 +29,7 @@ Camera::Camera (GLFWwindow* w, int hres, int vres) {
 	up = glm::vec3(0, 1, 0);
 	fovy = 0.785f;
 	nearclip = 0.1f;
-	farclip = 50.;
+	farclip = 1000.;
 	aspectratio = float(hres) / float(vres);
 	movementsens = 0.1f;
 	mousesens = 0.005f;
