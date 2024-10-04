@@ -74,6 +74,7 @@ private:
 	float rendertimes[NUM_FRAME_SAMPLES], rendertimemean, rendertimesd;
 	uint8_t framesamplecounter = 0u;
 	bool bloom, ssrr;
+	Bloom primarybloom;
 
 	// void initSettings ();
 

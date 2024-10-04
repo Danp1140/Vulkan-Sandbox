@@ -319,7 +319,8 @@ void PostProcOp::createGraphicsPipeline () {
 	pii.stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	pii.shaderfilepathprefix = "postproc";
 	pii.descsetlayoutcreateinfos = &dslcreateinfos[0];
-	pii.pushconstantrange = {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)},
+	pii.pushconstantrange = {VK_SHADER_STAGE_FRAGMENT_BIT, 0u, sizeof(PostProcPushConstants)};
+	pii.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 
 	GraphicsHandler::VKSubInitPipeline(&graphicspipeline, pii);
 }
@@ -410,4 +411,181 @@ void PostProcOp::updateDescriptorSets () {
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
 		diis, {{}, {}, {}, {}});
+}
+
+Bloom::Bloom() : Bloom(0) {}
+
+Bloom::Bloom(uint8_t nlevels) : numlevels(nlevels) {
+	pcdata = new PostProcPushConstants[nlevels];
+	recdata = new cbRecData[nlevels];
+	for (uint32_t i = 0; i < nlevels; i++) {
+		pcdata[i] = {
+			POST_PROC_OP_DOWNSAMPLE,
+			0,
+			glm::uvec2(
+				GraphicsHandler::vulkaninfo.swapchainextent.width, 
+				GraphicsHandler::vulkaninfo.swapchainextent.height) / pow(2, i + 1),
+			glm::uvec2(
+				GraphicsHandler::vulkaninfo.swapchainextent.width, 
+				GraphicsHandler::vulkaninfo.swapchainextent.height),
+			i + 1
+		};
+		recdata[i].pipeline = PostProcOp::computepipeline;
+		recdata[i].descriptorset = PostProcOp::ds;
+		recdata[i].pushconstantdata = static_cast<void*>(&pcdata[i]);
+	}
+}
+
+Bloom::~Bloom() {
+	delete[] recdata;
+	delete[] pcdata;
+}
+
+Bloom& Bloom::operator=(Bloom&& rhs) {
+	swap(*this, rhs);
+	return *this;
+}
+
+void swap(Bloom& b1, Bloom& b2) {
+	std::swap(b1.pcdata, b2.pcdata);
+	std::swap(b1.recdata, b2.recdata);
+	std::swap(b1.numlevels, b2.numlevels);
+}
+
+void Bloom::recordCompute(const cbRecData* data, size_t ndata, VkCommandBuffer& cb) {
+	// the length of this and other rec functions brings to mind the question of sync btwn threads to ensure order is maintained
+	// note this function requires multiple data to be passed as a std::vector<cbRecData>
+	VkCommandBufferInheritanceInfo cbinherinfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		VK_NULL_HANDLE,
+		0,
+		VK_NULL_HANDLE,
+		VK_FALSE,
+		0,
+		0
+	};
+	VkCommandBufferBeginInfo cbbeginfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		0,
+		&cbinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cbbeginfo);
+	vkCmdBindPipeline(
+		cb,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		data[0].pipeline.pipeline);
+	vkCmdBindDescriptorSets(
+		cb,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		data[0].pipeline.pipelinelayout,
+		0,
+		1, &data[0].descriptorset,
+		0, nullptr);
+	for (uint8_t d = 0; d < ndata; d++) {
+		vkCmdPushConstants(
+			cb,
+			data[0].pipeline.pipelinelayout,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			0u,
+			sizeof(PostProcPushConstants),
+			data[d].pushconstantdata);
+		vkCmdDispatch(
+			cb,
+			static_cast<PostProcPushConstants*>(data[d].pushconstantdata)->numinvocs.x,
+			static_cast<PostProcPushConstants*>(data[d].pushconstantdata)->numinvocs.y,
+			1);
+		VkImageSubresourceRange imgsubrecrange {
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			0, 1, 0, 1
+		};
+		VkImageMemoryBarrier imgmembar {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			nullptr,
+			VK_ACCESS_SHADER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			0,
+			0,
+			CompositingOp::scratchbuffer.image,
+			imgsubrecrange
+		};
+		// TODO: observe effects of removing this sync
+		// or at least removing the imgmembar, seems unneccesary
+		vkCmdPipelineBarrier(
+			cb,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &imgmembar);
+	}
+	// this uint hacking seems a little wrong but we can come back later
+	// nvm, skipping lvl 1 on purpose cuz i dont want to handle scratch overwrites, ill just sample from half-sized upsample instead
+	/*
+	for (d--; d > 0; d--) {
+		pcs.push_back({
+							  POST_PROC_OP_UPSAMPLE,
+							  0.,
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height) * pow(0.5, d),
+							  glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width,
+										 GraphicsHandler::vulkaninfo.swapchainextent.height),
+							  d + 1u});
+		vkCmdPushConstants(
+				cb,
+				data.pipeline.pipelinelayout,
+				VK_SHADER_STAGE_COMPUTE_BIT,
+				0u,
+				sizeof(PostProcPushConstants),
+				reinterpret_cast<void*>(&pcs[pci]));
+		vkCmdDispatch(
+				cb,
+				pcs[pci].numinvocs.x,
+				pcs[pci].numinvocs.y,
+				1);
+		pci++;
+	}
+	*/
+	vkEndCommandBuffer(cb);
+}
+
+void Bloom::recordDraw(cbRecData data, VkCommandBuffer& cb) {
+	VkCommandBufferInheritanceInfo cmdbufinherinfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		nullptr,
+		data.renderpass,
+		0,
+		data.framebuffer,
+		VK_FALSE,
+		0,
+		0
+	};
+	VkCommandBufferBeginInfo cmdbufbegininfo {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		nullptr,
+		VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+		&cmdbufinherinfo
+	};
+	vkBeginCommandBuffer(cb, &cmdbufbegininfo);
+	vkCmdBindPipeline(
+		cb,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		data.pipeline.pipeline);
+	vkCmdBindDescriptorSets(
+		cb,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		data.pipeline.pipelinelayout,
+		0,
+		1, &data.descriptorset,
+		0, nullptr);
+	vkCmdDraw(cb, 6, 1, 0, 0);
+	vkEndCommandBuffer(cb);
+}
+
+const PostProcPushConstants* Bloom::getPushConstantData(size_t i) const {
+	return &pcdata[i];
 }

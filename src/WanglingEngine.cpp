@@ -9,7 +9,7 @@ std::mutex WanglingEngine::scenedsmutex = std::mutex();
 VkDescriptorSet* WanglingEngine::scenedescriptorsets = nullptr;
 
 WanglingEngine::WanglingEngine () {
-	bloom = false;
+	bloom = true;
 	Text::createPipeline();
 	Terrain::createComputePipeline();
 	Terrain::createGraphicsPipeline();
@@ -28,6 +28,8 @@ WanglingEngine::WanglingEngine () {
 			GraphicsHandler::vulkaninfo.verticalres);
 
 	initSkybox();
+
+	primarybloom = Bloom(3);
 
 	skyboxtexture.resolution = {128, 128};
 	skyboxtexture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -506,8 +508,6 @@ void WanglingEngine::recordSkyboxCommandBuffers (cbRecData data, VkCommandBuffer
 	vkEndCommandBuffer(cb);
 }
 
-// TODO: figure out which buffer recording setup structs can be made static const for efficiency
-// you know, we only have to re-enqueue if the tasks change...
 void WanglingEngine::enqueueRecordingTasks () {
 	cbRecData tempdata {
 		VK_NULL_HANDLE,
@@ -741,7 +741,16 @@ void WanglingEngine::enqueueRecordingTasks () {
 	}));
 
 	/*
-	 * Start Compositing Renderpass
+	 * Compositing Computes
+	 */
+	if (bloom) {
+		recordingtasks.push(cbRecTask([&primarybloom = primarybloom] (VkCommandBuffer& c) {
+			Bloom::recordCompute(primarybloom.getCbRecData(), primarybloom.getNumLevels(), c);
+		}));
+	}
+
+	/*
+	 * Start Compositing Renderpass for Draws
 	 */
 	recordingtasks.push(cbRecTask({
 		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -752,67 +761,19 @@ void WanglingEngine::enqueueRecordingTasks () {
 		1,
 		&GraphicsHandler::vulkaninfo.primaryclears[0]
 	}));
+	// TODO: move to be static CompositingOp members
 	tempdata.renderpass = GraphicsHandler::vulkaninfo.compositingrenderpass;
 	tempdata.framebuffer = GraphicsHandler::vulkaninfo.compositingframebuffers[GraphicsHandler::swapchainimageindex];
 
 	/*
-	 * Bloom
+	 * Bloom Draw
 	 */
 	if (bloom) {
-
-		/*
-		GraphicsHandler::vulkaninfo.pppc[0].op = POST_PROC_OP_DOWNSAMPLE;
-		GraphicsHandler::vulkaninfo.pppc[0].exposure = mainsettingsfolder.settings[0].data.range.value;
-		GraphicsHandler::vulkaninfo.pppc[0].numinvocs = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width / 2, GraphicsHandler::vulkaninfo.swapchainextent.height / 2);
-		GraphicsHandler::vulkaninfo.pppc[0].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
-		GraphicsHandler::vulkaninfo.pppc[0].dfdepth = 1;
-		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
+		tempdata.pipeline = PostProcOp::getGraphicsPipeline();
+		tempdata.descriptorset = PostProcOp::getDS();
 		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata, c);
+			Bloom::recordDraw(tempdata, c);
 		}));
-
-		GraphicsHandler::vulkaninfo.pppc[1].op = POST_PROC_OP_DOWNSAMPLE;
-		GraphicsHandler::vulkaninfo.pppc[1].exposure = 0.;
-		GraphicsHandler::vulkaninfo.pppc[1].numinvocs = GraphicsHandler::vulkaninfo.pppc[0].numinvocs / 2;
-		GraphicsHandler::vulkaninfo.pppc[1].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
-		GraphicsHandler::vulkaninfo.pppc[1].dfdepth = 2;
-		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[0]);
-		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[1]);
-		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata, c);
-		}));
-		
-		GraphicsHandler::vulkaninfo.pppc[2].op = POST_PROC_OP_DOWNSAMPLE;
-		GraphicsHandler::vulkaninfo.pppc[2].exposure = 0.;
-		GraphicsHandler::vulkaninfo.pppc[2].numinvocs = GraphicsHandler::vulkaninfo.pppc[1].numinvocs / 2;
-		GraphicsHandler::vulkaninfo.pppc[2].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
-		GraphicsHandler::vulkaninfo.pppc[2].dfdepth = 3;
-		tempdata.pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[2]);
-		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {GraphicsHandler::recordPostProcCompute(tempdata, c);}));
-		*/
-		const uint8_t maxdfdepth = 5;
-		// theres def a better data type for this, refine when we get a better idea of what our postproc will look like
-		/*std::vector<cbRecData> postprocdata(maxdfdepth * 2);
-		for (uint8_t d = 0; d < maxdfdepth; d++) {
-			postprocdata[d].pipeline = GraphicsHandler::vulkaninfo.postprocpipeline;
-			postprocdata[d].descriptorset = GraphicsHandler::vulkaninfo.postprocds[GraphicsHandler::swapchainimageindex];
-			GraphicsHandler::vulkaninfo.pppc[d].op = POST_PROC_OP_DOWNSAMPLE;
-			GraphicsHandler::vulkaninfo.pppc[d].numinvocs = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height) / pow (2, d + 1); // check this, uint math is sketchy here
-			GraphicsHandler::vulkaninfo.pppc[d].scext = glm::uvec2(GraphicsHandler::vulkaninfo.swapchainextent.width, GraphicsHandler::vulkaninfo.swapchainextent.height);
-			GraphicsHandler::vulkaninfo.pppc[d].dfdepth = d + 1;
-			postprocdata[d].pushconstantdata = reinterpret_cast<void*>(&GraphicsHandler::vulkaninfo.pppc[d]);
-		}
-		*/
-		/*
-		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcCompute(tempdata, GraphicsHandler::vulkaninfo.pppc, c);
-		}));
-
-		tempdata.pipeline = GraphicsHandler::vulkaninfo.postprocgraphicspipeline;
-		recordingtasks.push(cbRecTask([tempdata] (VkCommandBuffer& c) {
-			GraphicsHandler::recordPostProcGraphics(tempdata, c);
-		}));
-		*/
 	}
 
 	/*

@@ -61,7 +61,7 @@ typedef struct PostProcPushConstants {
 } PostProcPushConstants;
 
 class PostProcOp : public CompositingOp {
-private:
+protected:
 	static uint8_t numpostprocops;
 	static PipelineInfo graphicspipeline, computepipeline;
 	static VkDescriptorSet ds;
@@ -73,8 +73,32 @@ private:
 public:
 	PostProcOp ();
 	~PostProcOp ();
+
+	static const PipelineInfo& getGraphicsPipeline() {return graphicspipeline;}
+	static const VkDescriptorSet getDS() {return ds;}
 };
 
 class Bloom : public PostProcOp {
+private:
+	PostProcPushConstants* pcdata;
+	cbRecData* recdata;
+	uint8_t numlevels;
 
+public:
+	Bloom();
+	Bloom(const Bloom& rhs) = default;
+	Bloom(Bloom&& rhs) = default;
+	Bloom(uint8_t nlevels);
+	~Bloom();
+
+	Bloom& operator=(Bloom&& rhs);
+	
+	friend void swap(Bloom& b1, Bloom& b2);
+
+	static void recordCompute(const cbRecData* data, size_t ndata, VkCommandBuffer& cb);
+	static void recordDraw(cbRecData data, VkCommandBuffer& cb);
+
+	const PostProcPushConstants* getPushConstantData(size_t i) const;
+	const cbRecData* getCbRecData() const {return recdata;}
+	uint8_t getNumLevels() const {return numlevels;}
 };
